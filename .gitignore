@@ -1,0 +1,89 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+
+# excel files
+*.xls
+*.xlsx
+*.xlsm
+
+sollumelab-app/
+
+# Python 가상환경
+venv/
+env/
+ENV/
+.venv/
+bin/
+lib/
+lib64/
+pyvenv.cfg
+include/
+pip-selfcheck.json
+
+# Python 캐시 및 컴파일 파일
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 배포 관련
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 테스트 및 커버리지
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+.hypothesis/
+
+# 환경 변수
+.env
+.env.local
+
+# Next.js Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js 빌드 출력
+.next/
+out/
+
+# 환경 변수 (Next.js)
+.env*.local
+
+# 디버그 로그
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# 기타
+*.log
+.cache/
