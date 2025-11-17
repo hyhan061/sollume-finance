@@ -1,0 +1,76 @@
+# Git 관련
+.git
+.gitignore
+.gitattributes
+
+# Python 가상환경
+bin/
+lib/
+lib64/
+include/
+pyvenv.cfg
+Scripts/
+share/
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 빌드 및 배포 관련
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Next.js 프로젝트 (불필요)
+sollumelab-app/
+node_modules/
+.next/
+
+# 로그 및 임시 파일
+logs/*.log
+uploads/*
+processed/*
+*.log
+
+# 문서
+README*.md
+*.md
+LICENSE
+
+# Docker 관련
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 스크립트
+start.sh
+start.bat
+build.sh
+build.bat
+deploy-*.sh
+
+# 환경 설정
+.env
+.env.local
+
+# 테스트
+tests/
+test_*.py
+*_test.py
+
+# 기타
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/

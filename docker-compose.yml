@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  sollume-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sollume-finance-app
+    ports:
+      - "8501:8501"
+    volumes:
+      # 데이터 영속성을 위한 볼륨 마운트
+      - ./logs:/app/logs
+      - ./processed:/app/processed
+      - ./uploads:/app/uploads
+      - ./Src/거래처마스터.xlsx:/app/Src/거래처마스터.xlsx
+      # 개발 시 코드 수정을 즉시 반영 (선택사항)
+      # - ./app.py:/app/app.py
+      # - ./Src/processing.py:/app/Src/processing.py
+    environment:
+      - TZ=Asia/Seoul
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - sollume-network
+
+networks:
+  sollume-network:
+    driver: bridge
+
+# 선택사항: 명명된 볼륨 사용 (데이터를 Docker가 관리)
+# volumes:
+#   sollume-logs:
+#   sollume-processed:
+#   sollume-uploads:

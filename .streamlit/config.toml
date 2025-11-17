@@ -1,0 +1,41 @@
+# Streamlit 설정 파일
+
+[server]
+# 서버 포트
+port = 8501
+
+# 모든 IP에서 접속 허용 (Docker용)
+address = "0.0.0.0"
+
+# 파일 변경 감지 (개발 모드)
+runOnSave = true
+
+# CORS 설정
+enableCORS = false
+enableXsrfProtection = true
+
+# 최대 업로드 크기 (MB)
+maxUploadSize = 200
+
+[browser]
+# 브라우저 자동 열기 (Docker에서는 비활성화)
+gatherUsageStats = false
+serverAddress = "localhost"
+serverPort = 8501
+
+[theme]
+# 테마 설정
+primaryColor = "#1f77b4"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"
+
+[logger]
+# 로깅 레벨
+level = "info"
+
+[client]
+# 클라이언트 설정
+showErrorDetails = true
+toolbarMode = "auto"
