@@ -75,7 +75,7 @@ st.markdown("""
 
 # 사이드바 메뉴
 with st.sidebar:
-    st.image("https://via.placeholder.com/150x50/1f77b4/ffffff?text=SollumeLab", use_container_width=True)
+    st.markdown("### 📊 SollumeLab")
     st.title("📋 메뉴")
 
     page = st.radio(
