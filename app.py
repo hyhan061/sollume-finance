@@ -10,11 +10,22 @@ import os
 import sys
 import logging
 from pathlib import Path
+import json
 
 # Src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent / "Src"))
 
 from processing import get_sales_daily, get_purchase_daily, save_dataframe_to_xls
+
+# 2025-11-29 hoyeon.han: Phase 2 - 커스텀 예외 및 로거 import
+from Src.exceptions import (
+    SollumeBaseException,
+    ErrorSeverity,
+    MasterFileNotFoundError,
+    SheetNotFoundError,
+    NoDataForDateError
+)
+from Src.logger import get_logger
 
 # 로깅 설정
 logging.basicConfig(
@@ -264,26 +275,84 @@ if page == "전표 생성":
                             use_container_width=True
                         )
 
-            except FileNotFoundError as e:
+            # 2025-11-29 hoyeon.han: Phase 2 - 개선된 예외 처리
+            except SollumeBaseException as e:
+                # 커스텀 예외 처리
                 progress_bar.empty()
                 status_text.empty()
-                st.markdown(f'<div class="error-box">⚠️ <b>파일을 찾을 수 없습니다</b><br>{str(e)}</div>', unsafe_allow_html=True)
-                st.info("💡 Src/거래처마스터.xlsx 파일이 있는지 확인해주세요.")
-                logging.error(f"파일 없음: {str(e)}")
 
-            except KeyError as e:
-                progress_bar.empty()
-                status_text.empty()
-                st.markdown(f'<div class="error-box">⚠️ <b>Excel 시트를 찾을 수 없습니다</b><br>{str(e)}</div>', unsafe_allow_html=True)
-                st.info("💡 파일에 '(누적)2025년 발주내역' 시트가 있는지 확인해주세요.")
-                logging.error(f"시트 없음: {str(e)}")
+                # 심각도에 따른 아이콘
+                severity_icon = {
+                    ErrorSeverity.INFO: "ℹ️",
+                    ErrorSeverity.WARNING: "⚠️",
+                    ErrorSeverity.ERROR: "❌",
+                    ErrorSeverity.CRITICAL: "🚨"
+                }
+
+                # 사용자 메시지 표시
+                st.markdown(
+                    f'<div class="error-box">'
+                    f'{severity_icon[e.severity]} <b>{e.category.value}</b><br>'
+                    f'{e.user_message}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+                # 해결 방법 안내
+                if e.solution_hints:
+                    st.info("**💡 해결 방법:**")
+                    for hint in e.solution_hints:
+                        st.write(hint)
+
+                # 개발자용 정보 (접을 수 있음)
+                with st.expander("🔍 개발자용 상세 정보"):
+                    st.code(f"오류 ID: {e.error_id}")
+                    st.code(f"발생 시각: {e.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+                    st.text(e.technical_details)
+                    if e.context:
+                        st.json(e.context)
+
+                # 오류 리포트 다운로드
+                error_report = {
+                    "오류_ID": e.error_id,
+                    "발생_시각": e.timestamp.isoformat(),
+                    "카테고리": e.category.value,
+                    "심각도": e.severity.value,
+                    "사용자_메시지": e.user_message,
+                    "기술_상세": e.technical_details,
+                    "해결_힌트": e.solution_hints,
+                    "컨텍스트": e.context,
+                    "파일명": uploaded_file.name if uploaded_file else "N/A",
+                    "선택_날짜": date_str,
+                }
+
+                st.download_button(
+                    label="📥 오류 리포트 다운로드 (개발자 전달용)",
+                    data=json.dumps(error_report, ensure_ascii=False, indent=2),
+                    file_name=f"error_report_{e.error_id}.json",
+                    mime="application/json"
+                )
+
+                # 오류 ID 강조
+                st.warning(
+                    f"⚠️ 문제가 계속되면 **오류 ID: `{e.error_id}`** 를 "
+                    f"개발자에게 알려주세요."
+                )
+
+                # 로거에 기록
+                logger = get_logger()
+                logger.log_custom_exception(e)
 
             except Exception as e:
+                # 예상치 못한 오류
                 progress_bar.empty()
                 status_text.empty()
-                st.markdown(f'<div class="error-box">❌ <b>처리 중 오류가 발생했습니다</b></div>', unsafe_allow_html=True)
 
-                # 에러 상세 정보 (펼치기)
+                st.markdown(
+                    '<div class="error-box">🚨 <b>예상치 못한 오류가 발생했습니다</b></div>',
+                    unsafe_allow_html=True
+                )
+
                 with st.expander("🔍 에러 상세 정보 (개발자에게 전달)"):
                     st.exception(e)
 
