@@ -11,7 +11,7 @@ sollumelab-app/
 venv/
 env/
 ENV/
-.venv/
+.venv*/
 bin/
 lib/
 lib64/
