@@ -9,7 +9,8 @@ Excel 파일 및 데이터 품질을 단계별로 검증
 import pandas as pd
 import os
 from typing import List, Tuple, Optional
-from .exceptions import (
+# 2025-11-30 hoyeon.han: 상대 import를 절대 import로 변경 (ImportError 해결)
+from exceptions import (
     SheetNotFoundError,
     ColumnNotFoundError,
     NoDataForDateError,

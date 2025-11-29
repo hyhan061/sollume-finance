@@ -20,7 +20,8 @@ import os
 from typing import Tuple
 
 # 2025-11-29 hoyeon.han: Phase 2 - 커스텀 예외 및 로거 import
-from .exceptions import (
+# 2025-11-30 hoyeon.han: 상대 import를 절대 import로 변경 (ImportError 해결)
+from exceptions import (
     MasterFileNotFoundError,
     SheetNotFoundError,
     ColumnNotFoundError,
@@ -28,8 +29,8 @@ from .exceptions import (
     ProcessingError,
     SollumeBaseException
 )
-from .logger import get_logger
-from .validators import DataValidator
+from logger import get_logger
+from validators import DataValidator
 
 
 def to_num(s: pd.Series) -> pd.Series:
