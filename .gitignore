@@ -86,6 +86,7 @@ next-env.d.ts
 
 # 기타
 *.log
+logs/*.json
 .cache/
 .claude/
 .gemini/
