@@ -63,28 +63,33 @@ fi
 echo ""
 
 # 필수 유틸리티 설치
+# 2025-12-01 hoyeon.han: 용량 절약을 위해 최소 필수만 설치
 echo "🔧 필수 유틸리티 설치..."
-sudo apt-get install -y \
-    curl \
-    wget \
-    git \
-    vim \
-    htop \
-    net-tools \
-    ufw
+sudo apt-get install -y curl
 
-echo "✅ 유틸리티 설치 완료"
+echo "✅ 필수 유틸리티 설치 완료 (curl)"
 echo ""
 
-# 방화벽 설정
-echo "🔥 방화벽 설정..."
-sudo ufw --force enable
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 8501/tcp  # Streamlit
-sudo ufw allow 80/tcp    # HTTP (향후 Nginx용)
-sudo ufw allow 443/tcp   # HTTPS (향후 Nginx용)
-sudo ufw status
-echo "✅ 방화벽 설정 완료"
+# 방화벽 설정 안내
+# 2025-12-01 hoyeon.han: UFW 대신 Oracle Cloud 콘솔 사용
+echo "🔥 방화벽 설정 안내..."
+echo "⚠️  Oracle Cloud 콘솔에서 방화벽 설정이 필요합니다:"
+echo ""
+echo "   1. Oracle Cloud 콘솔 로그인"
+echo "   2. Compute → Instances → 인스턴스 선택"
+echo "   3. Virtual Cloud Network → Public Subnet 선택"
+echo "   4. Security Lists → Default Security List"
+echo "   5. Ingress Rules → Add Ingress Rules:"
+echo ""
+echo "      소스 CIDR: 0.0.0.0/0"
+echo "      IP 프로토콜: TCP"
+echo "      대상 포트: 8501 (Streamlit)"
+echo ""
+echo "   선택사항 (HTTPS 사용 시):"
+echo "      대상 포트: 80 (HTTP)"
+echo "      대상 포트: 443 (HTTPS)"
+echo ""
+echo "✅ 방화벽 설정 안내 완료"
 echo ""
 
 # 애플리케이션 디렉토리 생성
