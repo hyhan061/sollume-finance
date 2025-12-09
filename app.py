@@ -632,40 +632,56 @@ def file_list_section():
     ) if os.path.exists("processed") else []  # 삼항 연산자
 
     if processed_files:
+        # =================================================================
+        # 2025-12-09 hoyeon.han: 중첩 Expander 제거
+        # Streamlit에서는 Expander 안에 또 다른 Expander를 넣을 수 없음
+        # 대신 날짜를 섹션 헤더로 표시하고, divider로 구분
+        # =================================================================
+
         # 날짜별 그룹화
         files_by_date = {}
         for filename in processed_files:
             try:
+                # 파일명에서 날짜 부분 추출 (예: "매출_2025-12-09.xls" -> "2025-12-09")
                 date_part = filename.split('_')[1].replace('.xls', '')
                 if date_part not in files_by_date:
                     files_by_date[date_part] = []
                 files_by_date[date_part].append(filename)
             except:
+                # 파일명 형식이 다른 경우 건너뛰기
                 continue
 
-        # 날짜별로 표시
+        # 날짜별로 표시 (중첩 Expander 대신 섹션 헤더 사용)
         for date, files in sorted(files_by_date.items(), reverse=True):
-            with st.expander(f"📅 {date} ({len(files)}개 파일)", expanded=False):
-                for filename in files:
-                    filepath = os.path.join("processed", filename)
-                    file_size = os.path.getsize(filepath) / 1024
-                    file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+            # 날짜를 큰 제목으로 표시
+            st.markdown(f"### 📅 {date} ({len(files)}개 파일)")
 
-                    col1, col2 = st.columns([4, 1])
+            # 해당 날짜의 파일들을 순회
+            for filename in files:
+                filepath = os.path.join("processed", filename)
+                file_size = os.path.getsize(filepath) / 1024
+                file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
 
-                    with col1:
-                        st.write(f"**{filename}**")
-                        st.caption(f"{file_size:.1f} KB | {file_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                # 두 개의 열로 나누기: 파일 정보 / 다운로드 버튼
+                col1, col2 = st.columns([4, 1])
 
-                    with col2:
-                        with open(filepath, "rb") as f:
-                            st.download_button(
-                                label="⬇️",
-                                data=f.read(),
-                                file_name=filename,
-                                mime="application/vnd.ms-excel",
-                                key=f"dl_{filename}_{date}"
-                            )
+                with col1:
+                    st.write(f"**{filename}**")
+                    st.caption(f"{file_size:.1f} KB | {file_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                with col2:
+                    # 파일을 바이너리 모드로 읽어서 다운로드 버튼 제공
+                    with open(filepath, "rb") as f:
+                        st.download_button(
+                            label="⬇️",
+                            data=f.read(),
+                            file_name=filename,
+                            mime="application/vnd.ms-excel",
+                            key=f"dl_{filename}_{date}"
+                        )
+
+            # 날짜 그룹 사이에 구분선 추가
+            st.divider()
     else:
         st.info("저장된 파일이 없습니다.")
 
