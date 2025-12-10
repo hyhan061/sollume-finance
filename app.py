@@ -16,7 +16,11 @@ import json
 # Src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent / "Src"))
 
+# 2025-12-10 hoyeon.han: 기존 전표 생성 모듈
 from processing import get_sales_daily, get_purchase_daily, save_dataframe_to_xls
+
+# 2025-12-10 hoyeon.han: 발주내역 기간별 요약 모듈 추가
+from Src.period_summary import process_period_summary
 
 # 2025-11-29 hoyeon.han: Phase 2 - 커스텀 예외 및 로거 import
 from Src.exceptions import (
@@ -160,19 +164,37 @@ with st.sidebar:
 # =============================================================================
 
 st.markdown('<div class="main-header">📊 경리나라 전표 생성 시스템</div>', unsafe_allow_html=True)
-st.caption("💡 모든 기능이 한 페이지에 통합되어 있습니다. 페이지 이동 없이 스크롤만으로 모든 작업을 처리하세요!")
+st.caption("💡 탭을 선택하여 원하는 기능을 사용하세요!")
 
 st.divider()
 
 # =============================================================================
-# Section 1: 파일 업로드 및 처리 (항상 표시)
+# 2025-12-10 hoyeon.han: 탭 구조로 변경
+# st.tabs(): 여러 탭을 생성하는 Streamlit 함수
+# 반환값은 탭 객체들의 리스트 (각 탭에 컨텐츠를 추가할 수 있음)
 # =============================================================================
 
-def upload_and_process_section():
-    """
-    2025-12-09 hoyeon.han: Section 1 - 파일 업로드 및 처리
+# 탭 생성
+# 탭 제목 리스트를 전달하면, 각 탭 객체가 반환됩니다
+tab1, tab2 = st.tabs([
+    "📝 전표 생성",           # 첫 번째 탭: 기존 기능 (일자별 전표 생성)
+    "📊 발주내역 요약"  # 두 번째 탭: 신규 기능 (기간별 요약)
+])
 
-    기능 설명:
+# =============================================================================
+# 탭 1: 전표 생성 (기존 기능)
+# =============================================================================
+
+# with 문: 컨텍스트 관리자
+# with tab1: 블록 안의 모든 코드는 tab1 탭에 표시됩니다
+with tab1:
+    # 원래 메인 페이지 내용을 함수로 래핑
+
+    def upload_and_process_section():
+        """
+        2025-12-09 hoyeon.han: Section 1 - 파일 업로드 및 처리
+
+        기능 설명:
     - 사용자가 발주내역 .xlsm 파일을 선택합니다
     - 처리할 날짜를 선택합니다
     - '처리' 버튼을 클릭하면 매출/매입 전표를 생성합니다
@@ -878,15 +900,419 @@ with st.expander("📁 저장된 파일 목록", expanded=False):
 with st.expander("🔍 최근 로그 (문제 해결용)", expanded=False):
     log_viewer_section()
 
-# Section 6: 시스템 설정 및 관리
-# 거래처마스터 파일 정보, 디스크 사용량, 데이터 정리 기능 제공
-with st.expander("⚙️ 시스템 설정 및 관리", expanded=False):
-    settings_section()
+    # Section 6: 시스템 설정 및 관리
+    # 거래처마스터 파일 정보, 디스크 사용량, 데이터 정리 기능 제공
+    with st.expander("⚙️ 시스템 설정 및 관리", expanded=False):
+        settings_section()
+
+# =============================================================================
+# 탭 2: 발주내역 요약 (신규 기능)
+# 2025-12-10 hoyeon.han: 기간별 발주내역 요약 생성 기능 추가
+# =============================================================================
+
+with tab2:
+    st.markdown('<div class="section-header">📊 발주내역 요약 생성</div>', unsafe_allow_html=True)
+    st.caption("특정 기간 동안의 발주내역을 일자별/업체별로 요약하여 Excel 파일로 제공합니다.")
+
+    # =========================================================================
+    # Section 1: 파일 업로드 및 시트 선택
+    # =========================================================================
+    st.markdown("### 📁 1. 발주내역 파일 업로드")
+
+    # 파일 업로드 위젯
+    # key를 다르게 설정하여 tab1의 uploader와 구분
+    uploaded_file_summary = st.file_uploader(
+        "발주내역 Excel 파일을 선택하세요 (.xlsm)",
+        type=['xlsm', 'xlsx'],  # .xlsm과 .xlsx 모두 허용
+        help="발주내역 데이터가 포함된 Excel 파일을 업로드하세요",
+        key="summary_uploader"  # tab1의 "main_uploader"와 다른 고유 키
+    )
+
+    # 시트 선택 UI 변수 초기화
+    selected_sheet = None
+
+    # 파일이 업로드되면 시트 선택 UI 표시
+    if uploaded_file_summary is not None:
+        # 파일 선택 성공 메시지
+        # .name: 파일명 속성
+        # .size: 파일 크기(바이트) 속성
+        # / 1024 / 1024: 바이트를 메가바이트로 변환
+        # :.2f: 소수점 2자리까지 표시
+        st.success(f"✅ 파일 선택됨: {uploaded_file_summary.name} ({uploaded_file_summary.size / 1024 / 1024:.2f} MB)")
+
+        # st.spinner(): 처리 중 표시 (로딩 애니메이션)
+        # with 블록이 실행되는 동안 "시트 목록 확인 중..." 메시지와 스피너 표시
+        with st.spinner("시트 목록 확인 중..."):
+            try:
+                # pd.ExcelFile(): Excel 파일 객체 생성
+                # 이 객체를 사용하면 시트 목록만 빠르게 가져올 수 있음 (전체 데이터 읽지 않음)
+                excel_file = pd.ExcelFile(uploaded_file_summary)
+
+                # .sheet_names: Excel 파일 내 모든 시트 이름 리스트
+                sheet_names = excel_file.sheet_names
+
+                # =========================================================
+                # 스마트 기본값 찾기
+                # "발주내역" 포함 + 현재 연도 포함 시트를 우선 선택
+                # =========================================================
+                default_index = 0  # 기본값: 첫 번째 시트
+                current_year = datetime.now().year  # 현재 연도 (예: 2025)
+
+                # enumerate(): 리스트의 인덱스와 값을 함께 반환
+                # 예: enumerate(["A", "B", "C"]) → (0, "A"), (1, "B"), (2, "C")
+                for i, sheet in enumerate(sheet_names):
+                    # "발주내역"과 현재 연도가 모두 포함된 시트 찾기
+                    # in 연산자: 문자열에 특정 문자열이 포함되어 있는지 확인
+                    # str(current_year): 숫자를 문자열로 변환 (2025 → "2025")
+                    if "발주내역" in sheet and str(current_year) in sheet:
+                        default_index = i  # 해당 시트의 인덱스를 기본값으로 설정
+                        break  # 찾았으므로 반복문 종료
+
+                # =========================================================
+                # 시트 선택 드롭다운
+                # =========================================================
+                # st.selectbox(): 드롭다운 선택 위젯
+                selected_sheet = st.selectbox(
+                    "📋 처리할 시트 선택",
+                    options=sheet_names,  # 선택 가능한 옵션 리스트
+                    index=default_index,  # 기본 선택 인덱스
+                    help="발주내역 데이터가 포함된 시트를 선택하세요",
+                    key="sheet_selector"  # 고유 키
+                )
+
+                # 선택된 시트 정보 표시
+                # **텍스트**: Markdown 문법으로 굵게 표시
+                st.info(f"📌 선택된 시트: **{selected_sheet}**")
+
+                # =========================================================
+                # 시트 미리보기 (접을 수 있는 영역)
+                # =========================================================
+                # st.expander(): 클릭하면 펼쳐지는 영역
+                # expanded=False: 처음에는 접힌 상태
+                with st.expander("🔍 시트 미리보기 (상위 5행)"):
+                    try:
+                        # pd.read_excel()로 실제 데이터 읽기
+                        # nrows=5: 상위 5행만 읽기 (전체 데이터를 읽지 않아 빠름)
+                        preview_df = pd.read_excel(
+                            uploaded_file_summary,
+                            sheet_name=selected_sheet,  # 선택된 시트
+                            header=3,  # 4번째 줄을 컬럼명으로 사용
+                            nrows=5  # 5행만 읽기
+                        )
+
+                        # st.dataframe(): DataFrame을 표 형태로 표시
+                        # use_container_width=True: 화면 너비에 맞춤
+                        st.dataframe(preview_df, use_container_width=True)
+
+                    except Exception as e:
+                        # 미리보기 실패 시 경고 메시지 표시
+                        # str(e): 예외 객체를 문자열로 변환
+                        st.warning(f"미리보기를 불러올 수 없습니다: {str(e)}")
+
+            except Exception as e:
+                # 시트 목록 읽기 실패 시
+                st.error(f"❌ 시트 목록을 읽을 수 없습니다: {str(e)}")
+                st.info("💡 시트명을 직접 입력해주세요")
+
+                # Fallback: 직접 입력
+                # st.text_input(): 텍스트 입력 위젯
+                selected_sheet = st.text_input(
+                    "시트명 입력",
+                    value="(누적)2025년 발주내역",  # 기본값
+                    help="Excel 파일 내 시트 이름을 정확히 입력하세요",
+                    key="sheet_name_input"
+                )
+
+    # =========================================================================
+    # Section 2: 처리 기간 선택
+    # =========================================================================
+    st.markdown("### 📅 2. 처리 기간 선택")
+
+    # 화면을 2개의 열로 나누기 (시작일, 종료일)
+    col1, col2 = st.columns(2)
+
+    # 첫 번째 열: 시작일
+    with col1:
+        # 기본값: 30일 전
+        # timedelta(days=30): 30일을 나타내는 객체
+        # datetime.today() - timedelta(days=30): 오늘로부터 30일 전
+        start_date = st.date_input(
+            "시작일",
+            value=datetime.today() - timedelta(days=30),  # 기본값: 30일 전
+            max_value=datetime.today(),  # 최대값: 오늘 (미래 날짜 선택 불가)
+            help="요약 처리를 시작할 날짜",
+            key="start_date_selector"
+        )
+
+    # 두 번째 열: 종료일
+    with col2:
+        end_date = st.date_input(
+            "종료일",
+            value=datetime.today(),  # 기본값: 오늘
+            max_value=datetime.today(),  # 최대값: 오늘
+            help="요약 처리를 종료할 날짜",
+            key="end_date_selector"
+        )
+
+    # 기간 유효성 검증 및 정보 표시
+    if start_date and end_date:
+        # 날짜 차이 계산
+        # .days: timedelta 객체에서 일수만 추출
+        days_diff = (end_date - start_date).days + 1  # +1: 시작일과 종료일 포함
+
+        if start_date > end_date:
+            # 시작일이 종료일보다 늦으면 경고
+            st.warning("⚠️ 시작일은 종료일보다 이전이어야 합니다.")
+        elif days_diff > 365:
+            # 1년 초과 시 경고 (처리 가능하지만 시간이 오래 걸림)
+            st.warning(f"⚠️ 처리 기간이 {days_diff}일입니다. 처리 시간이 오래 걸릴 수 있습니다.")
+        else:
+            # 정상 범위일 때 정보 표시
+            # :,: 천 단위 콤마 추가 (30 → 30, 1000 → 1,000)
+            st.info(f"📌 처리 기간: {start_date} ~ {end_date} ({days_diff:,}일)")
+
+    # =========================================================================
+    # Section 3: 실행 버튼
+    # =========================================================================
+    st.markdown("### 🚀 3. 실행")
+
+    # 실행 버튼
+    # disabled: 비활성화 조건 (파일 없음 or 시트 없음 or 날짜 역순)
+    process_summary_button = st.button(
+        "📊 요약 파일 생성",
+        type="primary",  # 파란색 강조 버튼
+        use_container_width=True,
+        disabled=(
+            uploaded_file_summary is None or  # 파일이 업로드되지 않았거나
+            selected_sheet is None or  # 시트가 선택되지 않았거나
+            start_date > end_date  # 시작일이 종료일보다 늦으면
+        ),
+        key="process_summary_button"
+    )
+
+    # =========================================================================
+    # Section 4: 처리 로직 및 결과 표시
+    # =========================================================================
+    if process_summary_button:
+        # 진행 상황 표시 위젯들
+        # st.progress(): 진행률 바 (0.0 ~ 1.0)
+        progress_bar = st.progress(0)
+
+        # st.empty(): 나중에 내용을 동적으로 업데이트할 수 있는 빈 컨테이너
+        # .text(), .markdown() 등으로 내용을 계속 갱신할 수 있음
+        status_text = st.empty()
+
+        # st.expander()를 사용하여 로그를 접을 수 있게 함
+        # expanded=True: 처음에 펼쳐진 상태
+        log_container = st.expander("📋 처리 로그", expanded=True)
+
+        # 로그 메시지를 저장할 리스트
+        # 각 일자별 처리 결과를 이 리스트에 추가하고, 화면에 표시
+        log_messages = []
+
+        # =====================================================================
+        # 콜백 함수: 진행률 업데이트
+        # =====================================================================
+        # def: 함수 정의
+        # current, total, msg: 매개변수 (파라미터)
+        def progress_callback(current, total, msg):
+            """
+            진행률 콜백 함수
+
+            이 함수는 period_summary.process_period_summary()에서 호출됩니다.
+            일자별 처리가 완료될 때마다 이 함수가 실행되어 화면을 업데이트합니다.
+
+            Args:
+                current (int): 현재 처리된 일수
+                total (int): 전체 처리할 일수
+                msg (str): 상태 메시지
+            """
+            # 진행률 계산 (0.0 ~ 1.0)
+            # / 연산자: 나눗셈 (정수를 나누면 실수 결과)
+            progress = current / total
+
+            # 진행률 바 업데이트
+            progress_bar.progress(progress)
+
+            # 상태 텍스트 업데이트
+            # :.1f%: 소수점 1자리 퍼센트 (0.5 → 50.0%)
+            status_text.text(f"⏳ 처리 중... ({current}/{total}일) {progress * 100:.1f}% - {msg}")
+
+            # 로그 메시지 추가
+            log_messages.append(msg)
+
+            # 로그 컨테이너에 표시
+            # with 문: 이 블록 안의 코드는 log_container 안에 표시됨
+            with log_container:
+                # 최근 10개 메시지만 표시 (너무 길어지지 않도록)
+                # [-10:]: 리스트의 마지막 10개 항목
+                for log_msg in log_messages[-10:]:
+                    st.caption(f"✓ {log_msg}")
+
+        try:
+            # =================================================================
+            # 임시 파일 저장
+            # =================================================================
+            # 업로드된 파일을 디스크에 임시로 저장
+            # Streamlit의 UploadedFile 객체는 메모리에만 있으므로,
+            # pandas가 읽을 수 있도록 파일로 저장해야 함
+
+            # 임시 파일 경로 생성
+            temp_file_path = os.path.join("uploads", uploaded_file_summary.name)
+
+            # with open(): 파일 열기 (with 블록이 끝나면 자동으로 닫힘)
+            # 'wb': write binary (바이너리 쓰기 모드)
+            with open(temp_file_path, 'wb') as f:
+                # .write(): 파일에 데이터 쓰기
+                # .getvalue(): UploadedFile 객체에서 바이너리 데이터 가져오기
+                f.write(uploaded_file_summary.getvalue())
+
+            # =================================================================
+            # 요약 처리 실행
+            # =================================================================
+            # 날짜 객체를 문자열로 변환
+            # .strftime(): datetime을 문자열로 포맷팅
+            start_date_str = start_date.strftime('%Y-%m-%d')
+            end_date_str = end_date.strftime('%Y-%m-%d')
+
+            # process_period_summary() 호출
+            # 이 함수는 Src/period_summary.py에 정의되어 있음
+            result = process_period_summary(
+                file_path=temp_file_path,  # 임시 파일 경로
+                sheet_name=selected_sheet,  # 선택된 시트명
+                start_date=start_date_str,  # 시작일 (문자열)
+                end_date=end_date_str,  # 종료일 (문자열)
+                progress_callback=progress_callback  # 진행률 콜백 함수
+            )
+
+            # =================================================================
+            # 처리 완료 - 결과 표시
+            # =================================================================
+            # 진행률 바를 100%로 설정
+            progress_bar.progress(1.0)
+            status_text.text("✅ 처리 완료!")
+
+            # 성공 메시지
+            st.success("✅ 처리가 완료되었습니다!")
+
+            # 요약 통계 표시
+            # st.columns([비율]): 화면을 열로 나누기
+            col1, col2, col3 = st.columns(3)
+
+            # st.metric(): 지표 카드 (제목, 값, 변화량)
+            with col1:
+                st.metric(
+                    "💰 총 누적 매출",
+                    f"{result['total_sales']:,.0f}원"  # :,.0f: 천 단위 콤마, 소수점 없음
+                )
+
+            with col2:
+                st.metric(
+                    "💳 총 누적 매입",
+                    f"{result['total_buy']:,.0f}원"
+                )
+
+            with col3:
+                # delta: 변화량 (양수면 녹색 화살표, 음수면 빨간 화살표)
+                profit_pct = (result['profit'] / result['total_sales'] * 100) if result['total_sales'] > 0 else 0
+                st.metric(
+                    "📈 손익",
+                    f"{result['profit']:,.0f}원",
+                    delta=f"{profit_pct:.1f}%"  # 손익률
+                )
+
+            st.divider()
+
+            # =================================================================
+            # 다운로드 버튼
+            # =================================================================
+            st.markdown("### ⬇️ 결과 파일 다운로드")
+
+            # 생성된 파일 읽기
+            # 'rb': read binary (바이너리 읽기 모드)
+            with open(result['output_file'], 'rb') as f:
+                # st.download_button(): 파일 다운로드 버튼
+                st.download_button(
+                    label="📥 요약 파일 다운로드",
+                    data=f,  # 파일 데이터
+                    file_name=os.path.basename(result['output_file']),  # 파일명 (경로 제외)
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Excel 파일 MIME 타입
+                    use_container_width=True
+                )
+
+            # 파일 정보 표시
+            st.caption(f"📁 파일명: {os.path.basename(result['output_file'])}")
+            st.caption(f"📊 생성된 시트: {len(result['sheets_created'])}개")
+
+            # =================================================================
+            # 상세 내역 미리보기 (선택사항)
+            # =================================================================
+            st.divider()
+            st.markdown("### 📊 상세 내역 미리보기")
+
+            # 일자별 요약 표시
+            # 리스트를 DataFrame으로 변환하여 표로 표시
+            if result['daily_summary']:
+                with st.expander("📅 일자별 요약", expanded=False):
+                    # pd.DataFrame(): 리스트나 딕셔너리를 DataFrame으로 변환
+                    daily_df = pd.DataFrame(result['daily_summary'])
+
+                    # 컬럼명 변경 (영어 → 한글)
+                    # .rename(): 컬럼명 변경
+                    # columns={기존명: 새이름}
+                    daily_df = daily_df.rename(columns={
+                        'date': '날짜',
+                        'sales': '매출',
+                        'buy': '매입'
+                    })
+
+                    # 손익 컬럼 추가
+                    daily_df['손익'] = daily_df['매출'] - daily_df['매입']
+
+                    # 표 표시
+                    st.dataframe(daily_df, use_container_width=True)
+
+            # =================================================================
+            # 임시 파일 정리
+            # =================================================================
+            # 처리가 완료되었으므로 임시 파일 삭제
+            try:
+                # os.remove(): 파일 삭제
+                os.remove(temp_file_path)
+            except:
+                # 삭제 실패해도 무시 (중요하지 않음)
+                pass
+
+        except Exception as e:
+            # =================================================================
+            # 에러 처리
+            # =================================================================
+            # 진행률 바 숨기기 (에러 발생 시)
+            progress_bar.empty()
+            status_text.empty()
+
+            # 에러 메시지 표시
+            st.error(f"❌ 처리 중 오류가 발생했습니다: {str(e)}")
+
+            # 상세 에러 정보 (개발자용)
+            with st.expander("🔍 에러 상세 정보"):
+                # import traceback: 에러의 전체 스택 트레이스 출력
+                import traceback
+
+                # st.code(): 코드 블록으로 표시 (고정폭 폰트, 색상 강조)
+                st.code(traceback.format_exc())
+
+            # 임시 파일 정리 (에러 발생 시에도 실행)
+            try:
+                if 'temp_file_path' in locals():  # 변수가 존재하는지 확인
+                    os.remove(temp_file_path)
+            except:
+                pass
 
 # 푸터
 st.divider()
 st.caption(
-    f"© 2024 SollumeLab | Streamlit 단일 페이지 버전 | "
-    f"마지막 업데이트: 2025-12-09 | "
-    f"v2.1.0-single-page"
+    f"© 2024 SollumeLab | Streamlit 탭 버전 | "
+    f"마지막 업데이트: 2025-12-10 | "
+    f"v2.2.0-with-period-summary"
 )
