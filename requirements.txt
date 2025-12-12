@@ -14,6 +14,10 @@ et-xmlfile==1.1.0
 # Streamlit (웹 앱)
 streamlit==1.39.0
 
+# Logging and Scheduling (2025-12-10 hoyeon.han: 로그 로테이션 및 압축)
+apscheduler==3.11.1
+tzlocal==5.3.1
+
 # Optional: Flask (기존 서버 - 필요 시)
 Flask==3.1.0
 Flask-Cors==5.0.0
