@@ -188,6 +188,222 @@ tab1, tab2 = st.tabs([
 # with 문: 컨텍스트 관리자
 # with tab1: 블록 안의 모든 코드는 tab1 탭에 표시됩니다
 with tab1:
+    # =============================================================================
+    # 2025-12-16 hoyeon.han: process_data() 함수를 upload_and_process_section() 전에 정의
+    # NameError 수정: Python에서는 함수를 호출하기 전에 먼저 정의해야 함
+    # 기존 위치: Line 273 → 신규 위치: Line 192
+    # =============================================================================
+
+    def process_data(uploaded_file, selected_date):
+        """데이터 처리 함수"""
+
+        # 진행상황 표시
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        try:
+            # 1. 임시 파일 저장
+            status_text.text("📤 파일 업로드 중...")
+            progress_bar.progress(10)
+
+            temp_path = os.path.join("uploads", uploaded_file.name)
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.read())
+
+            logging.info(f"파일 업로드: {uploaded_file.name}, 크기: {uploaded_file.size} bytes")
+
+            # 2. 날짜 변환
+            date_str = selected_date.strftime('%Y-%m-%d')
+
+            # 3. 매출 데이터 처리
+            status_text.text("💰 매출 데이터 처리 중...")
+            progress_bar.progress(30)
+
+            df_sales = get_sales_daily(temp_path, date_str, master_file_path="Src/거래처마스터.xlsx")
+            logging.info(f"매출 처리 완료: {len(df_sales)}건")
+
+            # 4. 매입 데이터 처리
+            status_text.text("🛒 매입 데이터 처리 중...")
+            progress_bar.progress(60)
+
+            df_purchase = get_purchase_daily(temp_path, date_str, master_file_path="Src/거래처마스터.xlsx")
+            logging.info(f"매입 처리 완료: {len(df_purchase)}건")
+
+            # 5. 파일 저장
+            status_text.text("💾 파일 저장 중...")
+            progress_bar.progress(80)
+
+            sales_filename = f"매출_{date_str}.xls"
+            purchase_filename = f"매입_{date_str}.xls"
+
+            sales_filepath = os.path.join("processed", sales_filename)
+            purchase_filepath = os.path.join("processed", purchase_filename)
+
+            save_dataframe_to_xls(df_sales, sales_filepath)
+            save_dataframe_to_xls(df_purchase, purchase_filepath)
+
+            # 6. 임시 파일 삭제
+            os.remove(temp_path)
+
+            # 7. 완료
+            progress_bar.progress(100)
+            status_text.text("✅ 처리 완료!")
+
+            # 성공 메시지
+            st.balloons()
+            st.markdown('<div class="success-box">✅ <b>처리가 완료되었습니다!</b></div>', unsafe_allow_html=True)
+
+            # =================================================================
+            # 2025-12-09 hoyeon.han: 처리 결과를 Session State에 저장
+            # 왜 저장하나? 페이지가 다시 실행되어도 결과를 표시하기 위해
+            # 딕셔너리(dictionary) 형태로 여러 정보를 하나로 묶어서 저장
+            # =================================================================
+
+            st.session_state.last_result = {
+                # 처리한 날짜 (예: "2025-12-09")
+                'date': date_str,
+
+                # 업로드한 파일 이름 (예: "발주내역_2025.xlsm")
+                'file': uploaded_file.name,
+
+                # 처리된 매출 데이터 건수 (예: 42건)
+                'sales_count': len(df_sales),
+
+                # 처리된 매입 데이터 건수 (예: 38건)
+                'purchase_count': len(df_purchase),
+
+                # 실제 매출 데이터 전체 (pandas DataFrame 객체)
+                # DataFrame은 엑셀처럼 행과 열로 구성된 표 형태의 데이터
+                'df_sales': df_sales,
+
+                # 실제 매입 데이터 전체 (pandas DataFrame 객체)
+                'df_purchase': df_purchase,
+
+                # 저장된 매출 파일 이름 (예: "매출_2025-12-09.xls")
+                'sales_filename': sales_filename,
+
+                # 저장된 매입 파일 이름 (예: "매입_2025-12-09.xls")
+                'purchase_filename': purchase_filename,
+
+                # 매출 파일의 전체 경로 (예: "processed/매출_2025-12-09.xls")
+                'sales_filepath': sales_filepath,
+
+                # 매입 파일의 전체 경로 (예: "processed/매입_2025-12-09.xls")
+                'purchase_filepath': purchase_filepath,
+
+                # 처리가 완료된 시각 (datetime 객체, 예: 2025-12-09 14:35:22)
+                'timestamp': datetime.now()
+            }
+
+            # =================================================================
+            # 처리 이력을 history 리스트에 추가
+            # append()는 리스트의 끝에 새 항목을 추가하는 함수
+            # 이력 목록에 표시할 요약 정보만 저장 (전체 데이터는 last_result에만)
+            # =================================================================
+
+            st.session_state.history.append({
+                # 처리 시각 (나중에 역순 정렬하여 최신 항목이 위에 표시됨)
+                'timestamp': datetime.now(),
+
+                # 처리 날짜
+                'date': date_str,
+
+                # 파일 이름
+                'file': uploaded_file.name,
+
+                # 매출 건수
+                'sales_count': len(df_sales),
+
+                # 매입 건수
+                'purchase_count': len(df_purchase)
+            })
+
+            # 페이지 리로드하여 결과 섹션 표시
+            st.rerun()
+
+        # 2025-11-29 hoyeon.han: Phase 2 - 개선된 예외 처리
+        except SollumeBaseException as e:
+            # 커스텀 예외 처리
+            progress_bar.empty()
+            status_text.empty()
+
+            # 심각도에 따른 아이콘
+            severity_icon = {
+                ErrorSeverity.INFO: "ℹ️",
+                ErrorSeverity.WARNING: "⚠️",
+                ErrorSeverity.ERROR: "❌",
+                ErrorSeverity.CRITICAL: "🚨"
+            }
+
+            # 사용자 메시지 표시
+            st.markdown(
+                f'<div class="error-box">'
+                f'{severity_icon[e.severity]} <b>{e.category.value}</b><br>'
+                f'{e.user_message}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+            # 해결 방법 안내
+            if e.solution_hints:
+                st.info("**💡 해결 방법:**")
+                for hint in e.solution_hints:
+                    st.write(hint)
+
+            # 개발자용 정보 (접을 수 있음)
+            with st.expander("🔍 개발자용 상세 정보"):
+                st.code(f"오류 ID: {e.error_id}")
+                st.code(f"발생 시각: {e.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+                st.text(e.technical_details)
+                if e.context:
+                    st.json(e.context)
+
+            # 오류 리포트 다운로드
+            error_report = {
+                "오류_ID": e.error_id,
+                "발생_시각": e.timestamp.isoformat(),
+                "카테고리": e.category.value,
+                "심각도": e.severity.value,
+                "사용자_메시지": e.user_message,
+                "기술_상세": e.technical_details,
+                "해결_힌트": e.solution_hints,
+                "컨텍스트": e.context,
+                "파일명": uploaded_file.name if uploaded_file else "N/A",
+                "선택_날짜": date_str,
+            }
+
+            st.download_button(
+                label="📥 오류 리포트 다운로드 (개발자 전달용)",
+                data=json.dumps(error_report, ensure_ascii=False, indent=2),
+                file_name=f"error_report_{e.error_id}.json",
+                mime="application/json"
+            )
+
+            # 오류 ID 강조
+            st.warning(
+                f"⚠️ 문제가 계속되면 **오류 ID: `{e.error_id}`** 를 "
+                f"개발자에게 알려주세요."
+            )
+
+            # 로거에 기록
+            logger = get_logger()
+            logger.log_custom_exception(e)
+
+        except Exception as e:
+            # 예상치 못한 오류
+            progress_bar.empty()
+            status_text.empty()
+
+            st.markdown(
+                '<div class="error-box">🚨 <b>예상치 못한 오류가 발생했습니다</b></div>',
+                unsafe_allow_html=True
+            )
+
+            with st.expander("🔍 에러 상세 정보 (개발자에게 전달)"):
+                st.exception(e)
+
+            logging.error(f"처리 실패: {str(e)}", exc_info=True)
+
     # 원래 메인 페이지 내용을 함수로 래핑
 
     def upload_and_process_section():
@@ -270,215 +486,7 @@ with tab1:
 
     st.divider()
 
-def process_data(uploaded_file, selected_date):
-    """데이터 처리 함수"""
-
-    # 진행상황 표시
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    try:
-        # 1. 임시 파일 저장
-        status_text.text("📤 파일 업로드 중...")
-        progress_bar.progress(10)
-
-        temp_path = os.path.join("uploads", uploaded_file.name)
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_file.read())
-
-        logging.info(f"파일 업로드: {uploaded_file.name}, 크기: {uploaded_file.size} bytes")
-
-        # 2. 날짜 변환
-        date_str = selected_date.strftime('%Y-%m-%d')
-
-        # 3. 매출 데이터 처리
-        status_text.text("💰 매출 데이터 처리 중...")
-        progress_bar.progress(30)
-
-        df_sales = get_sales_daily(temp_path, date_str, master_file_path="Src/거래처마스터.xlsx")
-        logging.info(f"매출 처리 완료: {len(df_sales)}건")
-
-        # 4. 매입 데이터 처리
-        status_text.text("🛒 매입 데이터 처리 중...")
-        progress_bar.progress(60)
-
-        df_purchase = get_purchase_daily(temp_path, date_str, master_file_path="Src/거래처마스터.xlsx")
-        logging.info(f"매입 처리 완료: {len(df_purchase)}건")
-
-        # 5. 파일 저장
-        status_text.text("💾 파일 저장 중...")
-        progress_bar.progress(80)
-
-        sales_filename = f"매출_{date_str}.xls"
-        purchase_filename = f"매입_{date_str}.xls"
-
-        sales_filepath = os.path.join("processed", sales_filename)
-        purchase_filepath = os.path.join("processed", purchase_filename)
-
-        save_dataframe_to_xls(df_sales, sales_filepath)
-        save_dataframe_to_xls(df_purchase, purchase_filepath)
-
-        # 6. 임시 파일 삭제
-        os.remove(temp_path)
-
-        # 7. 완료
-        progress_bar.progress(100)
-        status_text.text("✅ 처리 완료!")
-
-        # 성공 메시지
-        st.balloons()
-        st.markdown('<div class="success-box">✅ <b>처리가 완료되었습니다!</b></div>', unsafe_allow_html=True)
-
-        # =================================================================
-        # 2025-12-09 hoyeon.han: 처리 결과를 Session State에 저장
-        # 왜 저장하나? 페이지가 다시 실행되어도 결과를 표시하기 위해
-        # 딕셔너리(dictionary) 형태로 여러 정보를 하나로 묶어서 저장
-        # =================================================================
-
-        st.session_state.last_result = {
-            # 처리한 날짜 (예: "2025-12-09")
-            'date': date_str,
-
-            # 업로드한 파일 이름 (예: "발주내역_2025.xlsm")
-            'file': uploaded_file.name,
-
-            # 처리된 매출 데이터 건수 (예: 42건)
-            'sales_count': len(df_sales),
-
-            # 처리된 매입 데이터 건수 (예: 38건)
-            'purchase_count': len(df_purchase),
-
-            # 실제 매출 데이터 전체 (pandas DataFrame 객체)
-            # DataFrame은 엑셀처럼 행과 열로 구성된 표 형태의 데이터
-            'df_sales': df_sales,
-
-            # 실제 매입 데이터 전체 (pandas DataFrame 객체)
-            'df_purchase': df_purchase,
-
-            # 저장된 매출 파일 이름 (예: "매출_2025-12-09.xls")
-            'sales_filename': sales_filename,
-
-            # 저장된 매입 파일 이름 (예: "매입_2025-12-09.xls")
-            'purchase_filename': purchase_filename,
-
-            # 매출 파일의 전체 경로 (예: "processed/매출_2025-12-09.xls")
-            'sales_filepath': sales_filepath,
-
-            # 매입 파일의 전체 경로 (예: "processed/매입_2025-12-09.xls")
-            'purchase_filepath': purchase_filepath,
-
-            # 처리가 완료된 시각 (datetime 객체, 예: 2025-12-09 14:35:22)
-            'timestamp': datetime.now()
-        }
-
-        # =================================================================
-        # 처리 이력을 history 리스트에 추가
-        # append()는 리스트의 끝에 새 항목을 추가하는 함수
-        # 이력 목록에 표시할 요약 정보만 저장 (전체 데이터는 last_result에만)
-        # =================================================================
-
-        st.session_state.history.append({
-            # 처리 시각 (나중에 역순 정렬하여 최신 항목이 위에 표시됨)
-            'timestamp': datetime.now(),
-
-            # 처리 날짜
-            'date': date_str,
-
-            # 파일 이름
-            'file': uploaded_file.name,
-
-            # 매출 건수
-            'sales_count': len(df_sales),
-
-            # 매입 건수
-            'purchase_count': len(df_purchase)
-        })
-
-        # 페이지 리로드하여 결과 섹션 표시
-        st.rerun()
-
-    # 2025-11-29 hoyeon.han: Phase 2 - 개선된 예외 처리
-    except SollumeBaseException as e:
-        # 커스텀 예외 처리
-        progress_bar.empty()
-        status_text.empty()
-
-        # 심각도에 따른 아이콘
-        severity_icon = {
-            ErrorSeverity.INFO: "ℹ️",
-            ErrorSeverity.WARNING: "⚠️",
-            ErrorSeverity.ERROR: "❌",
-            ErrorSeverity.CRITICAL: "🚨"
-        }
-
-        # 사용자 메시지 표시
-        st.markdown(
-            f'<div class="error-box">'
-            f'{severity_icon[e.severity]} <b>{e.category.value}</b><br>'
-            f'{e.user_message}'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
-        # 해결 방법 안내
-        if e.solution_hints:
-            st.info("**💡 해결 방법:**")
-            for hint in e.solution_hints:
-                st.write(hint)
-
-        # 개발자용 정보 (접을 수 있음)
-        with st.expander("🔍 개발자용 상세 정보"):
-            st.code(f"오류 ID: {e.error_id}")
-            st.code(f"발생 시각: {e.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-            st.text(e.technical_details)
-            if e.context:
-                st.json(e.context)
-
-        # 오류 리포트 다운로드
-        error_report = {
-            "오류_ID": e.error_id,
-            "발생_시각": e.timestamp.isoformat(),
-            "카테고리": e.category.value,
-            "심각도": e.severity.value,
-            "사용자_메시지": e.user_message,
-            "기술_상세": e.technical_details,
-            "해결_힌트": e.solution_hints,
-            "컨텍스트": e.context,
-            "파일명": uploaded_file.name if uploaded_file else "N/A",
-            "선택_날짜": date_str,
-        }
-
-        st.download_button(
-            label="📥 오류 리포트 다운로드 (개발자 전달용)",
-            data=json.dumps(error_report, ensure_ascii=False, indent=2),
-            file_name=f"error_report_{e.error_id}.json",
-            mime="application/json"
-        )
-
-        # 오류 ID 강조
-        st.warning(
-            f"⚠️ 문제가 계속되면 **오류 ID: `{e.error_id}`** 를 "
-            f"개발자에게 알려주세요."
-        )
-
-        # 로거에 기록
-        logger = get_logger()
-        logger.log_custom_exception(e)
-
-    except Exception as e:
-        # 예상치 못한 오류
-        progress_bar.empty()
-        status_text.empty()
-
-        st.markdown(
-            '<div class="error-box">🚨 <b>예상치 못한 오류가 발생했습니다</b></div>',
-            unsafe_allow_html=True
-        )
-
-        with st.expander("🔍 에러 상세 정보 (개발자에게 전달)"):
-            st.exception(e)
-
-        logging.error(f"처리 실패: {str(e)}", exc_info=True)
+# 2025-12-16 hoyeon.han: process_data() 함수는 Line 197에 정의됨
 
 # =============================================================================
 # Section 2: 처리 결과 (조건부 표시)
