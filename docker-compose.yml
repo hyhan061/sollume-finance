@@ -13,9 +13,11 @@ services:
       - ./logs:/app/logs
       - ./processed:/app/processed
       - ./uploads:/app/uploads
-      - ./Src/거래처마스터.xlsx:/app/Src/거래처마스터.xlsx
+      # 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 사용
+      - ./database:/app/database
       # 개발 시 코드 수정을 즉시 반영 (선택사항)
-      # - ./app.py:/app/app.py
+      # - ./Home.py:/app/Home.py
+      # - ./pages:/app/pages
       # - ./Src/processing.py:/app/Src/processing.py
     environment:
       - TZ=Asia/Seoul

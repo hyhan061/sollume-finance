@@ -20,7 +20,8 @@ COMPOSE_FILE="docker-compose.cloud.yml"
 
 # 애플리케이션 디렉토리 생성
 echo "📁 애플리케이션 디렉토리 생성..."
-mkdir -p ${APP_DIR}/{logs,processed,uploads}
+# 2025-12-16 hoyeon.han: database 디렉토리 추가
+mkdir -p ${APP_DIR}/{logs,processed,uploads,database}
 cd ${APP_DIR}
 echo "✅ 디렉토리: $(pwd)"
 echo ""
@@ -40,7 +41,7 @@ services:
       - ./logs:/app/logs
       - ./processed:/app/processed
       - ./uploads:/app/uploads
-      - ./거래처마스터.xlsx:/app/Src/거래처마스터.xlsx:ro
+      - ./database:/app/database
     environment:
       - TZ=Asia/Seoul
       - PYTHONUNBUFFERED=1
@@ -82,11 +83,11 @@ else
 fi
 echo ""
 
-# 거래처마스터 파일 확인
-if [ ! -f "거래처마스터.xlsx" ]; then
-    echo "⚠️  경고: 거래처마스터.xlsx 파일이 없습니다!"
+# 2025-12-16 hoyeon.han: 거래처 DB 파일 확인
+if [ ! -f "database/customer_master.db" ]; then
+    echo "⚠️  경고: database/customer_master.db 파일이 없습니다!"
     echo "   이 파일을 서버로 복사해야 합니다:"
-    echo "   scp Src/거래처마스터.xlsx ubuntu@server-ip:~/sollume-finance/"
+    echo "   scp database/customer_master.db ubuntu@server-ip:~/sollume-finance/database/"
     echo ""
     read -p "계속하시겠습니까? (y/N): " -n 1 -r
     echo
@@ -159,5 +160,5 @@ echo ""
 echo "⚠️  중요사항:"
 echo "  - Oracle Cloud 콘솔에서 8501 포트가 열려있는지 확인"
 echo "  - Ingress Rules → 0.0.0.0/0 → TCP 8501 추가"
-echo "  - 거래처마스터.xlsx 파일 복사 확인"
+echo "  - database/customer_master.db 파일 복사 확인"
 echo ""

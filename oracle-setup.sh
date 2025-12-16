@@ -94,7 +94,8 @@ echo ""
 
 # 애플리케이션 디렉토리 생성
 echo "📁 애플리케이션 디렉토리 생성..."
-mkdir -p ~/sollume-finance/{logs,processed,uploads}
+# 2025-12-16 hoyeon.han: database 디렉토리 추가
+mkdir -p ~/sollume-finance/{logs,processed,uploads,database}
 cd ~/sollume-finance
 echo "✅ 디렉토리 생성 완료: $(pwd)"
 echo ""

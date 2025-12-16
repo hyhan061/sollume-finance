@@ -30,7 +30,8 @@ fi
 # 1. NAS에 디렉토리 생성
 echo ""
 echo "📁 NAS에 디렉토리 생성 중..."
-ssh ${NAS_USER}@${NAS_HOST} "mkdir -p ${NAS_PATH}/{logs,processed,uploads,Src,.streamlit}"
+# 2025-12-16 hoyeon.han: database, pages 디렉토리 추가
+ssh ${NAS_USER}@${NAS_HOST} "mkdir -p ${NAS_PATH}/{logs,processed,uploads,database,Src,pages,.streamlit}"
 
 if [ $? -ne 0 ]; then
     echo "❌ SSH 연결 실패. NAS 주소와 사용자명을 확인하세요."
@@ -42,15 +43,23 @@ echo ""
 echo "📤 파일을 NAS로 전송 중..."
 
 # 애플리케이션 파일
-scp app.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
+# 2025-12-16 hoyeon.han: app.py → Home.py, Multi-Page App 구조로 변경
+scp Home.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
 scp Dockerfile ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
 scp docker-compose.yml ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
 scp requirements.txt ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
 scp .dockerignore ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
 
+# Pages 디렉토리 (Multi-Page App)
+scp pages/*.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/pages/
+
 # Src 디렉토리
 scp Src/processing.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
-scp "Src/거래처마스터.xlsx" ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
+scp Src/customer_master_db.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
+
+# Database 디렉토리
+# 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 전송
+scp database/customer_master.db ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/database/
 
 # Streamlit 설정
 scp .streamlit/config.toml ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/.streamlit/

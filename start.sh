@@ -47,20 +47,21 @@ echo ""
 
 # =============================================================================
 # 2025-12-09 hoyeon.han: 필수 파일 확인
+# 2025-12-16 hoyeon.han: app.py → Home.py, 엑셀 → DB 변경
 # =============================================================================
 echo "📋 필수 파일 확인 중..."
 
-if [ ! -f "app.py" ]; then
-    echo "❌ app.py 파일이 없습니다!"
+if [ ! -f "Home.py" ]; then
+    echo "❌ Home.py 파일이 없습니다!"
     exit 1
 fi
-echo "   ✓ app.py 존재"
+echo "   ✓ Home.py 존재"
 
-if [ ! -f "Src/거래처마스터.xlsx" ]; then
-    echo "⚠️  경고: Src/거래처마스터.xlsx 파일이 없습니다."
-    echo "   앱 실행 시 오류가 발생할 수 있습니다."
+if [ ! -f "database/customer_master.db" ]; then
+    echo "⚠️  경고: database/customer_master.db 파일이 없습니다."
+    echo "   scripts/migrate_excel_to_db.py를 실행하여 마이그레이션하세요."
 else
-    echo "   ✓ 거래처마스터.xlsx 존재"
+    echo "   ✓ customer_master.db 존재"
 fi
 echo ""
 
@@ -98,4 +99,5 @@ echo ""
 # --server.port 8501: 포트 번호
 # --server.address localhost: 로컬에서만 접근 가능
 # --browser.gatherUsageStats false: 사용 통계 수집 안함
-streamlit run app.py --server.port 8501 --server.address localhost --browser.gatherUsageStats false
+# 2025-12-16 hoyeon.han: app.py → Home.py 변경
+streamlit run Home.py --server.port 8501 --server.address localhost --browser.gatherUsageStats false

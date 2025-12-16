@@ -17,14 +17,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
-COPY app.py .
+# 2025-12-16 hoyeon.han: Multi-Page App 구조로 변경
+COPY Home.py .
+COPY pages/ ./pages/
 COPY Src/ ./Src/
 
 # Streamlit 설정 파일 복사
 COPY .streamlit/ ./.streamlit/
 
 # 디렉토리 생성
-RUN mkdir -p logs uploads processed
+# 2025-12-16 hoyeon.han: database 디렉토리 추가
+RUN mkdir -p logs uploads processed database
 
 # 포트 노출
 EXPOSE 8501
@@ -34,4 +37,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
 # Streamlit 실행
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false"]
+# 2025-12-16 hoyeon.han: app.py → Home.py 변경
+CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false"]

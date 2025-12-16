@@ -43,6 +43,10 @@ uploads/*
 processed/*
 *.log
 
+# 2025-12-16 hoyeon.han: 데이터베이스 파일 제외 (런타임에 볼륨 마운트)
+database/*
+!database/.gitkeep
+
 # 문서
 README*.md
 *.md
