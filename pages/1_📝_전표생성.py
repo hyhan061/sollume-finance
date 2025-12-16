@@ -162,7 +162,11 @@ def process_data(uploaded_file, selected_date):
         save_dataframe_to_xls(df_purchase, purchase_filepath)
 
         # 6. 임시 파일 삭제
-        os.remove(temp_path)
+        # 2025-12-16 hoyeon.han: 파일이 없어도 에러 없이 진행
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass  # 파일이 이미 없으면 skip
 
         # 7. 완료
         progress_bar.progress(100)
@@ -580,27 +584,46 @@ def settings_section():
 
     col1, col2, col3 = st.columns(3)
 
+    # 2025-12-16 hoyeon.han: 파일 삭제 시 안전 처리 추가
     with col1:
         if st.button("🗑️ 업로드 파일 삭제", type="secondary", key="del_uploads"):
+            deleted_count = 0
             if os.path.exists("uploads"):
                 for file in os.listdir("uploads"):
-                    os.remove(os.path.join("uploads", file))
-                st.success("삭제 완료!")
+                    try:
+                        os.remove(os.path.join("uploads", file))
+                        deleted_count += 1
+                    except FileNotFoundError:
+                        pass  # 파일이 이미 없으면 skip
+            st.success(f"삭제 완료! ({deleted_count}개 파일)" if deleted_count > 0 else "삭제할 파일이 없습니다.")
+            if deleted_count > 0:
                 st.rerun()
 
     with col2:
         if st.button("🗑️ 처리된 파일 삭제", type="secondary", key="del_processed"):
+            deleted_count = 0
             if os.path.exists("processed"):
                 for file in os.listdir("processed"):
-                    os.remove(os.path.join("processed", file))
-                st.success("삭제 완료!")
+                    try:
+                        os.remove(os.path.join("processed", file))
+                        deleted_count += 1
+                    except FileNotFoundError:
+                        pass  # 파일이 이미 없으면 skip
+            st.success(f"삭제 완료! ({deleted_count}개 파일)" if deleted_count > 0 else "삭제할 파일이 없습니다.")
+            if deleted_count > 0:
                 st.rerun()
 
     with col3:
         if st.button("🗑️ 로그 파일 삭제", type="secondary", key="del_logs"):
+            deleted = False
             if os.path.exists("logs/app.log"):
-                os.remove("logs/app.log")
-                st.success("삭제 완료!")
+                try:
+                    os.remove("logs/app.log")
+                    deleted = True
+                except FileNotFoundError:
+                    pass  # 파일이 이미 없으면 skip
+            st.success("삭제 완료!" if deleted else "삭제할 파일이 없습니다.")
+            if deleted:
                 st.rerun()
 
 # =============================================================================

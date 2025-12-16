@@ -38,24 +38,38 @@ class CustomerMasterDB:
         self._init_db()
 
     def _init_db(self):
-        """데이터베이스 초기화 및 테이블 생성"""
+        """데이터베이스 초기화 및 테이블 생성
+
+        2025-12-16 hoyeon.han: 스키마 변경
+        - PK: 사업자번호 → id (AUTOINCREMENT)
+        - UNIQUE: (사업자번호, 발주내역_거래처명) 조합
+        - 이유: 동일 사업자번호가 여러 거래처명으로 표현될 수 있음
+        """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
                 # customers 테이블 생성
+                # 2025-12-16 hoyeon.han: id를 PK로 변경, 사업자번호+거래처명을 UNIQUE로
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS customers (
-                        사업자번호 VARCHAR(12) PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        사업자번호 VARCHAR(12) NOT NULL,
                         발주내역_거래처명 TEXT NOT NULL,
                         경리나라_거래처명 TEXT NOT NULL,
                         대표자명 TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(사업자번호, 발주내역_거래처명)
                     )
                 """)
 
                 # 인덱스 생성 (빠른 검색)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_customers_business_number
+                    ON customers(사업자번호)
+                """)
+
                 cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_customers_order_name
                     ON customers(발주내역_거래처명)
@@ -86,8 +100,12 @@ class CustomerMasterDB:
     ) -> Tuple[bool, str]:
         """거래처 추가
 
+        2025-12-16 hoyeon.han: PK 변경으로 인한 로직 수정
+        - PK: 사업자번호 → id (자동 생성)
+        - UNIQUE: (사업자번호, 발주내역_거래처명)
+
         Args:
-            business_number: 사업자번호 (PK)
+            business_number: 사업자번호
             order_name: 발주내역 거래처명
             accounting_name: 경리나라 거래처명
             representative: 대표자명 (선택)
@@ -111,21 +129,56 @@ class CustomerMasterDB:
                 return True, f"거래처가 등록되었습니다: {order_name}"
 
         except sqlite3.IntegrityError:
-            self.logger.warning(f"Duplicate business number: {business_number}")
-            return False, f"이미 존재하는 사업자번호입니다: {business_number}"
+            # 2025-12-16 hoyeon.han: UNIQUE 제약 위반 시 메시지 변경
+            self.logger.warning(f"Duplicate: {business_number} - {order_name}")
+            return False, f"이미 존재하는 거래처입니다: {business_number} - {order_name}"
 
         except Exception as e:
             self.logger.error(f"Failed to add customer: {e}")
             return False, f"거래처 등록 실패: {str(e)}"
 
-    def get_customer(self, business_number: str) -> Optional[dict]:
-        """사업자번호로 거래처 조회
+    # 2025-12-16 hoyeon.han: 기존 함수 - 하위 호환성 유지 (첫 번째 결과만 반환)
+    # def get_customer(self, business_number: str) -> Optional[dict]:
+    #     """사업자번호로 거래처 조회
+    #
+    #     Args:
+    #         business_number: 사업자번호
+    #
+    #     Returns:
+    #         거래처 정보 딕셔너리 또는 None
+    #     """
+    #     try:
+    #         with sqlite3.connect(self.db_path) as conn:
+    #             conn.row_factory = sqlite3.Row  # Row 객체로 반환
+    #             cursor = conn.cursor()
+    #
+    #             cursor.execute("""
+    #                 SELECT * FROM customers WHERE 사업자번호 = ?
+    #             """, (business_number,))
+    #
+    #             row = cursor.fetchone()
+    #
+    #             if row:
+    #                 return dict(row)
+    #             else:
+    #                 return None
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"Failed to get customer: {e}")
+    #         return None
+
+    def get_customer(self, business_number: str) -> List[dict]:
+        """사업자번호로 거래처 조회 (여러 건 반환 가능)
+
+        2025-12-16 hoyeon.han: 스키마 변경으로 인한 수정
+        - 동일 사업자번호가 여러 거래처명으로 존재할 수 있음
+        - 반환 타입: Optional[dict] → List[dict]
 
         Args:
             business_number: 사업자번호
 
         Returns:
-            거래처 정보 딕셔너리 또는 None
+            거래처 정보 딕셔너리 리스트 (없으면 빈 리스트)
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -134,67 +187,190 @@ class CustomerMasterDB:
 
                 cursor.execute("""
                     SELECT * FROM customers WHERE 사업자번호 = ?
+                    ORDER BY 발주내역_거래처명
                 """, (business_number,))
 
-                row = cursor.fetchone()
+                rows = cursor.fetchall()
 
-                if row:
-                    return dict(row)
-                else:
-                    return None
+                return [dict(row) for row in rows]
 
         except Exception as e:
             self.logger.error(f"Failed to get customer: {e}")
-            return None
+            return []
+
+    # 2025-12-16 hoyeon.han: 기존 함수 - 사업자번호로 수정 (첫 번째 매칭 레코드만 수정)
+    # def update_customer(
+    #     self,
+    #     business_number: str,
+    #     order_name: str,
+    #     accounting_name: str,
+    #     representative: Optional[str] = None
+    # ) -> Tuple[bool, str]:
+    #     """거래처 정보 수정
+    #
+    #     Args:
+    #         business_number: 사업자번호 (PK, 변경 불가)
+    #         order_name: 발주내역 거래처명
+    #         accounting_name: 경리나라 거래처명
+    #         representative: 대표자명 (선택)
+    #
+    #     Returns:
+    #         (성공 여부, 메시지)
+    #     """
+    #     try:
+    #         with sqlite3.connect(self.db_path) as conn:
+    #             cursor = conn.cursor()
+    #
+    #             cursor.execute("""
+    #                 UPDATE customers
+    #                 SET 발주내역_거래처명 = ?,
+    #                     경리나라_거래처명 = ?,
+    #                     대표자명 = ?,
+    #                     updated_at = CURRENT_TIMESTAMP
+    #                 WHERE 사업자번호 = ?
+    #             """, (order_name, accounting_name, representative, business_number))
+    #
+    #             if cursor.rowcount == 0:
+    #                 return False, f"거래처를 찾을 수 없습니다: {business_number}"
+    #
+    #             conn.commit()
+    #
+    #             self.logger.info(f"Customer updated: {business_number}")
+    #             return True, f"거래처 정보가 수정되었습니다: {order_name}"
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"Failed to update customer: {e}")
+    #         return False, f"거래처 수정 실패: {str(e)}"
 
     def update_customer(
         self,
-        business_number: str,
-        order_name: str,
-        accounting_name: str,
+        customer_id: int,
+        business_number: Optional[str] = None,
+        order_name: Optional[str] = None,
+        accounting_name: Optional[str] = None,
         representative: Optional[str] = None
     ) -> Tuple[bool, str]:
-        """거래처 정보 수정
+        """거래처 정보 수정 (ID 기준)
+
+        2025-12-16 hoyeon.han: 스키마 변경으로 인한 수정
+        - 식별자: 사업자번호 → id (PK)
+        - 모든 필드 Optional로 변경 (부분 수정 가능)
 
         Args:
-            business_number: 사업자번호 (PK, 변경 불가)
-            order_name: 발주내역 거래처명
-            accounting_name: 경리나라 거래처명
+            customer_id: 거래처 ID (PK)
+            business_number: 사업자번호 (선택)
+            order_name: 발주내역 거래처명 (선택)
+            accounting_name: 경리나라 거래처명 (선택)
             representative: 대표자명 (선택)
 
         Returns:
             (성공 여부, 메시지)
         """
         try:
+            # 기존 데이터 조회
+            customer = self.get_customer_by_id(customer_id)
+            if not customer:
+                return False, f"거래처를 찾을 수 없습니다: ID {customer_id}"
+
+            # 수정할 필드만 업데이트
+            update_fields = []
+            update_values = []
+
+            if business_number is not None:
+                update_fields.append("사업자번호 = ?")
+                update_values.append(business_number)
+
+            if order_name is not None:
+                update_fields.append("발주내역_거래처명 = ?")
+                update_values.append(order_name)
+
+            if accounting_name is not None:
+                update_fields.append("경리나라_거래처명 = ?")
+                update_values.append(accounting_name)
+
+            if representative is not None:
+                update_fields.append("대표자명 = ?")
+                update_values.append(representative)
+
+            if not update_fields:
+                return False, "수정할 필드가 없습니다"
+
+            # updated_at 자동 갱신
+            update_fields.append("updated_at = CURRENT_TIMESTAMP")
+
+            # ID 추가
+            update_values.append(customer_id)
+
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                cursor.execute("""
+                sql = f"""
                     UPDATE customers
-                    SET 발주내역_거래처명 = ?,
-                        경리나라_거래처명 = ?,
-                        대표자명 = ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE 사업자번호 = ?
-                """, (order_name, accounting_name, representative, business_number))
+                    SET {', '.join(update_fields)}
+                    WHERE id = ?
+                """
 
-                if cursor.rowcount == 0:
-                    return False, f"거래처를 찾을 수 없습니다: {business_number}"
-
+                cursor.execute(sql, update_values)
                 conn.commit()
 
-                self.logger.info(f"Customer updated: {business_number}")
-                return True, f"거래처 정보가 수정되었습니다: {order_name}"
+                self.logger.info(f"Customer updated: ID {customer_id}")
+                return True, f"거래처 정보가 수정되었습니다 (ID: {customer_id})"
+
+        except sqlite3.IntegrityError:
+            # 2025-12-16 hoyeon.han: UNIQUE 제약 위반
+            self.logger.warning(f"Duplicate: {business_number} - {order_name}")
+            return False, f"중복된 거래처 정보입니다: {business_number} - {order_name}"
 
         except Exception as e:
             self.logger.error(f"Failed to update customer: {e}")
             return False, f"거래처 수정 실패: {str(e)}"
 
-    def delete_customer(self, business_number: str) -> Tuple[bool, str]:
-        """거래처 삭제
+    # 2025-12-16 hoyeon.han: 기존 함수 - 사업자번호로 삭제 (모든 매칭 레코드 삭제)
+    # def delete_customer(self, business_number: str) -> Tuple[bool, str]:
+    #     """거래처 삭제
+    #
+    #     Args:
+    #         business_number: 사업자번호
+    #
+    #     Returns:
+    #         (성공 여부, 메시지)
+    #     """
+    #     try:
+    #         with sqlite3.connect(self.db_path) as conn:
+    #             cursor = conn.cursor()
+    #
+    #             # 삭제 전 정보 조회 (로그용)
+    #             customer = self.get_customer(business_number)
+    #
+    #             cursor.execute("""
+    #                 DELETE FROM customers WHERE 사업자번호 = ?
+    #             """, (business_number,))
+    #
+    #             if cursor.rowcount == 0:
+    #                 return False, f"거래처를 찾을 수 없습니다: {business_number}"
+    #
+    #             conn.commit()
+    #
+    #             if customer:
+    #                 self.logger.info(
+    #                     f"Customer deleted: {business_number} - "
+    #                     f"{customer.get('발주내역_거래처명')}"
+    #                 )
+    #
+    #             return True, "거래처가 삭제되었습니다"
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"Failed to delete customer: {e}")
+    #         return False, f"거래처 삭제 실패: {str(e)}"
+
+    def delete_customer(self, customer_id: int) -> Tuple[bool, str]:
+        """거래처 삭제 (ID 기준)
+
+        2025-12-16 hoyeon.han: 스키마 변경으로 인한 수정
+        - 식별자: 사업자번호 → id (PK)
 
         Args:
-            business_number: 사업자번호
+            customer_id: 거래처 ID (PK)
 
         Returns:
             (성공 여부, 메시지)
@@ -204,20 +380,21 @@ class CustomerMasterDB:
                 cursor = conn.cursor()
 
                 # 삭제 전 정보 조회 (로그용)
-                customer = self.get_customer(business_number)
+                customer = self.get_customer_by_id(customer_id)
 
                 cursor.execute("""
-                    DELETE FROM customers WHERE 사업자번호 = ?
-                """, (business_number,))
+                    DELETE FROM customers WHERE id = ?
+                """, (customer_id,))
 
                 if cursor.rowcount == 0:
-                    return False, f"거래처를 찾을 수 없습니다: {business_number}"
+                    return False, f"거래처를 찾을 수 없습니다: ID {customer_id}"
 
                 conn.commit()
 
                 if customer:
                     self.logger.info(
-                        f"Customer deleted: {business_number} - "
+                        f"Customer deleted: ID {customer_id} - "
+                        f"{customer.get('사업자번호')} - "
                         f"{customer.get('발주내역_거래처명')}"
                     )
 
@@ -227,12 +404,84 @@ class CustomerMasterDB:
             self.logger.error(f"Failed to delete customer: {e}")
             return False, f"거래처 삭제 실패: {str(e)}"
 
+    def get_customer_by_id(self, customer_id: int) -> Optional[dict]:
+        """ID로 거래처 조회
+
+        2025-12-16 hoyeon.han: 신규 함수 추가
+        - PK가 id로 변경되어 고유 식별을 위한 함수 추가
+
+        Args:
+            customer_id: 거래처 ID (PK)
+
+        Returns:
+            거래처 정보 딕셔너리 또는 None
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT * FROM customers WHERE id = ?
+                """, (customer_id,))
+
+                row = cursor.fetchone()
+
+                if row:
+                    return dict(row)
+                else:
+                    return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to get customer by id: {e}")
+            return None
+
+    def get_customer_by_name_and_business_number(
+        self,
+        order_name: str,
+        business_number: str
+    ) -> Optional[dict]:
+        """발주내역 거래처명과 사업자번호로 거래처 조회
+
+        2025-12-16 hoyeon.han: 신규 함수 추가
+        - UNIQUE(사업자번호, 발주내역_거래처명)로 정확히 1건 조회
+
+        Args:
+            order_name: 발주내역 거래처명
+            business_number: 사업자번호
+
+        Returns:
+            거래처 정보 딕셔너리 또는 None
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT * FROM customers
+                    WHERE 발주내역_거래처명 = ? AND 사업자번호 = ?
+                """, (order_name, business_number))
+
+                row = cursor.fetchone()
+
+                if row:
+                    return dict(row)
+                else:
+                    return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to get customer by name and business number: {e}")
+            return None
+
     # ==========================================================================
     # 검색 기능
     # ==========================================================================
 
     def search_customers(self, query: str) -> pd.DataFrame:
         """거래처 검색 (거래처명 또는 사업자번호)
+
+        2025-12-16 hoyeon.han: id 컬럼 추가 출력
 
         Args:
             query: 검색어 (거래처명 일부 또는 사업자번호)
@@ -245,6 +494,7 @@ class CustomerMasterDB:
                 # LIKE 검색 (부분 일치)
                 sql = """
                     SELECT
+                        id,
                         사업자번호,
                         발주내역_거래처명,
                         경리나라_거래처명,
@@ -276,6 +526,8 @@ class CustomerMasterDB:
     def get_all_customers(self) -> pd.DataFrame:
         """모든 거래처 조회
 
+        2025-12-16 hoyeon.han: id 컬럼 추가 출력
+
         Returns:
             전체 거래처 DataFrame
         """
@@ -283,6 +535,7 @@ class CustomerMasterDB:
             with sqlite3.connect(self.db_path) as conn:
                 sql = """
                     SELECT
+                        id,
                         사업자번호,
                         발주내역_거래처명,
                         경리나라_거래처명,
@@ -303,6 +556,9 @@ class CustomerMasterDB:
 
     def get_business_number(self, order_name: str) -> Optional[str]:
         """발주내역 거래처명으로 사업자번호 조회
+
+        2025-12-16 hoyeon.han: 스키마 변경 후에도 함수 시그니처 유지
+        - UNIQUE(사업자번호, 발주내역_거래처명)으로 1건만 반환됨
 
         Args:
             order_name: 발주내역 거래처명
