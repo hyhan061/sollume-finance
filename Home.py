@@ -2,6 +2,10 @@
 # 2025-12-16 hoyeon.han
 # 솔루미랩 회계 시스템 - Multi-Page App 홈 화면
 
+# Streamlit page configuration
+# title: 🏠 홈
+# icon: 🏠
+
 import streamlit as st
 import os
 from pathlib import Path
@@ -15,7 +19,7 @@ os.makedirs("database/backups", exist_ok=True)
 
 # 페이지 설정
 st.set_page_config(
-    page_title="솔루미랩 회계 시스템",
+    page_title="SollumeLab 회계 시스템",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -57,7 +61,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 홈 화면
-st.markdown('<div class="main-header">📊 솔루미랩 회계 시스템</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📊 SollumeLab 회계 시스템</div>', unsafe_allow_html=True)
 
 st.markdown("### 환영합니다! 👋")
 st.markdown("왼쪽 사이드바에서 원하는 기능을 선택하세요.")
@@ -129,7 +133,9 @@ st.info("""
 👈 **왼쪽 사이드바**에서 메뉴를 선택하세요.
 
 1️⃣ **전표 생성**: 발주내역 엑셀 업로드 → 날짜 선택 → 전표 생성 → 다운로드
+
 2️⃣ **발주내역 요약**: 발주내역 엑셀 업로드 → 기간 선택 → 요약 처리 → 다운로드
+
 3️⃣ **거래처 관리**: 거래처 검색 → 조회/등록/수정/삭제 → DB 관리
 """)
 

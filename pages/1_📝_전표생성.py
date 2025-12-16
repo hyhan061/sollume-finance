@@ -138,14 +138,16 @@ def process_data(uploaded_file, selected_date):
         status_text.text("💰 매출 데이터 처리 중...")
         progress_bar.progress(30)
 
-        df_sales = get_sales_daily(temp_path, date_str, master_file_path="Src/거래처마스터.xlsx")
+        # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
+        df_sales = get_sales_daily(temp_path, date_str, use_db=True)
         logging.info(f"매출 처리 완료: {len(df_sales)}건")
 
         # 4. 매입 데이터 처리
         status_text.text("🛒 매입 데이터 처리 중...")
         progress_bar.progress(60)
 
-        df_purchase = get_purchase_daily(temp_path, date_str, master_file_path="Src/거래처마스터.xlsx")
+        # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
+        df_purchase = get_purchase_daily(temp_path, date_str, use_db=True)
         logging.info(f"매입 처리 완료: {len(df_purchase)}건")
 
         # 5. 파일 저장
@@ -535,20 +537,33 @@ def log_viewer_section():
 def settings_section():
     """시스템 설정 및 관리 섹션"""
 
-    st.markdown("#### 📋 거래처마스터 파일")
-    master_file = "Src/거래처마스터.xlsx"
+    # 2025-12-16 hoyeon.han: 거래처마스터 파일 체크 제거, DB 상태로 변경
+    st.markdown("#### 📊 거래처 데이터베이스")
 
-    if os.path.exists(master_file):
-        file_size = os.path.getsize(master_file) / 1024
-        file_time = datetime.fromtimestamp(os.path.getmtime(master_file))
+    db_path = "database/customer_master.db"
 
-        st.success(f"✓ 파일 존재: {master_file}")
-        st.caption(
-            f"{file_size:.1f} KB | "
-            f"최종 수정: {file_time.strftime('%Y-%m-%d %H:%M')}"
-        )
+    if os.path.exists(db_path):
+        file_size = os.path.getsize(db_path) / 1024
+        file_time = datetime.fromtimestamp(os.path.getmtime(db_path))
+
+        # DB 연결해서 거래처 수 조회
+        try:
+            from Src.customer_master_db import CustomerMasterDB
+            db = CustomerMasterDB(db_path)
+            customer_count = len(db.get_all_customers())
+
+            st.success(f"✓ 데이터베이스 연결됨: {db_path}")
+            st.caption(
+                f"{file_size:.1f} KB | "
+                f"거래처 수: {customer_count}개 | "
+                f"최종 수정: {file_time.strftime('%Y-%m-%d %H:%M')}"
+            )
+        except Exception as e:
+            st.warning(f"⚠️ DB 조회 중 오류: {str(e)}")
+            st.caption(f"{file_size:.1f} KB | 최종 수정: {file_time.strftime('%Y-%m-%d %H:%M')}")
     else:
-        st.error(f"✗ 파일이 존재하지 않습니다: {master_file}")
+        st.error(f"✗ 데이터베이스가 존재하지 않습니다: {db_path}")
+        st.caption("scripts/migrate_excel_to_db.py를 실행하여 마이그레이션하세요.")
 
     st.divider()
 
