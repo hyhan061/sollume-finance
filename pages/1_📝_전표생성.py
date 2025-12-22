@@ -2,6 +2,7 @@
 솔루미랩 경리나라 전표 생성 페이지
 매출/매입 전표 날짜별 일괄등록 파일 생성
 2025-12-16 hoyeon.han: app.py.backup의 tab1 내용을 별도 페이지로 분리
+2025-12-17 hoyeon.han: 로그인 인증 추가
 """
 
 import streamlit as st
@@ -15,6 +16,14 @@ import json
 
 # Src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
+
+# 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
+import importlib.util
+spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent.parent / "Src" / "auth.py")
+auth = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(auth)
+auth.require_auth()
+auth.show_user_info_sidebar()
 
 # 전표 생성 모듈
 from processing import get_sales_daily, get_purchase_daily, save_dataframe_to_xls

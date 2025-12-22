@@ -2,6 +2,7 @@
 솔루미랩 발주내역 요약 페이지
 특정 기간 동안의 발주내역을 일자별/업체별로 요약
 2025-12-16 hoyeon.han: app.py.backup의 tab2 내용을 별도 페이지로 분리
+2025-12-17 hoyeon.han: 로그인 인증 추가
 """
 
 import streamlit as st
@@ -13,6 +14,14 @@ from pathlib import Path
 
 # Src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
+
+# 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
+import importlib.util
+spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent.parent / "Src" / "auth.py")
+auth = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(auth)
+auth.require_auth()
+auth.show_user_info_sidebar()
 
 # 발주내역 기간별 요약 모듈
 from Src.period_summary import process_period_summary

@@ -1,6 +1,7 @@
-# app.py
+# Home.py
 # 2025-12-16 hoyeon.han
 # 솔루미랩 회계 시스템 - Multi-Page App 홈 화면
+# 2025-12-17 hoyeon.han: 로그인 인증 기능 추가
 
 # Streamlit page configuration
 # title: 🏠 홈
@@ -8,7 +9,19 @@
 
 import streamlit as st
 import os
+import sys
 from pathlib import Path
+
+# 2025-12-17 hoyeon.han: 인증 모듈 직접 import (Src/__init__.py 우회)
+import importlib.util
+spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent / "Src" / "auth.py")
+auth = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(auth)
+
+init_session_state = auth.init_session_state
+is_session_valid = auth.is_session_valid
+show_login_page = auth.show_login_page
+show_user_info_sidebar = auth.show_user_info_sidebar
 
 # 디렉토리 생성
 os.makedirs("logs", exist_ok=True)
@@ -25,7 +38,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS 커스터마이징
+# 2025-12-17 hoyeon.han: 세션 상태 초기화
+init_session_state()
+
+# CSS 커스터마이징 (로그인 전에도 필요)
 st.markdown("""
 <style>
     .main-header {
@@ -60,9 +76,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 홈 화면
+# 메인 타이틀 (로그인 전에도 표시)
 st.markdown('<div class="main-header">📊 SollumeLab 회계 시스템</div>', unsafe_allow_html=True)
 
+# 2025-12-17 hoyeon.han: 인증 체크 - 미인증 시 로그인 페이지 표시
+if not is_session_valid():
+    show_login_page()
+    st.stop()
+
+# 2025-12-17 hoyeon.han: 사이드바에 사용자 정보 표시
+show_user_info_sidebar()
+
+# 홈 화면 (로그인 후)
 st.markdown("### 환영합니다! 👋")
 st.markdown("왼쪽 사이드바에서 원하는 기능을 선택하세요.")
 

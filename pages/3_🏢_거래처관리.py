@@ -2,6 +2,7 @@
 솔루미랩 거래처 관리 페이지
 거래처 검색, 등록, 수정, 삭제 및 Excel 가져오기/내보내기 기능
 2025-12-16 hoyeon.han: 거래처 관리 페이지 생성
+2025-12-17 hoyeon.han: 로그인 인증 추가
 """
 
 import streamlit as st
@@ -15,6 +16,14 @@ import logging
 
 # Src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
+
+# 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
+import importlib.util
+spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent.parent / "Src" / "auth.py")
+auth = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(auth)
+auth.require_auth()
+auth.show_user_info_sidebar()
 
 # 거래처 마스터 DB 클래스
 from customer_master_db import CustomerMasterDB
