@@ -18,9 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 # 2025-12-16 hoyeon.han: Multi-Page App 구조로 변경
+# 2025-02-03 hoyeon.han: Scripts 폴더 추가 (사용자 관리용)
 COPY Home.py .
 COPY pages/ ./pages/
 COPY Src/ ./Src/
+COPY Scripts/ ./Scripts/
 
 # Streamlit 설정 파일 복사
 COPY .streamlit/ ./.streamlit/
