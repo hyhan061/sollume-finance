@@ -23,12 +23,23 @@ gatherUsageStats = false
 serverAddress = "localhost"
 serverPort = 8501
 
+# 2025-12-22 hoyeon.han: Quick Win #1 - 경리나라 스타일 테마 적용
+# 참고: .claude/UI_DESIGN_IMPROVEMENT_PLAN.md
 [theme]
-# 테마 설정
-primaryColor = "#1f77b4"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
+# 메인 색상: 경리나라 블루 (신뢰감과 전문성)
+primaryColor = "#0066FF"
+
+# 배경 색상: 깨끗한 흰색
+backgroundColor = "#FFFFFF"
+
+# 보조 배경: 연한 회색 (카드 섹션, 입력창)
+secondaryBackgroundColor = "#F5F7FA"
+
+# 텍스트: 가독성 높은 차콜 그레이
+textColor = "#2C3E50"
+
+# 폰트: 한글 최적화 (Pretendard fallback)
+# 시스템에 Pretendard가 없으면 Apple SD Gothic Neo, Malgun Gothic 사용
 font = "sans serif"
 
 [logger]

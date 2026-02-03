@@ -23,7 +23,10 @@ spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent.pare
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 auth.require_auth()
-auth.show_user_info_sidebar()
+
+# 2025-12-22 hoyeon.han: Quick Win #4 - 커스텀 사이드바 로고
+from ui_components import render_custom_sidebar
+render_custom_sidebar()
 
 # 전표 생성 모듈
 from processing import get_sales_daily, get_purchase_daily, save_dataframe_to_xls
@@ -119,181 +122,362 @@ st.caption("발주내역 파일에서 경리나라 전표 파일을 생성합니
 st.divider()
 
 # =============================================================================
+# 2025-12-22 hoyeon.han: validate_uploaded_file() 함수 추가
+# Quick Win #5 - 파일 검증
+# =============================================================================
+
+def validate_uploaded_file(uploaded_file):
+    """
+    업로드된 파일을 즉시 검증하여 문제를 미리 발견
+
+    검증 항목:
+    1. 파일 크기 (200MB 이하)
+    2. 필수 시트 존재 여부
+    3. 필수 컬럼 존재 여부
+    4. 데이터 샘플 미리보기
+    """
+    col1, col2, col3, col4 = st.columns(4)
+
+    validation_passed = True
+
+    # 1. 파일 크기 검증
+    with col1:
+        file_size_mb = uploaded_file.size / 1024 / 1024
+        if file_size_mb < 200:
+            st.metric(
+                "📦 파일 크기",
+                f"{file_size_mb:.2f} MB",
+                delta="✅ 정상",
+                delta_color="normal"
+            )
+        else:
+            st.metric(
+                "📦 파일 크기",
+                f"{file_size_mb:.2f} MB",
+                delta="⚠️ 너무 큼",
+                delta_color="inverse"
+            )
+            validation_passed = False
+
+    # 2. 시트 확인
+    with col2:
+        try:
+            # 시트 목록만 확인 (데이터 로드 X)
+            import openpyxl
+            # 파일을 임시로 저장
+            temp_path = f"uploads/temp_{uploaded_file.name}"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+
+            wb = openpyxl.load_workbook(temp_path, read_only=True, data_only=True)
+            sheet_names = wb.sheetnames
+            wb.close()
+
+            target_sheet = '(누적)2025년 발주내역'
+            if target_sheet in sheet_names:
+                st.metric(
+                    "📋 필수 시트",
+                    "✅ 존재",
+                    delta=f"{len(sheet_names)}개 시트",
+                    delta_color="normal"
+                )
+            else:
+                st.metric(
+                    "📋 필수 시트",
+                    "❌ 없음",
+                    delta="시트명 확인",
+                    delta_color="inverse"
+                )
+                validation_passed = False
+                st.error(f"⚠️ '{target_sheet}' 시트가 없습니다.")
+
+        except Exception as e:
+            st.metric(
+                "📋 필수 시트",
+                "❌ 오류",
+                delta="파일 읽기 실패",
+                delta_color="inverse"
+            )
+            validation_passed = False
+            st.error(f"시트 확인 중 오류: {str(e)[:50]}...")
+
+    # 3. 컬럼 확인 (샘플 데이터 읽기)
+    with col3:
+        try:
+            # 상위 5행만 읽어서 컬럼 확인
+            df_sample = pd.read_excel(
+                uploaded_file,
+                sheet_name='(누적)2025년 발주내역',
+                header=3,
+                nrows=5
+            )
+
+            required_cols = ['출고일', '계산서', '업체명', '제품', '상품매출']
+            missing_cols = [col for col in required_cols if col not in df_sample.columns]
+
+            if not missing_cols:
+                st.metric(
+                    "🔤 필수 컬럼",
+                    "✅ 정상",
+                    delta=f"{len(df_sample.columns)}개 컬럼",
+                    delta_color="normal"
+                )
+            else:
+                st.metric(
+                    "🔤 필수 컬럼",
+                    "❌ 누락",
+                    delta=f"{len(missing_cols)}개 누락",
+                    delta_color="inverse"
+                )
+                validation_passed = False
+                st.error(f"⚠️ 누락된 컬럼: {', '.join(missing_cols)}")
+
+        except Exception as e:
+            st.metric(
+                "🔤 필수 컬럼",
+                "❌ 오류",
+                delta="컬럼 읽기 실패",
+                delta_color="inverse"
+            )
+            validation_passed = False
+
+    # 4. 데이터 샘플
+    with col4:
+        try:
+            if 'df_sample' in locals():
+                row_count = len(df_sample)
+                st.metric(
+                    "📊 데이터 샘플",
+                    f"{row_count}행",
+                    delta="(상위 5건)",
+                    delta_color="normal"
+                )
+            else:
+                st.metric(
+                    "📊 데이터 샘플",
+                    "N/A",
+                    delta="데이터 없음",
+                    delta_color="off"
+                )
+        except:
+            pass
+
+    # 검증 결과 요약
+    st.markdown("---")
+
+    if validation_passed:
+        st.success("✅ **파일 검증 통과!** 처리 버튼을 눌러 전표를 생성하세요.", icon="✅")
+    else:
+        st.error("❌ **파일 검증 실패!** 위의 오류를 수정한 후 다시 시도하세요.", icon="❌")
+
+    # 데이터 미리보기 (검증 통과 시)
+    if validation_passed and 'df_sample' in locals():
+        st.markdown("#### 📋 데이터 미리보기 (상위 5행)")
+        st.dataframe(
+            df_sample.head(5),
+            use_container_width=True,
+            height=200
+        )
+
+        # 주요 통계
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if '출고일' in df_sample.columns:
+                dates = pd.to_datetime(df_sample['출고일'], errors='coerce')
+                unique_dates = dates.nunique()
+                st.info(f"📅 샘플 날짜 범위: {unique_dates}일")
+
+        with col2:
+            if '업체명' in df_sample.columns:
+                unique_companies = df_sample['업체명'].nunique()
+                st.info(f"🏢 샘플 업체 수: {unique_companies}개")
+
+        with col3:
+            if '상품매출' in df_sample.columns:
+                total_sales = pd.to_numeric(df_sample['상품매출'], errors='coerce').sum()
+                st.info(f"💰 샘플 매출 합계: ₩{total_sales:,.0f}")
+
+
+# =============================================================================
 # 2025-12-16 hoyeon.han: process_data() 함수 정의
 # =============================================================================
 
 def process_data(uploaded_file, selected_date):
-    """데이터 처리 함수"""
+    """
+    데이터 처리 함수
+    2025-12-22 hoyeon.han: Quick Win #3 - st.status로 진행 상황 개선
+    """
 
-    # 진행상황 표시
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    try:
-        # 1. 임시 파일 저장
-        status_text.text("📤 파일 업로드 중...")
-        progress_bar.progress(10)
-
-        temp_path = os.path.join("uploads", uploaded_file.name)
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_file.read())
-
-        logging.info(f"파일 업로드: {uploaded_file.name}, 크기: {uploaded_file.size} bytes")
-
-        # 2. 날짜 변환
-        date_str = selected_date.strftime('%Y-%m-%d')
-
-        # 3. 매출 데이터 처리
-        status_text.text("💰 매출 데이터 처리 중...")
-        progress_bar.progress(30)
-
-        # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
-        df_sales = get_sales_daily(temp_path, date_str, use_db=True)
-        logging.info(f"매출 처리 완료: {len(df_sales)}건")
-
-        # 4. 매입 데이터 처리
-        status_text.text("🛒 매입 데이터 처리 중...")
-        progress_bar.progress(60)
-
-        # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
-        df_purchase = get_purchase_daily(temp_path, date_str, use_db=True)
-        logging.info(f"매입 처리 완료: {len(df_purchase)}건")
-
-        # 5. 파일 저장
-        status_text.text("💾 파일 저장 중...")
-        progress_bar.progress(80)
-
-        sales_filename = f"매출_{date_str}.xls"
-        purchase_filename = f"매입_{date_str}.xls"
-
-        sales_filepath = os.path.join("processed", sales_filename)
-        purchase_filepath = os.path.join("processed", purchase_filename)
-
-        save_dataframe_to_xls(df_sales, sales_filepath)
-        save_dataframe_to_xls(df_purchase, purchase_filepath)
-
-        # 6. 임시 파일 삭제
-        # 2025-12-16 hoyeon.han: 파일이 없어도 에러 없이 진행
+    # 2025-12-22 hoyeon.han: st.status를 사용한 실시간 진행 상황 표시
+    with st.status("⚙️ 전표 생성 중...", expanded=True) as status:
         try:
-            os.remove(temp_path)
-        except FileNotFoundError:
-            pass  # 파일이 이미 없으면 skip
+            # 1. 임시 파일 저장
+            # 2025-12-22 hoyeon.han: OSError [Errno 22] 수정 - getvalue() 사용
+            st.write("📤 **STEP 1/5**: 파일 업로드 중...")
+            temp_path = os.path.join("uploads", uploaded_file.name)
+            with open(temp_path, "wb") as f:
+                # uploaded_file.read() 대신 getvalue() 사용 (파일 포인터 이동 방지)
+                f.write(uploaded_file.getvalue())
 
-        # 7. 완료
-        progress_bar.progress(100)
-        status_text.text("✅ 처리 완료!")
+            logging.info(f"파일 업로드: {uploaded_file.name}, 크기: {uploaded_file.size} bytes")
+            st.write(f"✅ 파일 업로드 완료 ({uploaded_file.size / 1024 / 1024:.2f} MB)")
 
-        # 성공 메시지
-        st.balloons()
-        st.markdown('<div class="success-box">✅ <b>처리가 완료되었습니다!</b></div>', unsafe_allow_html=True)
+            # 2. 날짜 변환
+            date_str = selected_date.strftime('%Y-%m-%d')
 
-        # 2025-12-16 hoyeon.han: 처리 결과를 Session State에 저장
-        st.session_state.last_result = {
-            'date': date_str,
-            'file': uploaded_file.name,
-            'sales_count': len(df_sales),
-            'purchase_count': len(df_purchase),
-            'df_sales': df_sales,
-            'df_purchase': df_purchase,
-            'sales_filename': sales_filename,
-            'purchase_filename': purchase_filename,
-            'sales_filepath': sales_filepath,
-            'purchase_filepath': purchase_filepath,
-            'timestamp': datetime.now()
-        }
+            # 3. 매출 데이터 처리
+            st.write(f"💰 **STEP 2/5**: 매출 데이터 처리 중... (날짜: {date_str})")
 
-        # 처리 이력 추가
-        st.session_state.history.append({
-            'timestamp': datetime.now(),
-            'date': date_str,
-            'file': uploaded_file.name,
-            'sales_count': len(df_sales),
-            'purchase_count': len(df_purchase)
-        })
+            # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
+            df_sales = get_sales_daily(temp_path, date_str, use_db=True)
+            logging.info(f"매출 처리 완료: {len(df_sales)}건")
+            st.write(f"✅ 매출 데이터 처리 완료: **{len(df_sales):,}건**")
 
-        # 페이지 리로드
-        st.rerun()
+            # 4. 매입 데이터 처리
+            st.write("🛒 **STEP 3/5**: 매입 데이터 처리 중...")
 
-    except SollumeBaseException as e:
-        # 커스텀 예외 처리
-        progress_bar.empty()
-        status_text.empty()
+            # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
+            df_purchase = get_purchase_daily(temp_path, date_str, use_db=True)
+            logging.info(f"매입 처리 완료: {len(df_purchase)}건")
+            st.write(f"✅ 매입 데이터 처리 완료: **{len(df_purchase):,}건**")
 
-        # 심각도에 따른 아이콘
-        severity_icon = {
-            ErrorSeverity.INFO: "ℹ️",
-            ErrorSeverity.WARNING: "⚠️",
-            ErrorSeverity.ERROR: "❌",
-            ErrorSeverity.CRITICAL: "🚨"
-        }
+            # 5. 파일 저장
+            st.write("💾 **STEP 4/5**: 경리나라 전표 파일 저장 중...")
 
-        # 사용자 메시지 표시
-        st.markdown(
-            f'<div class="error-box">'
-            f'{severity_icon[e.severity]} <b>{e.category.value}</b><br>'
-            f'{e.user_message}'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+            sales_filename = f"매출_{date_str}.xls"
+            purchase_filename = f"매입_{date_str}.xls"
 
-        # 해결 방법 안내
-        if e.solution_hints:
-            st.info("**💡 해결 방법:**")
-            for hint in e.solution_hints:
-                st.write(hint)
+            sales_filepath = os.path.join("processed", sales_filename)
+            purchase_filepath = os.path.join("processed", purchase_filename)
 
-        # 개발자용 정보
-        with st.expander("🔍 개발자용 상세 정보"):
-            st.code(f"오류 ID: {e.error_id}")
-            st.code(f"발생 시각: {e.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-            st.text(e.technical_details)
-            if e.context:
-                st.json(e.context)
+            save_dataframe_to_xls(df_sales, sales_filepath)
+            save_dataframe_to_xls(df_purchase, purchase_filepath)
+            st.write(f"✅ 파일 저장 완료")
+            st.write(f"   - 매출: `{sales_filename}`")
+            st.write(f"   - 매입: `{purchase_filename}`")
 
-        # 오류 리포트 다운로드
-        error_report = {
-            "오류_ID": e.error_id,
-            "발생_시각": e.timestamp.isoformat(),
-            "카테고리": e.category.value,
-            "심각도": e.severity.value,
-            "사용자_메시지": e.user_message,
-            "기술_상세": e.technical_details,
-            "해결_힌트": e.solution_hints,
-            "컨텍스트": e.context,
-            "파일명": uploaded_file.name if uploaded_file else "N/A",
-            "선택_날짜": date_str,
-        }
+            # 6. 임시 파일 삭제
+            st.write("🧹 **STEP 5/5**: 임시 파일 정리 중...")
+            # 2025-12-16 hoyeon.han: 파일이 없어도 에러 없이 진행
+            try:
+                os.remove(temp_path)
+                st.write("✅ 임시 파일 삭제 완료")
+            except FileNotFoundError:
+                st.write("⚠️ 임시 파일이 이미 삭제되었습니다")
 
-        st.download_button(
-            label="📥 오류 리포트 다운로드 (개발자 전달용)",
-            data=json.dumps(error_report, ensure_ascii=False, indent=2),
-            file_name=f"error_report_{e.error_id}.json",
-            mime="application/json"
-        )
+            # 7. 완료
+            status.update(label="✅ 전표 생성 완료!", state="complete", expanded=False)
 
-        st.warning(
-            f"⚠️ 문제가 계속되면 **오류 ID: `{e.error_id}`** 를 "
-            f"개발자에게 알려주세요."
-        )
+            # 성공 메시지
+            st.balloons()
+            st.markdown('<div class="success-box">✅ <b>처리가 완료되었습니다!</b></div>', unsafe_allow_html=True)
 
-        # 로거에 기록
-        logger = get_logger()
-        logger.log_custom_exception(e)
+            # 2025-12-16 hoyeon.han: 처리 결과를 Session State에 저장
+            st.session_state.last_result = {
+                'date': date_str,
+                'file': uploaded_file.name,
+                'sales_count': len(df_sales),
+                'purchase_count': len(df_purchase),
+                'df_sales': df_sales,
+                'df_purchase': df_purchase,
+                'sales_filename': sales_filename,
+                'purchase_filename': purchase_filename,
+                'sales_filepath': sales_filepath,
+                'purchase_filepath': purchase_filepath,
+                'timestamp': datetime.now()
+            }
 
-    except Exception as e:
-        # 예상치 못한 오류
-        progress_bar.empty()
-        status_text.empty()
+            # 처리 이력 추가
+            st.session_state.history.append({
+                'timestamp': datetime.now(),
+                'date': date_str,
+                'file': uploaded_file.name,
+                'sales_count': len(df_sales),
+                'purchase_count': len(df_purchase)
+            })
 
-        st.markdown(
-            '<div class="error-box">🚨 <b>예상치 못한 오류가 발생했습니다</b></div>',
-            unsafe_allow_html=True
-        )
+            # 페이지 리로드
+            st.rerun()
 
-        with st.expander("🔍 에러 상세 정보 (개발자에게 전달)"):
-            st.exception(e)
+        except SollumeBaseException as e:
+            # 커스텀 예외 처리
+            status.update(label="❌ 처리 실패", state="error", expanded=True)
 
-        logging.error(f"처리 실패: {str(e)}", exc_info=True)
+            # 심각도에 따른 아이콘
+            severity_icon = {
+                ErrorSeverity.INFO: "ℹ️",
+                ErrorSeverity.WARNING: "⚠️",
+                ErrorSeverity.ERROR: "❌",
+                ErrorSeverity.CRITICAL: "🚨"
+            }
+
+            # 사용자 메시지 표시
+            st.markdown(
+                f'<div class="error-box">'
+                f'{severity_icon[e.severity]} <b>{e.category.value}</b><br>'
+                f'{e.user_message}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+            # 해결 방법 안내
+            if e.solution_hints:
+                st.info("**💡 해결 방법:**")
+                for hint in e.solution_hints:
+                    st.write(hint)
+
+            # 개발자용 정보
+            with st.expander("🔍 개발자용 상세 정보"):
+                st.code(f"오류 ID: {e.error_id}")
+                st.code(f"발생 시각: {e.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+                st.text(e.technical_details)
+                if e.context:
+                    st.json(e.context)
+
+            # 오류 리포트 다운로드
+            error_report = {
+                "오류_ID": e.error_id,
+                "발생_시각": e.timestamp.isoformat(),
+                "카테고리": e.category.value,
+                "심각도": e.severity.value,
+                "사용자_메시지": e.user_message,
+                "기술_상세": e.technical_details,
+                "해결_힌트": e.solution_hints,
+                "컨텍스트": e.context,
+                "파일명": uploaded_file.name if uploaded_file else "N/A",
+                "선택_날짜": date_str,
+            }
+
+            st.download_button(
+                label="📥 오류 리포트 다운로드 (개발자 전달용)",
+                data=json.dumps(error_report, ensure_ascii=False, indent=2),
+                file_name=f"error_report_{e.error_id}.json",
+                mime="application/json"
+            )
+
+            st.warning(
+                f"⚠️ 문제가 계속되면 **오류 ID: `{e.error_id}`** 를 "
+                f"개발자에게 알려주세요."
+            )
+
+            # 로거에 기록
+            logger = get_logger()
+            logger.log_custom_exception(e)
+
+        except Exception as e:
+            # 예상치 못한 오류
+            status.update(label="🚨 예상치 못한 오류", state="error", expanded=True)
+
+            st.markdown(
+                '<div class="error-box">🚨 <b>예상치 못한 오류가 발생했습니다</b></div>',
+                unsafe_allow_html=True
+            )
+
+            with st.expander("🔍 에러 상세 정보 (개발자에게 전달)"):
+                st.exception(e)
+
+            logging.error(f"처리 실패: {str(e)}", exc_info=True)
 
 # =============================================================================
 # Section 1: 파일 업로드 및 처리
@@ -333,11 +517,16 @@ def upload_and_process_section():
             key="process_button"
         )
 
+    # 2025-12-22 hoyeon.han: Quick Win #5 - 파일 업로드 후 즉시 검증
     if uploaded_file:
         st.info(
             f"📎 선택된 파일: **{uploaded_file.name}** "
             f"({uploaded_file.size / 1024 / 1024:.2f} MB)"
         )
+
+        # 파일 검증 카드
+        with st.expander("🔍 파일 검증", expanded=True):
+            validate_uploaded_file(uploaded_file)
 
     if process_button:
         if not uploaded_file:
@@ -358,22 +547,71 @@ def result_section():
 
     st.markdown('<div class="section-header">2️⃣ 처리 결과</div>', unsafe_allow_html=True)
 
+    # 2025-12-22 hoyeon.han: Quick Win #2 - 개선된 메트릭 카드
     st.success(
         f"✅ 처리 완료! ({result['date']}) | "
         f"파일: {result['file']} | "
         f"매출 {result['sales_count']}건, 매입 {result['purchase_count']}건"
     )
 
-    # 메트릭 표시
+    # 메트릭 표시 - 1행: 기본 정보
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("처리 날짜", result['date'])
+        st.metric("📅 처리 날짜", result['date'])
     with col2:
-        st.metric("매출 건수", result['sales_count'])
+        st.metric("💰 매출 건수", f"{result['sales_count']:,}건")
     with col3:
-        st.metric("매입 건수", result['purchase_count'])
+        st.metric("🛒 매입 건수", f"{result['purchase_count']:,}건")
     with col4:
-        st.metric("처리 시각", result['timestamp'].strftime('%H:%M:%S'))
+        st.metric("⏰ 처리 시각", result['timestamp'].strftime('%H:%M:%S'))
+
+    # 메트릭 표시 - 2행: 금액 및 검증 정보
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        # 매출 총액 계산
+        total_sales_amount = result['df_sales']['공급가액'].sum() if '공급가액' in result['df_sales'].columns else 0
+        st.metric(
+            "💵 매출 총액",
+            f"₩{total_sales_amount:,.0f}",
+            help="부가세 제외 공급가액 합계"
+        )
+
+    with col2:
+        # 매입 총액 계산
+        total_purchase_amount = result['df_purchase']['공급가액'].sum() if '공급가액' in result['df_purchase'].columns else 0
+        st.metric(
+            "💸 매입 총액",
+            f"₩{total_purchase_amount:,.0f}",
+            help="부가세 제외 공급가액 합계"
+        )
+
+    with col3:
+        # 사업자번호 누락 건수 (매출+매입)
+        missing_sales = result['df_sales']['사업자번호'].isna().sum() if '사업자번호' in result['df_sales'].columns else 0
+        missing_purchase = result['df_purchase']['사업자번호'].isna().sum() if '사업자번호' in result['df_purchase'].columns else 0
+        total_missing = missing_sales + missing_purchase
+
+        st.metric(
+            "⚠️ 사업자번호 누락",
+            f"{total_missing}건",
+            delta=f"-{total_missing}건" if total_missing > 0 else "정상",
+            delta_color="inverse" if total_missing > 0 else "normal",
+            help="경리나라 업로드 시 오류 발생 가능"
+        )
+
+    with col4:
+        # 데이터 검증 상태
+        validation_status = "✅ 정상" if total_missing == 0 else f"⚠️ 확인 필요"
+        validation_color = "normal" if total_missing == 0 else "inverse"
+
+        st.metric(
+            "🔍 검증 상태",
+            validation_status,
+            delta=f"{result['sales_count'] + result['purchase_count']:,}건 검증",
+            delta_color=validation_color,
+            help="모든 필수 항목 검증 완료 여부"
+        )
 
     # 탭으로 데이터 표시
     tab1, tab2 = st.tabs(["💰 매출 데이터", "🛒 매입 데이터"])

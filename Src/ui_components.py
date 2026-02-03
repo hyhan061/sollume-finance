@@ -1,0 +1,315 @@
+"""
+UI 공통 컴포넌트 모듈
+2025-12-22 hoyeon.han: Quick Win #4 - 사이드바 로고 및 공통 컴포넌트
+
+재사용 가능한 UI 컴포넌트를 제공합니다.
+"""
+
+import streamlit as st
+from datetime import datetime
+import os
+
+
+def render_sidebar_logo():
+    """
+    사이드바 로고 및 브랜딩
+    Quick Win #4 구현
+    """
+    with st.sidebar:
+        # 로고 및 타이틀
+        st.markdown("""
+        <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
+            <div style="
+                width: 80px;
+                height: 80px;
+                margin: 0 auto;
+                background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 2.5rem;
+                box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+            ">
+                📊
+            </div>
+            <h2 style="margin: 1rem 0 0.25rem 0; color: #2C3E50; font-size: 1.5rem;">
+                솔루미랩
+            </h2>
+            <p style="color: #718096; font-size: 0.875rem; margin: 0;">
+                회계 전표 시스템
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.divider()
+
+
+def render_sidebar_user_info():
+    """
+    사이드바 사용자 정보 표시
+    """
+    with st.sidebar:
+        # 사용자 정보 (인증 시스템 연동)
+        if 'user' in st.session_state:
+            user = st.session_state.user
+
+            st.markdown(f"""
+            <div style="
+                background: #F5F7FA;
+                border-radius: 8px;
+                padding: 1rem;
+                margin: 1rem 0;
+            ">
+                <div style="font-weight: bold; margin-bottom: 0.5rem; color: #2C3E50;">
+                    👤 {user.get('name', '사용자')}
+                </div>
+                <div style="font-size: 0.875rem; color: #718096;">
+                    {user.get('department', '')} {' | ' if user.get('department') else ''} {user.get('role', '')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.divider()
+
+
+def render_sidebar_quick_actions():
+    """
+    사이드바 퀵 액션 버튼
+    """
+    with st.sidebar:
+        st.markdown("### ⚡ 빠른 작업")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("📝 신규\n전표", use_container_width=True, key="quick_new"):
+                st.switch_page("pages/1_📝_전표생성.py")
+
+        with col2:
+            if st.button("📊 발주\n요약", use_container_width=True, key="quick_summary"):
+                st.switch_page("pages/2_📊_발주내역요약.py")
+
+        st.divider()
+
+
+def render_sidebar_system_status():
+    """
+    사이드바 시스템 상태 표시
+    """
+    with st.sidebar:
+        st.markdown("### 📡 시스템 상태")
+
+        # DB 연결 체크
+        db_path = "database/customer_master.db"
+        if os.path.exists(db_path):
+            st.success("✅ 데이터베이스 정상", icon="✅")
+        else:
+            st.error("❌ 데이터베이스 오류", icon="❌")
+
+        # 디스크 사용량 (간단 버전)
+        try:
+            processed_dir = "processed"
+            if os.path.exists(processed_dir):
+                file_count = len([f for f in os.listdir(processed_dir) if f.endswith('.xls')])
+                st.info(f"📁 저장된 파일: {file_count}개", icon="📁")
+            else:
+                st.info("📁 저장된 파일: 0개", icon="📁")
+        except:
+            pass
+
+        st.divider()
+
+        # 버전 정보
+        st.caption("v3.0.1 | 2025-12-22")
+
+
+def render_custom_sidebar():
+    """
+    통합 사이드바 렌더링
+    모든 페이지에서 이 함수를 호출하면 됩니다.
+
+    사용 예시:
+    ```python
+    from Src.ui_components import render_custom_sidebar
+    render_custom_sidebar()
+    ```
+    """
+    render_sidebar_logo()
+    render_sidebar_user_info()
+    render_sidebar_quick_actions()
+    render_sidebar_system_status()
+
+
+def card(title, content, status="info"):
+    """
+    재사용 가능한 카드 컴포넌트
+
+    Args:
+        title: 카드 제목
+        content: 카드 내용 (HTML 또는 텍스트)
+        status: 카드 상태 ("info", "success", "warning", "error")
+
+    사용 예시:
+    ```python
+    from Src.ui_components import card
+
+    card(
+        title="처리 완료",
+        content="매출 152건, 매입 89건이 처리되었습니다.",
+        status="success"
+    )
+    ```
+    """
+    status_colors = {
+        "info": "#0066FF",
+        "success": "#4CAF50",
+        "warning": "#FF9800",
+        "error": "#F44336"
+    }
+
+    color = status_colors.get(status, "#0066FF")
+
+    st.markdown(f"""
+    <div style="
+        background: white;
+        border-left: 4px solid {color};
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        margin: 1rem 0;
+    ">
+        <h3 style="margin: 0 0 0.5rem 0; color: {color}; font-size: 1.25rem;">
+            {title}
+        </h3>
+        <div style="color: #2C3E50;">
+            {content}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def alert(message, alert_type="info", icon=None):
+    """
+    알림 메시지 컴포넌트
+
+    Args:
+        message: 알림 메시지
+        alert_type: 알림 타입 ("info", "success", "warning", "error")
+        icon: 커스텀 아이콘 (선택)
+
+    사용 예시:
+    ```python
+    from Src.ui_components import alert
+
+    alert("파일이 성공적으로 업로드되었습니다.", "success", "✅")
+    ```
+    """
+    alert_config = {
+        "info": {"bg": "#D1ECF1", "border": "#17A2B8", "text": "#0C5460", "icon": "ℹ️"},
+        "success": {"bg": "#D4EDDA", "border": "#28A745", "text": "#155724", "icon": "✅"},
+        "warning": {"bg": "#FFF3CD", "border": "#FFC107", "text": "#856404", "icon": "⚠️"},
+        "error": {"bg": "#F8D7DA", "border": "#DC3545", "text": "#721C24", "icon": "❌"}
+    }
+
+    config = alert_config.get(alert_type, alert_config["info"])
+    display_icon = icon if icon else config["icon"]
+
+    st.markdown(f"""
+    <div style="
+        background-color: {config['bg']};
+        border-left: 4px solid {config['border']};
+        border-radius: 4px;
+        padding: 1rem;
+        margin: 1rem 0;
+        color: {config['text']};
+    ">
+        <span style="font-size: 1.25rem; margin-right: 0.5rem;">{display_icon}</span>
+        <span>{message}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def metric_card(label, value, delta=None, delta_color="normal", help_text=None):
+    """
+    커스텀 메트릭 카드 (st.metric 확장 버전)
+
+    Args:
+        label: 라벨
+        value: 값
+        delta: 변화량 (선택)
+        delta_color: 변화량 색상 ("normal", "inverse", "off")
+        help_text: 도움말 (선택)
+    """
+    # Streamlit 기본 st.metric 사용 (추후 커스터마이징 가능)
+    st.metric(
+        label=label,
+        value=value,
+        delta=delta,
+        delta_color=delta_color,
+        help=help_text
+    )
+
+
+def workflow_steps(steps, current_step):
+    """
+    워크플로우 스텝 표시
+
+    Args:
+        steps: 단계 리스트 [{"number": 1, "icon": "📤", "label": "파일 선택"}, ...]
+        current_step: 현재 단계 번호
+
+    사용 예시:
+    ```python
+    from Src.ui_components import workflow_steps
+
+    steps = [
+        {"number": 1, "icon": "📤", "label": "파일 선택"},
+        {"number": 2, "icon": "🔍", "label": "데이터 검증"},
+        {"number": 3, "icon": "⚙️", "label": "전표 생성"},
+        {"number": 4, "icon": "✅", "label": "결과 확인"}
+    ]
+
+    workflow_steps(steps, current_step=2)
+    ```
+    """
+    cols = st.columns(len(steps))
+
+    for i, col in enumerate(cols):
+        with col:
+            step = steps[i]
+            is_active = step["number"] == current_step
+            is_completed = step["number"] < current_step
+
+            # 색상 결정
+            if is_completed:
+                color = "#4CAF50"  # 초록
+            elif is_active:
+                color = "#0066FF"  # 파란
+            else:
+                color = "#E0E0E0"  # 회색
+
+            st.markdown(f"""
+            <div style="text-align: center;">
+                <div style="
+                    width: 60px;
+                    height: 60px;
+                    line-height: 60px;
+                    border-radius: 50%;
+                    background: {color};
+                    color: white;
+                    font-size: 2rem;
+                    margin: 0 auto 0.5rem;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                ">
+                    {step['icon']}
+                </div>
+                <div style="
+                    font-weight: {'bold' if is_active else 'normal'};
+                    color: {color if (is_active or is_completed) else '#718096'};
+                    font-size: 0.875rem;
+                ">
+                    {step['label']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
