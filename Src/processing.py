@@ -14,6 +14,7 @@ Sollume Finance 데이터 처리 모듈 (개선 버전)
 """
 
 import pandas as pd
+import numpy as np
 from datetime import datetime
 import xlwt
 import os
@@ -28,7 +29,7 @@ from exceptions import (
     ColumnNotFoundError,
     NoDataForDateError,
     ProcessingError,
-    SollumeBaseException
+    SollumeBaseException,
 )
 from logger import get_logger
 from validators import DataValidator
@@ -36,6 +37,7 @@ from validators import DataValidator
 # 2025-12-16 hoyeon.han: DB 사용을 위한 import (옵션)
 try:
     from customer_master_db import CustomerMasterDB
+
     DB_AVAILABLE = True
 except ImportError:
     DB_AVAILABLE = False
@@ -53,10 +55,10 @@ def to_num(s: pd.Series) -> pd.Series:
     """
     return pd.to_numeric(
         s.astype(str)
-         .str.strip()
-         .str.replace(',', '', regex=False)
-         .str.replace(r'[^0-9.\-]', '', regex=True),
-        errors='coerce'
+        .str.strip()
+        .str.replace(",", "", regex=False)
+        .str.replace(r"[^0-9.\-]", "", regex=True),
+        errors="coerce",
     )
 
 
@@ -89,7 +91,7 @@ def get_sales_daily(
     date: str,
     master_file_path: str = "거래처마스터.xlsx",
     use_db: bool = True,
-    db_path: str = "database/customer_master.db"
+    db_path: str = "database/customer_master.db",
 ) -> pd.DataFrame:
     """
     매출 데이터 처리 함수 (개선 버전)
@@ -121,7 +123,7 @@ def get_sales_daily(
         ProcessingError: 처리 중 오류
     """
     logger = get_logger()
-    sheet_name = '(누적)2025년 발주내역'
+    sheet_name = "(누적)2025년 발주내역"
     start_time = datetime.now()
 
     try:
@@ -134,10 +136,7 @@ def get_sales_daily(
             DataValidator.validate_file_size(file_path)
 
             df = pd.read_excel(
-                file_path,
-                engine='openpyxl',
-                sheet_name=sheet_name,
-                header=3
+                file_path, engine="openpyxl", sheet_name=sheet_name, header=3
             )
         except ValueError as e:
             if "Worksheet" in str(e):
@@ -149,9 +148,7 @@ def get_sales_daily(
         # STEP 2: 필수 컬럼 검증
         logger.log_info("STEP 2: 필수 컬럼 검증")
         DataValidator.validate_columns(
-            df,
-            DataValidator.REQUIRED_COLUMNS_SALES,
-            sheet_name
+            df, DataValidator.REQUIRED_COLUMNS_SALES, sheet_name
         )
 
         # STEP 3: 거래처마스터 읽기
@@ -165,10 +162,12 @@ def get_sales_daily(
             df_customer = db.get_all_customers()
 
             # 컬럼명 변환 (DB → Excel 형식)
-            df_customer = df_customer.rename(columns={
-                '발주내역_거래처명': '거래처명_솔루미랩',
-                '경리나라_거래처명': '거래처명_경리나라'
-            })
+            df_customer = df_customer.rename(
+                columns={
+                    "발주내역_거래처명": "거래처명_솔루미랩",
+                    "경리나라_거래처명": "거래처명_경리나라",
+                }
+            )
 
             logger.log_info(f"거래처마스터 DB 읽기 완료: {len(df_customer)}행")
         else:
@@ -179,33 +178,31 @@ def get_sales_daily(
             try:
                 df_customer = pd.read_excel(
                     master_file_path,
-                    engine='openpyxl',
-                    sheet_name='거래처마스터',
-                    header=0
+                    engine="openpyxl",
+                    sheet_name="거래처마스터",
+                    header=0,
                 )
             except ValueError as e:
-                raise SheetNotFoundError('거래처마스터', os.path.basename(master_file_path))
+                raise SheetNotFoundError(
+                    "거래처마스터", os.path.basename(master_file_path)
+                )
 
             # 거래처마스터 컬럼 검증
             DataValidator.validate_columns(
-                df_customer,
-                DataValidator.REQUIRED_MASTER_COLUMNS,
-                '거래처마스터'
+                df_customer, DataValidator.REQUIRED_MASTER_COLUMNS, "거래처마스터"
             )
 
             logger.log_info(f"거래처마스터 읽기 완료: {len(df_customer)}행")
 
         # STEP 4: 날짜 변환 및 필터링
         logger.log_info(f"STEP 4: 날짜 필터링 ({date})")
-        today = datetime.strptime(date, '%Y-%m-%d')
+        today = datetime.strptime(date, "%Y-%m-%d")
 
         # 출고일 날짜 변환
-        df['출고일'] = pd.to_datetime(df['출고일'], errors='coerce')
+        df["출고일"] = pd.to_datetime(df["출고일"], errors="coerce")
 
         # 2025-11-29 hoyeon.han: .copy() 추가로 SettingWithCopyWarning 방지
-        df_sales_today = df[
-            (df['출고일'] == today) & (df['계산서'] == '대상')
-        ].copy()
+        df_sales_today = df[(df["출고일"] == today) & (df["계산서"] == "대상")].copy()
 
         # 데이터 존재 확인
         DataValidator.validate_date_data_exists(df_sales_today, date, len(df))
@@ -216,20 +213,20 @@ def get_sales_daily(
         logger.log_info("STEP 5: 데이터 전처리")
 
         # 2025-11-29 hoyeon.han: .copy() 이후 직접 할당 (pandas 3.0 대비)
-        df_sales_today['특이사항'] = df_sales_today['특이사항'].fillna('')
-        df_sales_today['상품매출'] = df_sales_today['상품매출'].fillna(0)
-        df_sales_today['판매배송비'] = df_sales_today['판매배송비'].fillna(0)
-        df_sales_today['도선료'] = df_sales_today['도선료'].fillna(0)
+        df_sales_today["특이사항"] = df_sales_today["특이사항"].fillna("")
+        df_sales_today["상품매출"] = df_sales_today["상품매출"].fillna(0)
+        df_sales_today["판매배송비"] = df_sales_today["판매배송비"].fillna(0)
+        df_sales_today["도선료"] = df_sales_today["도선료"].fillna(0)
 
         # 숫자 변환
-        df_sales_today['상품매출'] = to_num(df_sales_today['상품매출'])
-        df_sales_today['수량'] = to_num(df_sales_today['수량'])
+        df_sales_today["상품매출"] = to_num(df_sales_today["상품매출"])
+        df_sales_today["수량"] = to_num(df_sales_today["수량"])
 
         # 데이터 필터링: 상품매출, 배송비, 도선료가 있는 것만
         df_sales_today = df_sales_today[
-            (df_sales_today['상품매출'] != 0) |
-            (df_sales_today['판매배송비'] != 0) |
-            (df_sales_today['도선료'] != 0)
+            (df_sales_today["상품매출"] != 0)
+            | (df_sales_today["판매배송비"] != 0)
+            | (df_sales_today["도선료"] != 0)
         ].copy()
 
         # 최종 데이터 확인
@@ -242,106 +239,112 @@ def get_sales_daily(
         logger.log_info("STEP 6: 비즈니스 로직 적용")
 
         # 반품유무 추가
-        df_sales_today['반품유무'] = df_sales_today['수량'].apply(
-            lambda x: 'Y' if x < 0 else 'N'
-        )
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        df_sales_today["반품유무"] = np.where(df_sales_today["수량"] < 0, "Y", "N")
 
         # 이너바우어 통합
         df_sales_today.loc[
-            df_sales_today['업체명'].str.startswith('이너바우어', na=False),
-            '업체명'
-        ] = '이너바우어'
+            df_sales_today["업체명"].str.startswith("이너바우어", na=False), "업체명"
+        ] = "이너바우어"
 
         # 정렬
         df_sales_today = df_sales_today.sort_values(
-            ['업체명', '특이사항', '제품', '수량']
+            ["업체명", "특이사항", "제품", "수량"]
         )
 
         # STEP 7: 제품 데이터 집계
         logger.log_info("STEP 7: 제품 데이터 집계")
 
-        df_1 = df_sales_today.groupby(
-            ['업체명', '특이사항', '제품', '과세구분', '반품유무']
-        )[['수량', '상품매출']].sum().reset_index()
+        df_1 = (
+            df_sales_today.groupby(
+                ["업체명", "특이사항", "제품", "과세구분", "반품유무"]
+            )[["수량", "상품매출"]]
+            .sum()
+            .reset_index()
+        )
 
-        df_1['단가'] = df_1.apply(
-            lambda x: 0 if x['수량'] == 0 else x['상품매출'] / x['수량'],
-            axis=1
+        df_1["단가"] = df_1.apply(
+            lambda x: 0 if x["수량"] == 0 else x["상품매출"] / x["수량"], axis=1
         )
-        df_1['공급가'] = df_1.apply(
-            lambda x: x['상품매출'] if x['과세구분'] == "면세" else round(x['상품매출'] / 1.1, 0),
-            axis=1
+        df_1["공급가"] = df_1.apply(
+            lambda x: x["상품매출"]
+            if x["과세구분"] == "면세"
+            else round(x["상품매출"] / 1.1, 0),
+            axis=1,
         )
-        df_1['부가세'] = df_1.apply(
-            lambda x: 0 if x['과세구분'] == "면세" else x['상품매출'] - x['공급가'],
-            axis=1
+        df_1["부가세"] = df_1.apply(
+            lambda x: 0 if x["과세구분"] == "면세" else x["상품매출"] - x["공급가"],
+            axis=1,
         )
-        df_1 = df_1.rename(columns={'제품': '품목명'})
+        df_1 = df_1.rename(columns={"제품": "품목명"})
 
         # STEP 8: 배송비 집계
         logger.log_info("STEP 8: 배송비 집계")
 
-        df_sales_today_delivery = df_sales_today[df_sales_today['판매배송비'] != 0]
-        df_2 = df_sales_today_delivery.groupby(
-            ['업체명', '특이사항', '판매배송비', '과세구분']
-        ).agg({"수량": "count"}).reset_index()
+        df_sales_today_delivery = df_sales_today[df_sales_today["판매배송비"] != 0]
+        df_2 = (
+            df_sales_today_delivery.groupby(
+                ["업체명", "특이사항", "판매배송비", "과세구분"]
+            )
+            .agg({"수량": "count"})
+            .reset_index()
+        )
 
-        df_2['품목명'] = '택배비'
-        df_2 = df_2.rename(columns={'판매배송비': '단가'})
-        df_2['상품매출'] = df_2['단가'] * df_2['수량']
-        df_2['공급가'] = df_2.apply(
-            lambda x: x['상품매출'] if x['과세구분'] == "면세" else round(x['상품매출'] / 1.1, 0),
-            axis=1
+        df_2["품목명"] = "택배비"
+        df_2 = df_2.rename(columns={"판매배송비": "단가"})
+        df_2["상품매출"] = df_2["단가"] * df_2["수량"]
+
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        mask_tax_free_2 = df_2["과세구분"] == "면세"
+        df_2["공급가"] = np.where(
+            mask_tax_free_2, df_2["상품매출"], (df_2["상품매출"] / 1.1).round(0)
         )
-        df_2['부가세'] = df_2.apply(
-            lambda x: 0 if x['과세구분'] == "면세" else x['상품매출'] - x['공급가'],
-            axis=1
-        )
+        df_2["부가세"] = np.where(mask_tax_free_2, 0, df_2["상품매출"] - df_2["공급가"])
 
         # STEP 9: 도선료 집계
         logger.log_info("STEP 9: 도선료 집계")
 
-        df_sales_today_shipped = df_sales_today[df_sales_today['도선료'] != 0]
-        df_3 = df_sales_today_shipped.groupby(
-            ['업체명', '특이사항', '도선료', '과세구분']
-        ).agg({"수량": "count"}).reset_index()
+        df_sales_today_shipped = df_sales_today[df_sales_today["도선료"] != 0]
+        df_3 = (
+            df_sales_today_shipped.groupby(["업체명", "특이사항", "도선료", "과세구분"])
+            .agg({"수량": "count"})
+            .reset_index()
+        )
 
-        df_3['품목명'] = '도선료'
-        df_3 = df_3.rename(columns={'도선료': '단가'})
-        df_3['상품매출'] = df_3['단가'] * df_3['수량']
-        df_3['공급가'] = df_3.apply(
-            lambda x: x['상품매출'] if x['과세구분'] == "면세" else round(x['상품매출'] / 1.1, 0),
-            axis=1
+        df_3["품목명"] = "도선료"
+        df_3 = df_3.rename(columns={"도선료": "단가"})
+        df_3["상품매출"] = df_3["단가"] * df_3["수량"]
+
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        mask_tax_free_3 = df_3["과세구분"] == "면세"
+        df_3["공급가"] = np.where(
+            mask_tax_free_3, df_3["상품매출"], (df_3["상품매출"] / 1.1).round(0)
         )
-        df_3['부가세'] = df_3.apply(
-            lambda x: 0 if x['과세구분'] == "면세" else x['상품매출'] - x['공급가'],
-            axis=1
-        )
+        df_3["부가세"] = np.where(mask_tax_free_3, 0, df_3["상품매출"] - df_3["공급가"])
 
         # STEP 10: 일괄등록 시트 생성
         logger.log_info("STEP 10: 일괄등록 시트 생성")
 
         df_5 = pd.concat([df_1, df_2, df_3], ignore_index=True)
-        df_5['거래일자'] = date
-        df_5['구분'] = '사업자'
-        df_5['거래처명'] = df_5['업체명']
-        df_5['부가세구분'] = df_5['과세구분'].apply(
-            lambda x: '포함' if x == "과세" else "없음"
+        df_5["거래일자"] = date
+        df_5["구분"] = "사업자"
+        df_5["거래처명"] = df_5["업체명"]
+
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        df_5["부가세구분"] = np.where(df_5["과세구분"] == "과세", "포함", "없음")
+
+        df_5["프로젝트/현장"] = ""
+        df_5["창고"] = ""
+        df_5["품목월일"] = datetime.strptime(date, "%Y-%m-%d").strftime("%m%d")
+        df_5["품목코드"] = ""
+        df_5["규격"] = ""
+        df_5["단위"] = ""
+        df_5 = df_5.rename(
+            columns={"공급가": "공급가액", "부가세": "세액", "특이사항": "품목비고"}
         )
-        df_5['프로젝트/현장'] = ''
-        df_5['창고'] = ''
-        df_5['품목월일'] = datetime.strptime(date, '%Y-%m-%d').strftime("%m%d")
-        df_5['품목코드'] = ''
-        df_5['규격'] = ''
-        df_5['단위'] = ''
-        df_5 = df_5.rename(columns={
-            '공급가': '공급가액',
-            '부가세': '세액',
-            '특이사항': '품목비고'
-        })
-        df_5['입금액'] = ''
-        df_5['인수자'] = ''
-        df_5['공통메모'] = ''
+        df_5["입금액"] = ""
+        df_5["인수자"] = ""
+        df_5["공통메모"] = ""
 
         # STEP 11: 마스터 데이터 조인
         logger.log_info("STEP 11: 마스터 데이터 조인")
@@ -349,23 +352,50 @@ def get_sales_daily(
         df_10 = pd.merge(
             left=df_5,
             right=df_customer,
-            how='left',
-            left_on='거래처명',
-            right_on='거래처명_솔루미랩'
-        ).reindex([
-            '거래일자', '구분', '거래처명', '사업자번호', '부가세구분',
-            '프로젝트/현장', '창고', '품목월일', '품목코드', '품목명', '규격',
-            '수량', '단위', '단가', '공급가액', '세액', '품목비고', '입금액',
-            '인수자', '공통메모'
-        ], axis=1)
+            how="left",
+            left_on="거래처명",
+            right_on="거래처명_솔루미랩",
+        ).reindex(
+            [
+                "거래일자",
+                "구분",
+                "거래처명",
+                "사업자번호",
+                "부가세구분",
+                "프로젝트/현장",
+                "창고",
+                "품목월일",
+                "품목코드",
+                "품목명",
+                "규격",
+                "수량",
+                "단위",
+                "단가",
+                "공급가액",
+                "세액",
+                "품목비고",
+                "입금액",
+                "인수자",
+                "공통메모",
+            ],
+            axis=1,
+        )
 
-        df_10 = df_10.sort_values(['거래처명', '부가세구분', '품목비고', '품목명'])
+        df_10 = df_10.sort_values(["거래처명", "부가세구분", "품목비고", "품목명"])
 
         # 중복 행 처리
         df_10.loc[
-            df_10.duplicated(['사업자번호', '거래처명', '부가세구분', '품목비고']),
-            ['거래일자', '구분', '거래처명', '사업자번호', '부가세구분', '프로젝트/현장', '창고']
-        ] = ''
+            df_10.duplicated(["사업자번호", "거래처명", "부가세구분", "품목비고"]),
+            [
+                "거래일자",
+                "구분",
+                "거래처명",
+                "사업자번호",
+                "부가세구분",
+                "프로젝트/현장",
+                "창고",
+            ],
+        ] = ""
 
         # STEP 12: 검증 및 경고
         logger.log_info("STEP 12: 최종 검증")
@@ -398,7 +428,7 @@ def get_purchase_daily(
     date: str,
     master_file_path: str = "거래처마스터.xlsx",
     use_db: bool = True,
-    db_path: str = "database/customer_master.db"
+    db_path: str = "database/customer_master.db",
 ) -> pd.DataFrame:
     """
     매입 데이터 처리 함수 (개선 버전)
@@ -430,7 +460,7 @@ def get_purchase_daily(
         ProcessingError: 처리 중 오류
     """
     logger = get_logger()
-    sheet_name = '(누적)2025년 발주내역'
+    sheet_name = "(누적)2025년 발주내역"
     start_time = datetime.now()
 
     try:
@@ -441,10 +471,7 @@ def get_purchase_daily(
         try:
             DataValidator.validate_file_size(file_path)
             df = pd.read_excel(
-                file_path,
-                engine='openpyxl',
-                sheet_name=sheet_name,
-                header=3
+                file_path, engine="openpyxl", sheet_name=sheet_name, header=3
             )
         except ValueError as e:
             if "Worksheet" in str(e):
@@ -455,9 +482,7 @@ def get_purchase_daily(
 
         # 필수 컬럼 검증
         DataValidator.validate_columns(
-            df,
-            DataValidator.REQUIRED_COLUMNS_PURCHASE,
-            sheet_name
+            df, DataValidator.REQUIRED_COLUMNS_PURCHASE, sheet_name
         )
 
         # 거래처마스터 읽기
@@ -471,10 +496,12 @@ def get_purchase_daily(
             df_customer = db.get_all_customers()
 
             # 컬럼명 변환 (DB → Excel 형식)
-            df_customer = df_customer.rename(columns={
-                '발주내역_거래처명': '거래처명_솔루미랩',
-                '경리나라_거래처명': '거래처명_경리나라'
-            })
+            df_customer = df_customer.rename(
+                columns={
+                    "발주내역_거래처명": "거래처명_솔루미랩",
+                    "경리나라_거래처명": "거래처명_경리나라",
+                }
+            )
 
             logger.log_info(f"거래처마스터 DB 읽기 완료: {len(df_customer)}행")
         else:
@@ -485,43 +512,42 @@ def get_purchase_daily(
             try:
                 df_customer = pd.read_excel(
                     master_file_path,
-                    engine='openpyxl',
-                    sheet_name='거래처마스터',
-                    header=0
+                    engine="openpyxl",
+                    sheet_name="거래처마스터",
+                    header=0,
                 )
             except ValueError as e:
-                raise SheetNotFoundError('거래처마스터', os.path.basename(master_file_path))
+                raise SheetNotFoundError(
+                    "거래처마스터", os.path.basename(master_file_path)
+                )
 
             DataValidator.validate_columns(
-                df_customer,
-                DataValidator.REQUIRED_MASTER_COLUMNS,
-                '거래처마스터'
+                df_customer, DataValidator.REQUIRED_MASTER_COLUMNS, "거래처마스터"
             )
 
             logger.log_info(f"거래처마스터 읽기 완료: {len(df_customer)}행")
 
         # STEP 4: 날짜 변환 및 필터링
         logger.log_info(f"STEP 3: 날짜 필터링 ({date})")
-        today = datetime.strptime(date, '%Y-%m-%d')
+        today = datetime.strptime(date, "%Y-%m-%d")
 
-        df['출고일'] = pd.to_datetime(df['출고일'], errors='coerce')
+        df["출고일"] = pd.to_datetime(df["출고일"], errors="coerce")
 
         # 2025-11-29 hoyeon.han: .copy() 추가로 SettingWithCopyWarning 방지
         df_buy_today = df[
-            (df['출고일'] == today) &
-            (df['특이사항'] != '솔루미재고') &
-            (df['매입처'] != '당사재고') &
-            (df['매입처'] != '솔루미랩')
+            (df["출고일"] == today)
+            & (df["특이사항"] != "솔루미재고")
+            & (df["매입처"] != "당사재고")
+            & (df["매입처"] != "솔루미랩")
         ].copy()
 
         # 컬럼 이름 변경
-        df_buy_today = df_buy_today.rename(columns={'도선료.1': '매입도선료'})
+        df_buy_today = df_buy_today.rename(columns={"도선료.1": "매입도선료"})
 
         # 타입 변환
-        df_buy_today = df_buy_today.astype({
-            '매입배송비': 'float64',
-            '매입도선료': 'float64'
-        })
+        df_buy_today = df_buy_today.astype(
+            {"매입배송비": "float64", "매입도선료": "float64"}
+        )
 
         # 데이터 존재 확인
         DataValidator.validate_date_data_exists(df_buy_today, date, len(df))
@@ -531,20 +557,20 @@ def get_purchase_daily(
         # STEP 5: 데이터 전처리
         logger.log_info("STEP 4: 데이터 전처리")
 
-        df_buy_today['특이사항'] = df_buy_today['특이사항'].fillna('')
-        df_buy_today['상품매입'] = df_buy_today['상품매입'].fillna(0)
-        df_buy_today['매입배송비'] = df_buy_today['매입배송비'].fillna(0)
-        df_buy_today['매입도선료'] = df_buy_today['매입도선료'].fillna(0)
+        df_buy_today["특이사항"] = df_buy_today["특이사항"].fillna("")
+        df_buy_today["상품매입"] = df_buy_today["상품매입"].fillna(0)
+        df_buy_today["매입배송비"] = df_buy_today["매입배송비"].fillna(0)
+        df_buy_today["매입도선료"] = df_buy_today["매입도선료"].fillna(0)
 
         # 숫자 변환
-        df_buy_today['상품매입'] = to_num(df_buy_today['상품매입'])
-        df_buy_today['수량'] = to_num(df_buy_today['수량'])
+        df_buy_today["상품매입"] = to_num(df_buy_today["상품매입"])
+        df_buy_today["수량"] = to_num(df_buy_today["수량"])
 
         # 데이터 필터링
         df_buy_today = df_buy_today[
-            (df_buy_today['상품매입'] != 0) |
-            (df_buy_today['매입배송비'] != 0) |
-            (df_buy_today['매입도선료'] != 0)
+            (df_buy_today["상품매입"] != 0)
+            | (df_buy_today["매입배송비"] != 0)
+            | (df_buy_today["매입도선료"] != 0)
         ].copy()
 
         if len(df_buy_today) == 0:
@@ -556,119 +582,132 @@ def get_purchase_daily(
         logger.log_info("STEP 5: 업무 로직 적용 (업체별 특수 처리)")
 
         # 지앤제이: 매입배송비, 매입도선료 0 처리
-        df_buy_today.loc[df_buy_today['매입처'] == '지앤제이', '매입배송비'] = 0
-        df_buy_today.loc[df_buy_today['매입처'] == '지앤제이', '매입도선료'] = 0
+        df_buy_today.loc[df_buy_today["매입처"] == "지앤제이", "매입배송비"] = 0
+        df_buy_today.loc[df_buy_today["매입처"] == "지앤제이", "매입도선료"] = 0
         df_buy_today.loc[
-            (df_buy_today['매입처'] == '지앤제이') & (df_buy_today['업체명'] == '빅웨이브즈'),
-            '특이사항'
-        ] = '빅웨이브즈'
+            (df_buy_today["매입처"] == "지앤제이")
+            & (df_buy_today["업체명"] == "빅웨이브즈"),
+            "특이사항",
+        ] = "빅웨이브즈"
 
         # 유스랩: 매입배송비, 매입도선료 0 처리
-        df_buy_today.loc[df_buy_today['매입처'] == '유스랩', '매입배송비'] = 0
-        df_buy_today.loc[df_buy_today['매입처'] == '유스랩', '매입도선료'] = 0
+        df_buy_today.loc[df_buy_today["매입처"] == "유스랩", "매입배송비"] = 0
+        df_buy_today.loc[df_buy_today["매입처"] == "유스랩", "매입도선료"] = 0
         df_buy_today.loc[
-            (df_buy_today['매입처'] == '유스랩') & (df_buy_today['업체명'] == '빅웨이브즈'),
-            '특이사항'
-        ] = '빅웨이브즈'
+            (df_buy_today["매입처"] == "유스랩")
+            & (df_buy_today["업체명"] == "빅웨이브즈"),
+            "특이사항",
+        ] = "빅웨이브즈"
 
         # 유라이크: 매입도선료 0 처리
-        df_buy_today.loc[df_buy_today['매입처'] == '유라이크', '매입도선료'] = 0
+        df_buy_today.loc[df_buy_today["매입처"] == "유라이크", "매입도선료"] = 0
 
         # 반품유무 추가
-        df_buy_today['반품유무'] = df_buy_today['수량'].apply(
-            lambda x: 'Y' if x < 0 else 'N'
-        )
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        df_buy_today["반품유무"] = np.where(df_buy_today["수량"] < 0, "Y", "N")
 
         # 정렬
-        df_buy_today = df_buy_today.sort_values(
-            ['매입처', '특이사항', '제품', '수량']
-        )
+        df_buy_today = df_buy_today.sort_values(["매입처", "특이사항", "제품", "수량"])
 
         # STEP 7-9: 집계 (매출과 유사)
         logger.log_info("STEP 6: 제품 데이터 집계")
 
-        df_11 = df_buy_today.groupby(
-            ['매입처', '특이사항', '제품', '과세구분', '반품유무']
-        )[['수량', '상품매입']].sum().reset_index()
+        df_11 = (
+            df_buy_today.groupby(
+                ["매입처", "특이사항", "제품", "과세구분", "반품유무"]
+            )[["수량", "상품매입"]]
+            .sum()
+            .reset_index()
+        )
 
-        df_11['단가'] = df_11.apply(
-            lambda x: 0 if x['수량'] == 0 else x['상품매입'] / x['수량'],
-            axis=1
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        df_11["단가"] = np.where(
+            df_11["수량"] == 0, 0, df_11["상품매입"] / df_11["수량"]
         )
-        df_11['공급가'] = df_11.apply(
-            lambda x: x['상품매입'] if x['과세구분'] == "면세" else round(x['상품매입'] / 1.1, 0),
-            axis=1
+
+        mask_tax_free_11 = df_11["과세구분"] == "면세"
+        df_11["공급가"] = np.where(
+            mask_tax_free_11, df_11["상품매입"], (df_11["상품매입"] / 1.1).round(0)
         )
-        df_11['부가세'] = df_11.apply(
-            lambda x: 0 if x['과세구분'] == "면세" else x['상품매입'] - x['공급가'],
-            axis=1
+        df_11["부가세"] = np.where(
+            mask_tax_free_11, 0, df_11["상품매입"] - df_11["공급가"]
         )
-        df_11 = df_11.rename(columns={'제품': '품목명'})
+
+        df_11 = df_11.rename(columns={"제품": "품목명"})
 
         # 배송비 집계
         logger.log_info("STEP 7: 배송비 집계")
 
-        df_buy_today_delivery = df_buy_today[df_buy_today['매입배송비'] > 0]
-        df_12 = df_buy_today_delivery.groupby(
-            ['매입처', '특이사항', '매입배송비', '과세구분']
-        ).agg({"수량": "count"}).reset_index()
-
-        df_12['품목명'] = '택배비'
-        df_12 = df_12.rename(columns={'매입배송비': '단가'})
-        df_12['상품매입'] = df_12['단가'] * df_12['수량']
-        df_12['공급가'] = df_12.apply(
-            lambda x: x['상품매입'] if x['과세구분'] == "면세" else round(x['상품매입'] / 1.1, 0),
-            axis=1
+        df_buy_today_delivery = df_buy_today[df_buy_today["매입배송비"] > 0]
+        df_12 = (
+            df_buy_today_delivery.groupby(
+                ["매입처", "특이사항", "매입배송비", "과세구분"]
+            )
+            .agg({"수량": "count"})
+            .reset_index()
         )
-        df_12['부가세'] = df_12.apply(
-            lambda x: 0 if x['과세구분'] == "면세" else x['상품매입'] - x['공급가'],
-            axis=1
+
+        df_12["품목명"] = "택배비"
+        df_12 = df_12.rename(columns={"매입배송비": "단가"})
+        df_12["상품매입"] = df_12["단가"] * df_12["수량"]
+
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        mask_tax_free_12 = df_12["과세구분"] == "면세"
+        df_12["공급가"] = np.where(
+            mask_tax_free_12, df_12["상품매입"], (df_12["상품매입"] / 1.1).round(0)
+        )
+        df_12["부가세"] = np.where(
+            mask_tax_free_12, 0, df_12["상품매입"] - df_12["공급가"]
         )
 
         # 도선료 집계
         logger.log_info("STEP 8: 도선료 집계")
 
-        df_buy_today_shipped = df_buy_today[df_buy_today['매입도선료'] > 0]
-        df_13 = df_buy_today_shipped.groupby(
-            ['매입처', '특이사항', '매입도선료', '과세구분']
-        ).agg({"수량": "count"}).reset_index()
-
-        df_13['품목명'] = '도선료'
-        df_13 = df_13.rename(columns={'매입도선료': '단가'})
-        df_13['상품매입'] = df_13['단가'] * df_13['수량']
-        df_13['공급가'] = df_13.apply(
-            lambda x: x['상품매입'] if x['과세구분'] == "면세" else round(x['상품매입'] / 1.1, 0),
-            axis=1
+        df_buy_today_shipped = df_buy_today[df_buy_today["매입도선료"] > 0]
+        df_13 = (
+            df_buy_today_shipped.groupby(
+                ["매입처", "특이사항", "매입도선료", "과세구분"]
+            )
+            .agg({"수량": "count"})
+            .reset_index()
         )
-        df_13['부가세'] = df_13.apply(
-            lambda x: 0 if x['과세구분'] == "면세" else x['상품매입'] - x['공급가'],
-            axis=1
+
+        df_13["품목명"] = "도선료"
+        df_13 = df_13.rename(columns={"매입도선료": "단가"})
+        df_13["상품매입"] = df_13["단가"] * df_13["수량"]
+
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        mask_tax_free_13 = df_13["과세구분"] == "면세"
+        df_13["공급가"] = np.where(
+            mask_tax_free_13, df_13["상품매입"], (df_13["상품매입"] / 1.1).round(0)
+        )
+        df_13["부가세"] = np.where(
+            mask_tax_free_13, 0, df_13["상품매입"] - df_13["공급가"]
         )
 
         # STEP 10: 일괄등록 시트 생성
         logger.log_info("STEP 9: 일괄등록 시트 생성")
 
         df_15 = pd.concat([df_11, df_12, df_13], ignore_index=True)
-        df_15['거래일자'] = date
-        df_15['구분'] = '사업자'
-        df_15['거래처명'] = df_15['매입처']
-        df_15['부가세구분'] = df_15['과세구분'].apply(
-            lambda x: '포함' if x == "과세" else "없음"
+        df_15["거래일자"] = date
+        df_15["구분"] = "사업자"
+        df_15["거래처명"] = df_15["매입처"]
+
+        # 2025-02-03 hoyeon.han: 벡터화 적용
+        df_15["부가세구분"] = np.where(df_15["과세구분"] == "과세", "포함", "없음")
+
+        df_15["프로젝트/현장"] = ""
+        df_15["창고"] = ""
+        df_15["품목월일"] = datetime.strptime(date, "%Y-%m-%d").strftime("%m%d")
+        df_15["품목코드"] = ""
+        df_15["규격"] = ""
+        df_15["단위"] = ""
+        df_15 = df_15.rename(
+            columns={"공급가": "공급가액", "부가세": "세액", "특이사항": "품목비고"}
         )
-        df_15['프로젝트/현장'] = ''
-        df_15['창고'] = ''
-        df_15['품목월일'] = datetime.strptime(date, '%Y-%m-%d').strftime("%m%d")
-        df_15['품목코드'] = ''
-        df_15['규격'] = ''
-        df_15['단위'] = ''
-        df_15 = df_15.rename(columns={
-            '공급가': '공급가액',
-            '부가세': '세액',
-            '특이사항': '품목비고'
-        })
-        df_15['입금액'] = ''
-        df_15['인수자'] = ''
-        df_15['공통메모'] = ''
+        df_15["입금액"] = ""
+        df_15["인수자"] = ""
+        df_15["공통메모"] = ""
 
         # STEP 11: 마스터 데이터 조인
         logger.log_info("STEP 10: 마스터 데이터 조인")
@@ -676,22 +715,49 @@ def get_purchase_daily(
         df_20 = pd.merge(
             left=df_15,
             right=df_customer,
-            how='left',
-            left_on='거래처명',
-            right_on='거래처명_솔루미랩'
-        ).reindex([
-            '거래일자', '구분', '거래처명', '사업자번호', '부가세구분',
-            '프로젝트/현장', '창고', '품목월일', '품목코드', '품목명', '규격',
-            '수량', '단위', '단가', '공급가액', '세액', '품목비고', '입금액',
-            '인수자', '공통메모'
-        ], axis=1)
+            how="left",
+            left_on="거래처명",
+            right_on="거래처명_솔루미랩",
+        ).reindex(
+            [
+                "거래일자",
+                "구분",
+                "거래처명",
+                "사업자번호",
+                "부가세구분",
+                "프로젝트/현장",
+                "창고",
+                "품목월일",
+                "품목코드",
+                "품목명",
+                "규격",
+                "수량",
+                "단위",
+                "단가",
+                "공급가액",
+                "세액",
+                "품목비고",
+                "입금액",
+                "인수자",
+                "공통메모",
+            ],
+            axis=1,
+        )
 
-        df_20 = df_20.sort_values(['거래처명', '부가세구분', '품목비고', '품목명'])
+        df_20 = df_20.sort_values(["거래처명", "부가세구분", "품목비고", "품목명"])
 
         df_20.loc[
-            df_20.duplicated(['사업자번호', '거래처명', '부가세구분', '품목비고']),
-            ['거래일자', '구분', '거래처명', '사업자번호', '부가세구분', '프로젝트/현장', '창고']
-        ] = ''
+            df_20.duplicated(["사업자번호", "거래처명", "부가세구분", "품목비고"]),
+            [
+                "거래일자",
+                "구분",
+                "거래처명",
+                "사업자번호",
+                "부가세구분",
+                "프로젝트/현장",
+                "창고",
+            ],
+        ] = ""
 
         # STEP 12: 검증 및 경고
         logger.log_info("STEP 11: 최종 검증")
