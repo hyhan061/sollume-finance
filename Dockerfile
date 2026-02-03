@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY Home.py .
 COPY pages/ ./pages/
 COPY Src/ ./Src/
-COPY Scripts/ ./Scripts/
+COPY scripts/ ./scripts/
 
 # Streamlit 설정 파일 복사
 COPY .streamlit/ ./.streamlit/
