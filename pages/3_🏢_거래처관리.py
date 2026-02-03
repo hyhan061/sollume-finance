@@ -17,9 +17,15 @@ import logging
 # Src 디렉토리를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
+# 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
+st.set_page_config(page_title="거래처 관리", page_icon="🏢", layout="wide")
+
 # 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
 import importlib.util
-spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent.parent / "Src" / "auth.py")
+
+spec = importlib.util.spec_from_file_location(
+    "auth", Path(__file__).parent.parent / "Src" / "auth.py"
+)
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 auth.require_auth()
@@ -38,26 +44,20 @@ os.makedirs("uploads", exist_ok=True)
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('logs/customer_management.log'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler("logs/customer_management.log"),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
-
-# 페이지 설정
-st.set_page_config(
-    page_title="거래처 관리",
-    page_icon="🏢",
-    layout="wide"
-)
 
 # =============================================================================
 # 2025-12-16 hoyeon.han: CSS 스타일 정의
 # =============================================================================
 
-st.markdown("""
+st.markdown(
+    """
 <style>
     .main-header {
         font-size: 2rem;
@@ -110,27 +110,30 @@ st.markdown("""
         margin: 1rem 0;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # =============================================================================
 # 2025-12-16 hoyeon.han: Session State 초기화
 # =============================================================================
 
-if 'search_results' not in st.session_state:
+if "search_results" not in st.session_state:
     st.session_state.search_results = pd.DataFrame()
 
-if 'selected_customer' not in st.session_state:
+if "selected_customer" not in st.session_state:
     st.session_state.selected_customer = None
 
-if 'show_add_form' not in st.session_state:
+if "show_add_form" not in st.session_state:
     st.session_state.show_add_form = False
 
-if 'show_edit_form' not in st.session_state:
+if "show_edit_form" not in st.session_state:
     st.session_state.show_edit_form = False
 
 # =============================================================================
 # 2025-12-16 hoyeon.han: 유틸리티 함수
 # =============================================================================
+
 
 def is_business_number_format(business_number: str) -> bool:
     """사업자번호 형식 검증 (000-00-00000)
@@ -142,7 +145,7 @@ def is_business_number_format(business_number: str) -> bool:
         형식이 올바르면 True, 아니면 False
     """
     # 정규식 패턴: 숫자3자리-숫자2자리-숫자5자리
-    pattern = r'^\d{3}-\d{2}-\d{5}$'
+    pattern = r"^\d{3}-\d{2}-\d{5}$"
     return bool(re.match(pattern, business_number))
 
 
@@ -156,10 +159,10 @@ def format_business_number(business_number: str) -> str:
         형식화된 사업자번호 (000-00-00000)
     """
     # 하이픈 제거
-    cleaned = business_number.replace('-', '').replace(' ', '')
+    cleaned = business_number.replace("-", "").replace(" ", "")
 
     # 숫자만 남김
-    numbers = ''.join(filter(str.isdigit, cleaned))
+    numbers = "".join(filter(str.isdigit, cleaned))
 
     # 10자리가 아니면 원본 반환
     if len(numbers) != 10:
@@ -173,10 +176,13 @@ def format_business_number(business_number: str) -> str:
 # 2025-12-16 hoyeon.han: 거래처 검색 기능
 # =============================================================================
 
+
 def show_search_section(db: CustomerMasterDB):
     """거래처 검색 섹션"""
 
-    st.markdown('<div class="section-header">🔍 거래처 검색</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header">🔍 거래처 검색</div>', unsafe_allow_html=True
+    )
 
     col1, col2, col3 = st.columns([3, 1, 1])
 
@@ -184,7 +190,7 @@ def show_search_section(db: CustomerMasterDB):
         search_query = st.text_input(
             "거래처명 또는 사업자번호 검색",
             placeholder="거래처명 일부 또는 사업자번호를 입력하세요",
-            key="search_query"
+            key="search_query",
         )
 
     with col2:
@@ -202,7 +208,9 @@ def show_search_section(db: CustomerMasterDB):
 
                 if len(results) == 0:
                     st.warning(f"'{search_query}'에 대한 검색 결과가 없습니다.")
-                    st.info("신규 거래처를 등록하시겠습니까? 아래 '신규 등록' 버튼을 클릭하세요.")
+                    st.info(
+                        "신규 거래처를 등록하시겠습니까? 아래 '신규 등록' 버튼을 클릭하세요."
+                    )
                     st.session_state.show_add_form = True
                 else:
                     st.success(f"검색 결과: {len(results)}건")
@@ -230,21 +238,21 @@ def show_search_section(db: CustomerMasterDB):
 # 2025-12-16 hoyeon.han: 검색 결과 표시
 # =============================================================================
 
+
 def show_search_results():
     """검색 결과 테이블 표시"""
 
     if st.session_state.search_results.empty:
         return
 
-    st.markdown('<div class="section-header">📊 검색 결과</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header">📊 검색 결과</div>', unsafe_allow_html=True
+    )
 
     # DataFrame 표시 (타임스탬프 컬럼 제외)
-    display_df = st.session_state.search_results[[
-        '사업자번호',
-        '발주내역_거래처명',
-        '경리나라_거래처명',
-        '대표자명'
-    ]].copy()
+    display_df = st.session_state.search_results[
+        ["사업자번호", "발주내역_거래처명", "경리나라_거래처명", "대표자명"]
+    ].copy()
 
     # 인덱스를 1부터 시작
     display_df.index = range(1, len(display_df) + 1)
@@ -252,7 +260,7 @@ def show_search_results():
     st.dataframe(
         display_df,
         use_container_width=True,
-        height=min(400, (len(display_df) + 1) * 35 + 3)
+        height=min(400, (len(display_df) + 1) * 35 + 3),
     )
 
     # 거래처 선택 (수정/삭제용)
@@ -262,8 +270,8 @@ def show_search_results():
 
     with col1:
         # 사업자번호 선택
-        business_numbers = st.session_state.search_results['사업자번호'].tolist()
-        customer_names = st.session_state.search_results['발주내역_거래처명'].tolist()
+        business_numbers = st.session_state.search_results["사업자번호"].tolist()
+        customer_names = st.session_state.search_results["발주내역_거래처명"].tolist()
 
         # 선택 옵션: "사업자번호 - 거래처명"
         options = [f"{bn} - {cn}" for bn, cn in zip(business_numbers, customer_names)]
@@ -271,7 +279,7 @@ def show_search_results():
         selected_option = st.selectbox(
             "수정/삭제할 거래처 선택",
             options=["선택하세요"] + options,
-            key="selected_customer_option"
+            key="selected_customer_option",
         )
 
     with col2:
@@ -307,10 +315,13 @@ def show_search_results():
 # 2025-12-16 hoyeon.han: 신규 거래처 등록 폼
 # =============================================================================
 
+
 def show_add_customer_form(db: CustomerMasterDB):
     """신규 거래처 등록 폼"""
 
-    st.markdown('<div class="section-header">➕ 신규 거래처 등록</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header">➕ 신규 거래처 등록</div>', unsafe_allow_html=True
+    )
 
     with st.form("add_customer_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -319,23 +330,20 @@ def show_add_customer_form(db: CustomerMasterDB):
             business_number_input = st.text_input(
                 "사업자번호 *",
                 placeholder="000-00-00000 또는 0000000000",
-                help="하이픈 포함 또는 미포함 10자리"
+                help="하이픈 포함 또는 미포함 10자리",
             )
 
             order_name = st.text_input(
-                "발주내역 거래처명 *",
-                placeholder="발주내역 엑셀에 표시되는 거래처명"
+                "발주내역 거래처명 *", placeholder="발주내역 엑셀에 표시되는 거래처명"
             )
 
         with col2:
             accounting_name = st.text_input(
-                "경리나라 거래처명 *",
-                placeholder="경리나라 프로그램에 등록된 거래처명"
+                "경리나라 거래처명 *", placeholder="경리나라 프로그램에 등록된 거래처명"
             )
 
             representative = st.text_input(
-                "대표자명",
-                placeholder="대표자 성함 (선택사항)"
+                "대표자명", placeholder="대표자 성함 (선택사항)"
             )
 
         st.markdown("**필수 항목**")
@@ -343,7 +351,9 @@ def show_add_customer_form(db: CustomerMasterDB):
         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
 
         with col_btn2:
-            submit_btn = st.form_submit_button("💾 등록", type="primary", use_container_width=True)
+            submit_btn = st.form_submit_button(
+                "💾 등록", type="primary", use_container_width=True
+            )
 
         with col_btn3:
             cancel_btn = st.form_submit_button("❌ 취소", use_container_width=True)
@@ -357,7 +367,9 @@ def show_add_customer_form(db: CustomerMasterDB):
     if submit_btn:
         # 입력 검증
         if not business_number_input or not order_name or not accounting_name:
-            st.error("필수 항목을 모두 입력해주세요 (사업자번호, 발주내역 거래처명, 경리나라 거래처명)")
+            st.error(
+                "필수 항목을 모두 입력해주세요 (사업자번호, 발주내역 거래처명, 경리나라 거래처명)"
+            )
             return
 
         # 사업자번호 형식 변환
@@ -365,7 +377,9 @@ def show_add_customer_form(db: CustomerMasterDB):
 
         # 형식 검증
         if not is_business_number_format(business_number):
-            st.error(f"사업자번호 형식이 올바르지 않습니다: {business_number_input}\n올바른 형식: 000-00-00000 (하이픈 포함 10자리)")
+            st.error(
+                f"사업자번호 형식이 올바르지 않습니다: {business_number_input}\n올바른 형식: 000-00-00000 (하이픈 포함 10자리)"
+            )
             return
 
         # DB에 등록
@@ -375,7 +389,7 @@ def show_add_customer_form(db: CustomerMasterDB):
                     business_number=business_number,
                     order_name=order_name.strip(),
                     accounting_name=accounting_name.strip(),
-                    representative=representative.strip() if representative else None
+                    representative=representative.strip() if representative else None,
                 )
 
             if success:
@@ -403,10 +417,13 @@ def show_add_customer_form(db: CustomerMasterDB):
 # 2025-12-16 hoyeon.han: 거래처 수정 폼
 # =============================================================================
 
+
 def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
     """거래처 수정 폼"""
 
-    st.markdown('<div class="section-header">✏️ 거래처 정보 수정</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header">✏️ 거래처 정보 수정</div>', unsafe_allow_html=True
+    )
 
     # 기존 정보 조회
     customer = db.get_customer(business_number)
@@ -417,40 +434,41 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
         return
 
     # 정보 표시
-    st.info(f"**수정 대상:** {customer['발주내역_거래처명']} ({customer['사업자번호']})")
+    st.info(
+        f"**수정 대상:** {customer['발주내역_거래처명']} ({customer['사업자번호']})"
+    )
 
     with st.form("edit_customer_form"):
         # 사업자번호는 변경 불가 (PK)
         st.text_input(
             "사업자번호 (변경 불가)",
-            value=customer['사업자번호'],
+            value=customer["사업자번호"],
             disabled=True,
-            help="사업자번호는 수정할 수 없습니다"
+            help="사업자번호는 수정할 수 없습니다",
         )
 
         col1, col2 = st.columns(2)
 
         with col1:
             order_name = st.text_input(
-                "발주내역 거래처명 *",
-                value=customer['발주내역_거래처명']
+                "발주내역 거래처명 *", value=customer["발주내역_거래처명"]
             )
 
         with col2:
             accounting_name = st.text_input(
-                "경리나라 거래처명 *",
-                value=customer['경리나라_거래처명']
+                "경리나라 거래처명 *", value=customer["경리나라_거래처명"]
             )
 
         representative = st.text_input(
-            "대표자명",
-            value=customer['대표자명'] if customer['대표자명'] else ""
+            "대표자명", value=customer["대표자명"] if customer["대표자명"] else ""
         )
 
         col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
 
         with col_btn2:
-            submit_btn = st.form_submit_button("💾 수정 완료", type="primary", use_container_width=True)
+            submit_btn = st.form_submit_button(
+                "💾 수정 완료", type="primary", use_container_width=True
+            )
 
         with col_btn3:
             cancel_btn = st.form_submit_button("❌ 취소", use_container_width=True)
@@ -465,7 +483,9 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
     if submit_btn:
         # 입력 검증
         if not order_name or not accounting_name:
-            st.error("필수 항목을 모두 입력해주세요 (발주내역 거래처명, 경리나라 거래처명)")
+            st.error(
+                "필수 항목을 모두 입력해주세요 (발주내역 거래처명, 경리나라 거래처명)"
+            )
             return
 
         # DB 업데이트
@@ -475,7 +495,7 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
                     business_number=business_number,
                     order_name=order_name.strip(),
                     accounting_name=accounting_name.strip(),
-                    representative=representative.strip() if representative else None
+                    representative=representative.strip() if representative else None,
                 )
 
             if success:
@@ -502,6 +522,7 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
 # =============================================================================
 # 2025-12-16 hoyeon.han: 거래처 삭제 확인
 # =============================================================================
+
 
 def show_delete_confirmation(business_number: str):
     """거래처 삭제 확인 다이얼로그"""
@@ -546,7 +567,7 @@ def show_delete_confirmation(business_number: str):
 
                 # 검색 결과에서 제거
                 st.session_state.search_results = st.session_state.search_results[
-                    st.session_state.search_results['사업자번호'] != business_number
+                    st.session_state.search_results["사업자번호"] != business_number
                 ]
 
                 st.session_state.selected_customer = None
@@ -569,10 +590,13 @@ def show_delete_confirmation(business_number: str):
 # 2025-12-16 hoyeon.han: Excel 가져오기/내보내기
 # =============================================================================
 
+
 def show_data_management(db: CustomerMasterDB):
     """데이터 관리 섹션 (Excel 가져오기/내보내기, DB 백업)"""
 
-    st.markdown('<div class="section-header">🔄 데이터 관리</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header">🔄 데이터 관리</div>', unsafe_allow_html=True
+    )
 
     col1, col2, col3 = st.columns(3)
 
@@ -590,18 +614,18 @@ def show_data_management(db: CustomerMasterDB):
             """)
 
             uploaded_file = st.file_uploader(
-                "Excel 파일 선택",
-                type=['xlsx', 'xls'],
-                key="import_excel"
+                "Excel 파일 선택", type=["xlsx", "xls"], key="import_excel"
             )
 
             if uploaded_file:
-                if st.button("📥 가져오기 실행", type="primary", use_container_width=True):
+                if st.button(
+                    "📥 가져오기 실행", type="primary", use_container_width=True
+                ):
                     try:
                         # 임시 파일로 저장
                         temp_path = f"uploads/temp_master_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-                        with open(temp_path, 'wb') as f:
+                        with open(temp_path, "wb") as f:
                             f.write(uploaded_file.getvalue())
 
                         with st.spinner("Excel 데이터 가져오는 중..."):
@@ -633,7 +657,7 @@ def show_data_management(db: CustomerMasterDB):
             if st.button("📤 내보내기 실행", type="primary", use_container_width=True):
                 try:
                     # 파일명 생성
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     export_path = f"processed/거래처마스터_{timestamp}.xlsx"
 
                     with st.spinner("Excel 파일 생성 중..."):
@@ -644,13 +668,13 @@ def show_data_management(db: CustomerMasterDB):
                         logger.info(f"Excel 내보내기 성공: {export_path}")
 
                         # 다운로드 버튼
-                        with open(export_path, 'rb') as f:
+                        with open(export_path, "rb") as f:
                             st.download_button(
                                 label="💾 Excel 파일 다운로드",
                                 data=f.read(),
                                 file_name=f"거래처마스터_{timestamp}.xlsx",
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
+                                use_container_width=True,
                             )
                     else:
                         st.error(message)
@@ -663,7 +687,9 @@ def show_data_management(db: CustomerMasterDB):
     # DB 백업
     with col3:
         with st.expander("💾 DB 백업", expanded=False):
-            st.info("데이터베이스를 백업합니다. 백업 파일은 `database/backups/` 폴더에 저장됩니다.")
+            st.info(
+                "데이터베이스를 백업합니다. 백업 파일은 `database/backups/` 폴더에 저장됩니다."
+            )
 
             if st.button("💾 백업 실행", type="primary", use_container_width=True):
                 try:
@@ -678,7 +704,9 @@ def show_data_management(db: CustomerMasterDB):
                     file_size = backup_path.stat().st_size / 1024  # KB
 
                     st.caption(f"백업 파일 크기: {file_size:.2f} KB")
-                    st.caption(f"백업 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    st.caption(
+                        f"백업 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
 
                 except Exception as e:
                     logger.error(f"DB 백업 오류: {e}", exc_info=True)
@@ -688,6 +716,7 @@ def show_data_management(db: CustomerMasterDB):
 # =============================================================================
 # 2025-12-16 hoyeon.han: 통계 정보 표시
 # =============================================================================
+
 
 def show_statistics(db: CustomerMasterDB):
     """DB 통계 정보 표시"""
@@ -701,17 +730,21 @@ def show_statistics(db: CustomerMasterDB):
             st.metric("총 거래처 수", f"{stats.get('total_customers', 0)}건")
 
         with col2:
-            latest_created = stats.get('latest_created')
+            latest_created = stats.get("latest_created")
             if latest_created:
-                created_date = datetime.strptime(latest_created, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d')
+                created_date = datetime.strptime(
+                    latest_created, "%Y-%m-%d %H:%M:%S"
+                ).strftime("%Y-%m-%d")
                 st.metric("최근 등록일", created_date)
             else:
                 st.metric("최근 등록일", "N/A")
 
         with col3:
-            latest_updated = stats.get('latest_updated')
+            latest_updated = stats.get("latest_updated")
             if latest_updated:
-                updated_date = datetime.strptime(latest_updated, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d')
+                updated_date = datetime.strptime(
+                    latest_updated, "%Y-%m-%d %H:%M:%S"
+                ).strftime("%Y-%m-%d")
                 st.metric("최근 수정일", updated_date)
             else:
                 st.metric("최근 수정일", "N/A")
@@ -724,6 +757,7 @@ def show_statistics(db: CustomerMasterDB):
 # =============================================================================
 # 2025-12-16 hoyeon.han: 메인 페이지
 # =============================================================================
+
 
 def main():
     """메인 페이지"""
@@ -762,7 +796,9 @@ def main():
         st.divider()
 
     # 신규 등록 버튼 (검색 결과가 없거나 명시적으로 추가 버튼 클릭)
-    if st.session_state.search_results.empty or st.button("➕ 신규 거래처 등록", type="secondary"):
+    if st.session_state.search_results.empty or st.button(
+        "➕ 신규 거래처 등록", type="secondary"
+    ):
         st.session_state.show_add_form = True
 
     # 신규 등록 폼
