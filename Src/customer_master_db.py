@@ -96,7 +96,7 @@ class CustomerMasterDB:
         business_number: str,
         order_name: str,
         accounting_name: str,
-        representative: Optional[str] = None
+        representative: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """거래처 추가
 
@@ -117,11 +117,14 @@ class CustomerMasterDB:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO customers
                     (사업자번호, 발주내역_거래처명, 경리나라_거래처명, 대표자명)
                     VALUES (?, ?, ?, ?)
-                """, (business_number, order_name, accounting_name, representative))
+                """,
+                    (business_number, order_name, accounting_name, representative),
+                )
 
                 conn.commit()
 
@@ -131,7 +134,10 @@ class CustomerMasterDB:
         except sqlite3.IntegrityError:
             # 2025-12-16 hoyeon.han: UNIQUE 제약 위반 시 메시지 변경
             self.logger.warning(f"Duplicate: {business_number} - {order_name}")
-            return False, f"이미 존재하는 거래처입니다: {business_number} - {order_name}"
+            return (
+                False,
+                f"이미 존재하는 거래처입니다: {business_number} - {order_name}",
+            )
 
         except Exception as e:
             self.logger.error(f"Failed to add customer: {e}")
@@ -185,10 +191,13 @@ class CustomerMasterDB:
                 conn.row_factory = sqlite3.Row  # Row 객체로 반환
                 cursor = conn.cursor()
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM customers WHERE 사업자번호 = ?
                     ORDER BY 발주내역_거래처명
-                """, (business_number,))
+                """,
+                    (business_number,),
+                )
 
                 rows = cursor.fetchall()
 
@@ -248,7 +257,7 @@ class CustomerMasterDB:
         business_number: Optional[str] = None,
         order_name: Optional[str] = None,
         accounting_name: Optional[str] = None,
-        representative: Optional[str] = None
+        representative: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """거래처 정보 수정 (ID 기준)
 
@@ -306,7 +315,7 @@ class CustomerMasterDB:
 
                 sql = f"""
                     UPDATE customers
-                    SET {', '.join(update_fields)}
+                    SET {", ".join(update_fields)}
                     WHERE id = ?
                 """
 
@@ -382,9 +391,12 @@ class CustomerMasterDB:
                 # 삭제 전 정보 조회 (로그용)
                 customer = self.get_customer_by_id(customer_id)
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     DELETE FROM customers WHERE id = ?
-                """, (customer_id,))
+                """,
+                    (customer_id,),
+                )
 
                 if cursor.rowcount == 0:
                     return False, f"거래처를 찾을 수 없습니다: ID {customer_id}"
@@ -421,9 +433,12 @@ class CustomerMasterDB:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM customers WHERE id = ?
-                """, (customer_id,))
+                """,
+                    (customer_id,),
+                )
 
                 row = cursor.fetchone()
 
@@ -437,9 +452,7 @@ class CustomerMasterDB:
             return None
 
     def get_customer_by_name_and_business_number(
-        self,
-        order_name: str,
-        business_number: str
+        self, order_name: str, business_number: str
     ) -> Optional[dict]:
         """발주내역 거래처명과 사업자번호로 거래처 조회
 
@@ -458,10 +471,13 @@ class CustomerMasterDB:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM customers
                     WHERE 발주내역_거래처명 = ? AND 사업자번호 = ?
-                """, (order_name, business_number))
+                """,
+                    (order_name, business_number),
+                )
 
                 row = cursor.fetchone()
 
@@ -471,7 +487,9 @@ class CustomerMasterDB:
                     return None
 
         except Exception as e:
-            self.logger.error(f"Failed to get customer by name and business number: {e}")
+            self.logger.error(
+                f"Failed to get customer by name and business number: {e}"
+            )
             return None
 
     # ==========================================================================
@@ -511,9 +529,7 @@ class CustomerMasterDB:
 
                 search_pattern = f"%{query}%"
                 df = pd.read_sql_query(
-                    sql,
-                    conn,
-                    params=(search_pattern, search_pattern, search_pattern)
+                    sql, conn, params=(search_pattern, search_pattern, search_pattern)
                 )
 
                 self.logger.info(f"Search: '{query}' -> {len(df)} results")
@@ -533,15 +549,40 @@ class CustomerMasterDB:
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
-                sql = """
+                # 2026-04-08 hoyeon.han: 구버전 스키마 호환 처리 추가
+                # 기존 코드 (id 컬럼 고정 조회) - 구버전 DB에서 "no such column: id" 오류 발생 가능
+                # sql = """
+                #     SELECT
+                #         id,
+                #         사업자번호,
+                #         발주내역_거래처명,
+                #         경리나라_거래처명,
+                #         대표자명,
+                #         created_at,
+                #         updated_at
+                #     FROM customers
+                #     ORDER BY 발주내역_거래처명
+                # """
+
+                # 2026-04-08 hoyeon.han: 실제 테이블 컬럼 확인 후 동적 SELECT 구성
+                table_info = pd.read_sql_query("PRAGMA table_info(customers)", conn)
+                existing_columns = set(table_info["name"].tolist())
+
+                select_columns = [
+                    "사업자번호",
+                    "발주내역_거래처명",
+                    "경리나라_거래처명",
+                    "대표자명",
+                    "created_at",
+                    "updated_at",
+                ]
+
+                if "id" in existing_columns:
+                    select_columns = ["id"] + select_columns
+
+                sql = f"""
                     SELECT
-                        id,
-                        사업자번호,
-                        발주내역_거래처명,
-                        경리나라_거래처명,
-                        대표자명,
-                        created_at,
-                        updated_at
+                        {", ".join(select_columns)}
                     FROM customers
                     ORDER BY 발주내역_거래처명
                 """
@@ -570,10 +611,13 @@ class CustomerMasterDB:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT 사업자번호 FROM customers
                     WHERE 발주내역_거래처명 = ?
-                """, (order_name,))
+                """,
+                    (order_name,),
+                )
 
                 row = cursor.fetchone()
 
@@ -591,9 +635,7 @@ class CustomerMasterDB:
     # ==========================================================================
 
     def import_from_excel(
-        self,
-        excel_path: str,
-        sheet_name: str = "거래처마스터"
+        self, excel_path: str, sheet_name: str = "거래처마스터"
     ) -> Tuple[bool, str]:
         """Excel 파일에서 DB로 데이터 가져오기
 
@@ -609,24 +651,28 @@ class CustomerMasterDB:
             df = pd.read_excel(excel_path, sheet_name=sheet_name)
 
             # 컬럼명 확인
-            required_columns = ['거래처명_경리나라', '거래처명_솔루미랩', '사업자번호']
+            required_columns = ["거래처명_경리나라", "거래처명_솔루미랩", "사업자번호"]
             missing_columns = [col for col in required_columns if col not in df.columns]
 
             if missing_columns:
                 return False, f"필수 컬럼이 없습니다: {missing_columns}"
 
             # 컬럼명 변경
-            df = df.rename(columns={
-                '거래처명_솔루미랩': '발주내역_거래처명',
-                '거래처명_경리나라': '경리나라_거래처명'
-            })
+            df = df.rename(
+                columns={
+                    "거래처명_솔루미랩": "발주내역_거래처명",
+                    "거래처명_경리나라": "경리나라_거래처명",
+                }
+            )
 
             # NaN 처리
-            df['발주내역_거래처명'] = df['발주내역_거래처명'].fillna(df['경리나라_거래처명'])
-            df['대표자명'] = df['대표자명'].fillna('')
+            df["발주내역_거래처명"] = df["발주내역_거래처명"].fillna(
+                df["경리나라_거래처명"]
+            )
+            df["대표자명"] = df["대표자명"].fillna("")
 
             # 사업자번호가 없는 행 제외
-            df = df[df['사업자번호'].notna()]
+            df = df[df["사업자번호"].notna()]
 
             # DB에 저장
             success_count = 0
@@ -635,10 +681,12 @@ class CustomerMasterDB:
 
             for _, row in df.iterrows():
                 success, message = self.add_customer(
-                    business_number=str(row['사업자번호']),
-                    order_name=str(row['발주내역_거래처명']),
-                    accounting_name=str(row['경리나라_거래처명']),
-                    representative=str(row.get('대표자명', '')) if pd.notna(row.get('대표자명')) else None
+                    business_number=str(row["사업자번호"]),
+                    order_name=str(row["발주내역_거래처명"]),
+                    accounting_name=str(row["경리나라_거래처명"]),
+                    representative=str(row.get("대표자명", ""))
+                    if pd.notna(row.get("대표자명"))
+                    else None,
                 )
 
                 if success:
@@ -679,21 +727,20 @@ class CustomerMasterDB:
                 return False, "내보낼 데이터가 없습니다"
 
             # 컬럼명 변경 (원본 형식으로)
-            df = df.rename(columns={
-                '발주내역_거래처명': '거래처명_솔루미랩',
-                '경리나라_거래처명': '거래처명_경리나라'
-            })
+            df = df.rename(
+                columns={
+                    "발주내역_거래처명": "거래처명_솔루미랩",
+                    "경리나라_거래처명": "거래처명_경리나라",
+                }
+            )
 
             # 필요한 컬럼만 선택
-            df_export = df[[
-                '거래처명_경리나라',
-                '거래처명_솔루미랩',
-                '사업자번호',
-                '대표자명'
-            ]]
+            df_export = df[
+                ["거래처명_경리나라", "거래처명_솔루미랩", "사업자번호", "대표자명"]
+            ]
 
             # Excel 저장
-            df_export.to_excel(excel_path, sheet_name='거래처마스터', index=False)
+            df_export.to_excel(excel_path, sheet_name="거래처마스터", index=False)
 
             self.logger.info(f"Exported {len(df_export)} customers to {excel_path}")
             return True, f"Excel 파일로 내보내기 완료: {len(df_export)}건"
@@ -791,10 +838,10 @@ class CustomerMasterDB:
                 latest_updated = cursor.fetchone()[0]
 
                 return {
-                    'total_customers': total_count,
-                    'latest_created': latest_created,
-                    'latest_updated': latest_updated,
-                    'db_path': self.db_path
+                    "total_customers": total_count,
+                    "latest_created": latest_created,
+                    "latest_updated": latest_updated,
+                    "db_path": self.db_path,
                 }
 
         except Exception as e:
@@ -810,7 +857,7 @@ if __name__ == "__main__":
     # 로깅 설정
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # 테스트 DB 생성
@@ -822,7 +869,7 @@ if __name__ == "__main__":
         business_number="123-45-67890",
         order_name="테스트거래처",
         accounting_name="(주)테스트",
-        representative="홍길동"
+        representative="홍길동",
     )
     print(f"결과: {msg}")
 

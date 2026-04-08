@@ -14,7 +14,18 @@ from pathlib import Path
 
 # 2025-12-17 hoyeon.han: 인증 모듈 직접 import (Src/__init__.py 우회)
 import importlib.util
-spec = importlib.util.spec_from_file_location("auth", Path(__file__).parent / "Src" / "auth.py")
+
+spec = importlib.util.spec_from_file_location(
+    "auth", Path(__file__).parent / "Src" / "auth.py"
+)
+
+# 2026-04-08 hoyeon.han: spec/loader None 가드 추가
+if spec is None or spec.loader is None:
+    raise ImportError(
+        "인증 모듈(auth.py)을 로드할 수 없습니다. 파일 경로를 확인해주세요."
+    )
+
+# 2026-04-08 hoyeon.han: 기존 로딩 방식 유지 (None 가드 통과 후 실행)
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 
@@ -35,14 +46,15 @@ st.set_page_config(
     page_title="SollumeLab 회계 시스템",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # 2025-12-17 hoyeon.han: 세션 상태 초기화
 init_session_state()
 
 # CSS 커스터마이징 (로그인 전에도 필요)
-st.markdown("""
+st.markdown(
+    """
 <style>
     .main-header {
         font-size: 2.5rem;
@@ -74,10 +86,14 @@ st.markdown("""
         color: #555;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # 메인 타이틀 (로그인 전에도 표시)
-st.markdown('<div class="main-header">📊 SollumeLab 회계 시스템</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="main-header">📊 SollumeLab 회계 시스템</div>', unsafe_allow_html=True
+)
 
 # 2025-12-17 hoyeon.han: 인증 체크 - 미인증 시 로그인 페이지 표시
 if not is_session_valid():
@@ -93,11 +109,13 @@ st.markdown("왼쪽 사이드바에서 원하는 기능을 선택하세요.")
 
 st.divider()
 
-# 기능 소개
-col1, col2, col3 = st.columns(3)
+# 2026-04-08 hoyeon.han: 특정업체 전표 생성 기능 소개 추가
+# st.columns(3) → st.columns(4) 변경으로 4개의 카드 표시
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("""
+    st.markdown(
+        """
     <div class="section-box">
         <div class="section-title">📝 전표 생성</div>
         <div class="section-desc">
@@ -112,10 +130,13 @@ with col1:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 with col2:
-    st.markdown("""
+    st.markdown(
+        """
     <div class="section-box">
         <div class="section-title">📊 발주내역 요약</div>
         <div class="section-desc">
@@ -130,10 +151,13 @@ with col2:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 with col3:
-    st.markdown("""
+    st.markdown(
+        """
     <div class="section-box">
         <div class="section-title">🏢 거래처 관리</div>
         <div class="section-desc">
@@ -148,7 +172,30 @@ with col3:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
+
+with col4:
+    st.markdown(
+        """
+    <div class="section-box">
+        <div class="section-title">🎯 특정업체 전표</div>
+        <div class="section-desc">
+            특정 기간의 특정 업체 전표를 생성합니다.
+            <div class="feature-list">
+                <ul>
+                    <li>기간 선택 (시작일~종료일)</li>
+                    <li>복수 업체 선택</li>
+                    <li>업체별 매출/매입 전표</li>
+                    <li>개별 파일 다운로드</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
 st.divider()
 
@@ -162,6 +209,8 @@ st.info("""
 2️⃣ **발주내역 요약**: 발주내역 엑셀 업로드 → 기간 선택 → 요약 처리 → 다운로드
 
 3️⃣ **거래처 관리**: 거래처 검색 → 조회/등록/수정/삭제 → DB 관리
+
+4️⃣ **특정업체 전표**: 발주내역 엑셀 업로드 → 기간/업체 선택 → 업체별 전표 생성 → 다운로드
 """)
 
 # 시스템 정보
@@ -177,7 +226,7 @@ with col_left:
         "로그": Path("logs").exists(),
         "업로드": Path("uploads").exists(),
         "처리완료": Path("processed").exists(),
-        "데이터베이스": Path("database").exists()
+        "데이터베이스": Path("database").exists(),
     }
 
     for dir_name, exists in dirs_status.items():
