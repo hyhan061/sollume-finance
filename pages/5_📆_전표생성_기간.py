@@ -32,6 +32,15 @@ from ui_components import render_custom_sidebar
 
 render_custom_sidebar()
 
+# 2026-04-09 hoyeon.han: 기간 통합 전표 처리에 필요한 import
+from processing import (
+    get_sales_by_period,
+    get_purchase_by_period,
+    save_dataframe_to_xls,
+)
+from exceptions import SollumeBaseException
+import logging
+
 # 디렉토리 생성
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("processed", exist_ok=True)
@@ -144,22 +153,183 @@ generate_clicked = st.button(
     key="period_voucher_generate_button",
 )
 
+
+# 2026-04-09 hoyeon.han: 기간 통합 전표 처리 오케스트레이션
+def process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date):
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
+
+    temp_filename = (
+        f"temp_period_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_file.name}"
+    )
+    temp_path = os.path.join("uploads", temp_filename)
+
+    with st.status("⚙️ 기간 전표 생성 중...", expanded=True) as status:
+        try:
+            st.write("📤 **STEP 1/5**: 업로드 파일 임시 저장")
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+            st.write(f"✅ 임시 저장 완료: `{uploaded_file.name}`")
+
+            st.write(
+                f"💰 **STEP 2/5**: 매출 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
+            )
+            df_sales = get_sales_by_period(
+                file_path=temp_path,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                sheet_name=selected_sheet,
+                use_db=True,
+            )
+            logging.info(f"기간 매출 처리 완료: {len(df_sales)}건")
+            st.write(f"✅ 매출 데이터 처리 완료: **{len(df_sales):,}건**")
+
+            st.write(
+                f"🛒 **STEP 3/5**: 매입 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
+            )
+            df_purchase = get_purchase_by_period(
+                file_path=temp_path,
+                start_date=start_date_str,
+                end_date=end_date_str,
+                sheet_name=selected_sheet,
+                use_db=True,
+            )
+            logging.info(f"기간 매입 처리 완료: {len(df_purchase)}건")
+            st.write(f"✅ 매입 데이터 처리 완료: **{len(df_purchase):,}건**")
+
+            st.write("💾 **STEP 4/5**: 경리나라 전표 파일 저장 중...")
+            sales_filename = f"매출_{start_date_str}~{end_date_str}.xls"
+            purchase_filename = f"매입_{start_date_str}~{end_date_str}.xls"
+            sales_filepath = os.path.join("processed", sales_filename)
+            purchase_filepath = os.path.join("processed", purchase_filename)
+
+            save_dataframe_to_xls(df_sales, sales_filepath)
+            save_dataframe_to_xls(df_purchase, purchase_filepath)
+            st.write(f"✅ 파일 저장 완료")
+            st.write(f"   - 매출: `{sales_filename}`")
+            st.write(f"   - 매입: `{purchase_filename}`")
+
+            st.write("🧹 **STEP 5/5**: 임시 파일 정리 중...")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            st.write("✅ 임시 파일 삭제 완료")
+
+            status.update(label="✅ 전표 생성 완료", state="complete", expanded=False)
+
+            st.session_state.period_voucher_result = {
+                "source_file": uploaded_file.name,
+                "sheet_name": selected_sheet,
+                "start_date": start_date_str,
+                "end_date": end_date_str,
+                "sales_count": len(df_sales),
+                "purchase_count": len(df_purchase),
+                "df_sales": df_sales,
+                "df_purchase": df_purchase,
+                "sales_filename": sales_filename,
+                "purchase_filename": purchase_filename,
+                "sales_filepath": sales_filepath,
+                "purchase_filepath": purchase_filepath,
+                "timestamp": datetime.now(),
+            }
+
+            st.rerun()
+
+        except SollumeBaseException as e:
+            status.update(label="❌ 처리 실패", state="error", expanded=True)
+            st.error(e.user_message)
+            with st.expander("🔍 에러 상세 정보"):
+                st.exception(e)
+
+        except Exception as e:
+            status.update(label="❌ 처리 실패", state="error", expanded=True)
+            st.error(f"처리 중 오류가 발생했습니다: {str(e)}")
+            with st.expander("🔍 에러 상세 정보"):
+                st.exception(e)
+
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+
 if generate_clicked:
     if selected_sheet is None:
         st.error("시트를 선택해주세요.")
         st.stop()
 
-    # 2026-04-09 hoyeon.han: T6에서 처리 함수 호출로 교체 예정
-    st.info("처리 중...")
-    pass
+    # 2026-04-09 hoyeon.han: T6에서 처리 함수 호출로 교체 완료
+    # st.info("처리 중...")
+    # pass
+    process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date)
 
 st.divider()
 
 st.markdown("### 📦 4. 생성 결과")
 result = st.session_state.period_voucher_result
 
-# 2026-04-09 hoyeon.han: T7에서 결과 표시 로직 완성 예정
+# 2026-04-09 hoyeon.han: 결과 섹션 완성
+# --- 기존 코드 (주석 처리) ---
+# if result:
+#     st.success("✅ 전표 생성이 완료되었습니다.")
+# else:
+#     st.info("아직 생성된 결과가 없습니다.")
+# --- 기존 코드 끝 ---
+
 if result:
-    st.success("✅ 전표 생성이 완료되었습니다.")
+    st.success(
+        f"✅ 처리 완료 | 기간: {result['start_date']}~{result['end_date']} | "
+        f"매출 {result['sales_count']:,}건 / 매입 {result['purchase_count']:,}건"
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📅 처리 기간", f"{result['start_date']}~{result['end_date']}")
+    with col2:
+        st.metric("💰 매출 건수", f"{result['sales_count']:,}건")
+    with col3:
+        st.metric("🛒 매입 건수", f"{result['purchase_count']:,}건")
+    with col4:
+        st.metric("⏰ 처리 시각", result["timestamp"].strftime("%H:%M:%S"))
+
+    tab1, tab2 = st.tabs(["💰 매출 데이터", "🛒 매입 데이터"])
+
+    with tab1:
+        if result["sales_count"] > 0:
+            st.info(f"총 {result['sales_count']:,}건의 매출 데이터가 처리되었습니다.")
+            st.dataframe(
+                result["df_sales"].head(20), use_container_width=True, height=300
+            )
+            with open(result["sales_filepath"], "rb") as f:
+                st.download_button(
+                    label="📥 매출 파일 다운로드",
+                    data=f.read(),
+                    file_name=result["sales_filename"],
+                    mime="application/vnd.ms-excel",
+                    type="primary",
+                    use_container_width=True,
+                    key="period_download_sales",
+                )
+        else:
+            st.warning("해당 기간에 처리할 매출 데이터가 없습니다.")
+
+    with tab2:
+        if result["purchase_count"] > 0:
+            st.info(
+                f"총 {result['purchase_count']:,}건의 매입 데이터가 처리되었습니다."
+            )
+            st.dataframe(
+                result["df_purchase"].head(20), use_container_width=True, height=300
+            )
+            with open(result["purchase_filepath"], "rb") as f:
+                st.download_button(
+                    label="📥 매입 파일 다운로드",
+                    data=f.read(),
+                    file_name=result["purchase_filename"],
+                    mime="application/vnd.ms-excel",
+                    type="primary",
+                    use_container_width=True,
+                    key="period_download_purchase",
+                )
+        else:
+            st.warning("해당 기간에 처리할 매입 데이터가 없습니다.")
 else:
     st.info("아직 생성된 결과가 없습니다.")
