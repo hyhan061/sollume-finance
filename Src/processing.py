@@ -1272,6 +1272,21 @@ def get_purchase_by_period_vendor(
         df_buy_today.loc[df_buy_today["매입처"] == "유스랩", "매입배송비"] = 0
         df_buy_today.loc[df_buy_today["매입처"] == "유스랩", "매입도선료"] = 0
 
+        # 2026-04-13 hoyeon.han: 빅웨이브즈 특이사항 설정 추가 (get_purchase_daily와 동기화)
+        # 지앤제이 + 빅웨이브즈인 경우 특이사항 설정
+        df_buy_today.loc[
+            (df_buy_today["매입처"] == "지앤제이")
+            & (df_buy_today["업체명"] == "빅웨이브즈"),
+            "특이사항",
+        ] = "빅웨이브즈"
+
+        # 유스랩 + 빅웨이브즈인 경우 특이사항 설정
+        df_buy_today.loc[
+            (df_buy_today["매입처"] == "유스랩")
+            & (df_buy_today["업체명"] == "빅웨이브즈"),
+            "특이사항",
+        ] = "빅웨이브즈"
+
         # 유라이크: 매입도선료 0 처리
         df_buy_today.loc[df_buy_today["매입처"] == "유라이크", "매입도선료"] = 0
 
@@ -1594,6 +1609,21 @@ def get_purchase_by_period(
         # 유스랩: 매입배송비, 매입도선료 0 처리
         df_buy_today.loc[df_buy_today["매입처"] == "유스랩", "매입배송비"] = 0
         df_buy_today.loc[df_buy_today["매입처"] == "유스랩", "매입도선료"] = 0
+
+        # 2026-04-13 hoyeon.han: 빅웨이브즈 특이사항 설정 추가 (get_purchase_daily와 동기화)
+        # 지앤제이 + 빅웨이브즈인 경우 특이사항 설정
+        df_buy_today.loc[
+            (df_buy_today["매입처"] == "지앤제이")
+            & (df_buy_today["업체명"] == "빅웨이브즈"),
+            "특이사항",
+        ] = "빅웨이브즈"
+
+        # 유스랩 + 빅웨이브즈인 경우 특이사항 설정
+        df_buy_today.loc[
+            (df_buy_today["매입처"] == "유스랩")
+            & (df_buy_today["업체명"] == "빅웨이브즈"),
+            "특이사항",
+        ] = "빅웨이브즈"
 
         # 유라이크: 매입도선료 0 처리
         df_buy_today.loc[df_buy_today["매입처"] == "유라이크", "매입도선료"] = 0
