@@ -621,6 +621,21 @@ def process_period_summary(
         df_sales_acc_summary.to_excel(excel_writer, sheet_name='매출_업체별합계', index=False)
         sheets_created.append('매출_업체별합계')
 
+    # 2026-05-11 hoyeon.han: 업체별 + 일자별 교차 시트 신규 추가
+    if not df_sales_acc.empty:
+        df_sales_acc_daily = (
+            df_sales_acc
+            .groupby(['출고일', '업체명', '특이사항'])[['업체별합계']]
+            .sum()
+            .sort_values(['업체명', '출고일', '특이사항'])
+            .reset_index()
+        )
+        df_sales_acc_daily['출고일'] = df_sales_acc_daily['출고일'].dt.strftime('%Y-%m-%d')
+        df_sales_acc_daily = df_sales_acc_daily[['출고일', '업체명', '특이사항', '업체별합계']]
+        df_sales_acc_daily.to_excel(excel_writer, sheet_name='매출_업체_일자별', index=False)
+        sheets_created.append('매출_업체_일자별')
+        logger.info(f"매출_업체_일자별 시트 생성: {len(df_sales_acc_daily)}행")
+
     # 매입 업체별 합계
     if not df_buy_acc.empty:
         df_buy_acc_summary = (
@@ -632,6 +647,21 @@ def process_period_summary(
         )
         df_buy_acc_summary.to_excel(excel_writer, sheet_name='매입_업체별합계', index=False)
         sheets_created.append('매입_업체별합계')
+
+    # 2026-05-11 hoyeon.han: 업체별 + 일자별 교차 시트 신규 추가
+    if not df_buy_acc.empty:
+        df_buy_acc_daily = (
+            df_buy_acc
+            .groupby(['출고일', '매입처', '특이사항'])[['업체별합계']]
+            .sum()
+            .sort_values(['매입처', '출고일', '특이사항'])
+            .reset_index()
+        )
+        df_buy_acc_daily['출고일'] = df_buy_acc_daily['출고일'].dt.strftime('%Y-%m-%d')
+        df_buy_acc_daily = df_buy_acc_daily[['출고일', '매입처', '특이사항', '업체별합계']]
+        df_buy_acc_daily.to_excel(excel_writer, sheet_name='매입_업체_일자별', index=False)
+        sheets_created.append('매입_업체_일자별')
+        logger.info(f"매입_업체_일자별 시트 생성: {len(df_buy_acc_daily)}행")
 
     # 매출 일자별 합계
     if not df_sales_daily.empty:
