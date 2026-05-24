@@ -645,33 +645,11 @@ def result_section():
         st.info(f"총 {result['sales_count']}건의 매출 데이터가 처리되었습니다.")
         st.dataframe(result["df_sales"].head(20), use_container_width=True, height=300)
 
-        with open(result["sales_filepath"], "rb") as f:
-            st.download_button(
-                label="📥 매출 파일 다운로드",
-                data=f.read(),
-                file_name=result["sales_filename"],
-                mime="application/vnd.ms-excel",
-                type="primary",
-                use_container_width=True,
-                key="download_sales",
-            )
-
     with tab2:
         st.info(f"총 {result['purchase_count']}건의 매입 데이터가 처리되었습니다.")
         st.dataframe(
             result["df_purchase"].head(20), use_container_width=True, height=300
         )
-
-        with open(result["purchase_filepath"], "rb") as f:
-            st.download_button(
-                label="📥 매입 파일 다운로드",
-                data=f.read(),
-                file_name=result["purchase_filename"],
-                mime="application/vnd.ms-excel",
-                type="primary",
-                use_container_width=True,
-                key="download_purchase",
-            )
 
     st.markdown(
         '<div class="info-box">'
@@ -717,30 +695,65 @@ def session_history_section():
 
 # =============================================================================
 # 메인 실행
-# 2025-04-13 hoyeon.han: 시스템 관리 기능은 6_⚙️_시스템관리.py로 분리
+# 2025-04-13 hoyeon.han: 1:2 레이아웃으로 변경 (제어:결과 = 1:2)
 # =============================================================================
 
-# Section 1: 파일 업로드 및 처리
-upload_and_process_section()
+# 메인 영역 1:2 분할
+control_col, result_col = st.columns([1, 2], gap="medium")
 
-# Section 2: 처리 결과 (조걶� 표시)
-if st.session_state.last_result:
-    result_section()
+# ========== LEFT: 제어 패널 (1/3) ==========
+with control_col:
+    # 파일 업로드 및 처리
+    upload_and_process_section()
 
-# Section 3: 이번 세션 처리 이력 (Expander로 접을 수 있게 구성)
-with st.expander("📜 이번 세션 처리 이력", expanded=False):
-    session_history_section()
+    # 다운로드 버튼 (결과 있을 때만 표시)
+    if st.session_state.last_result:
+        result = st.session_state.last_result
+        st.divider()
+        st.markdown("### 📥 다운로드")
+        with st.container(border=True):
+            with open(result["sales_filepath"], "rb") as f:
+                st.download_button(
+                    label="💰 매출 파일",
+                    data=f.read(),
+                    file_name=result["sales_filename"],
+                    mime="application/vnd.ms-excel",
+                    type="primary",
+                    use_container_width=True,
+                    key="download_sales_main",
+                )
+            with open(result["purchase_filepath"], "rb") as f:
+                st.download_button(
+                    label="🛒 매입 파일",
+                    data=f.read(),
+                    file_name=result["purchase_filename"],
+                    mime="application/vnd.ms-excel",
+                    type="primary",
+                    use_container_width=True,
+                    key="download_purchase_main",
+                )
 
-# 시스템 관리 페이지 안내
-st.divider()
-col1, col2 = st.columns([4, 1])
-with col1:
-    st.info(
-        "📂 저장된 파일 목록, 로그 확인, 시스템 설정은 **⚙️ 시스템 관리** 페이지에서 이용하실 수 있습니다."
-    )
-with col2:
+    # 처리 이력
+    with st.expander("📜 이번 세션 처리 이력", expanded=False):
+        session_history_section()
+
+    # 시스템 관리 페이지 안내
+    st.divider()
+    st.info("📂 파일 목록, 로그 확인은 **⚙️ 시스템 관리** 페이지에서")
     if st.button("⚙️ 시스템 관리로 이동", use_container_width=True, key="goto_settings"):
         st.switch_page("pages/6_⚙️_시스템관리.py")
+
+# ========== RIGHT: 결과 패널 (2/3) ==========
+with result_col:
+    # 처리 결과 (조걶� 표시)
+    if st.session_state.last_result:
+        result_section()
+    else:
+        # 결과 없을 때 안내 메시지
+        st.info(
+            "👈 좌측에서 파일을 업로드하고 처리 버튼을 클릭하세요.\n\n"
+            "처리 결과가 여기에 표시됩니다."
+        )
 
 # 푸터
 st.divider()
