@@ -269,18 +269,48 @@ def show_search_results():
     col1, col2 = st.columns(2)
 
     with col1:
-        # 사업자번호 선택
-        business_numbers = st.session_state.search_results["사업자번호"].tolist()
-        customer_names = st.session_state.search_results["발주내역_거래처명"].tolist()
+        # 2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응 - 사업자번호 단독 식별 불가, id 기반 선택으로 변경
+        # # 사업자번호 선택
+        # business_numbers = st.session_state.search_results["사업자번호"].tolist()
+        # customer_names = st.session_state.search_results["발주내역_거래처명"].tolist()
+        #
+        # # 선택 옵션: "사업자번호 - 거래처명"
+        # options = [f"{bn} - {cn}" for bn, cn in zip(business_numbers, customer_names)]
+        #
+        # selected_option = st.selectbox(
+        #     "수정/삭제할 거래처 선택",
+        #     options=["선택하세요"] + options,
+        #     key="selected_customer_option",
+        # )
 
-        # 선택 옵션: "사업자번호 - 거래처명"
-        options = [f"{bn} - {cn}" for bn, cn in zip(business_numbers, customer_names)]
+        # 2026-05-24 hoyeon.han: id 컬럼이 있을 때만 식별자 기반 선택 활성화
+        if "id" in st.session_state.search_results.columns:
+            ids = st.session_state.search_results["id"].tolist()
+            business_numbers = st.session_state.search_results["사업자번호"].tolist()
+            customer_names = st.session_state.search_results[
+                "발주내역_거래처명"
+            ].tolist()
 
-        selected_option = st.selectbox(
-            "수정/삭제할 거래처 선택",
-            options=["선택하세요"] + options,
-            key="selected_customer_option",
-        )
+            # 옵션 값은 id, 라벨은 "사업자번호 - 거래처명"
+            id_to_label = {
+                int(cid): f"{bn} - {cn}"
+                for cid, bn, cn in zip(ids, business_numbers, customer_names)
+            }
+            options = [None] + list(id_to_label.keys())
+
+            selected_id = st.selectbox(
+                "수정/삭제할 거래처 선택",
+                options=options,
+                format_func=lambda x: "선택하세요" if x is None else id_to_label[x],
+                key="selected_customer_option",
+            )
+        else:
+            # 구버전 스키마 호환: id 컬럼이 없으면 수정/삭제 비활성화
+            selected_id = None
+            st.warning(
+                "현재 DB 스키마에 id 컬럼이 없어 수정/삭제가 비활성화되어 있습니다. "
+                "DB 마이그레이션이 필요합니다."
+            )
 
     with col2:
         st.write("")  # 여백
@@ -295,10 +325,9 @@ def show_search_results():
             delete_btn = st.button("🗑️ 삭제", type="secondary", use_container_width=True)
 
     # 거래처 선택 처리
-    if selected_option != "선택하세요":
-        # 사업자번호 추출
-        selected_business_number = selected_option.split(" - ")[0]
-        st.session_state.selected_customer = selected_business_number
+    # 2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응 - id 기반으로 selected_customer 저장
+    if selected_id is not None:
+        st.session_state.selected_customer = int(selected_id)
 
         # 수정 버튼 클릭
         if edit_btn:
@@ -308,7 +337,7 @@ def show_search_results():
 
         # 삭제 버튼 클릭
         if delete_btn:
-            show_delete_confirmation(selected_business_number)
+            show_delete_confirmation(int(selected_id))
 
 
 # =============================================================================
@@ -418,18 +447,38 @@ def show_add_customer_form(db: CustomerMasterDB):
 # =============================================================================
 
 
-def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
-    """거래처 수정 폼"""
+# 2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응 - 식별자 business_number → customer_id 로 변경
+# def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
+#     """거래처 수정 폼"""
+#
+#     st.markdown(
+#         '<div class="section-header">✏️ 거래처 정보 수정</div>', unsafe_allow_html=True
+#     )
+#
+#     # 기존 정보 조회
+#     customer = db.get_customer(business_number)
+#
+#     if not customer:
+#         st.error(f"거래처를 찾을 수 없습니다: {business_number}")
+#         st.session_state.show_edit_form = False
+#         return
+def show_edit_customer_form(db: CustomerMasterDB, customer_id: int):
+    """거래처 수정 폼
+
+    2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응
+    - 인자: business_number(str) → customer_id(int)
+    - 조회: get_customer(List[dict] 반환) → get_customer_by_id(단일 dict 반환)
+    """
 
     st.markdown(
         '<div class="section-header">✏️ 거래처 정보 수정</div>', unsafe_allow_html=True
     )
 
     # 기존 정보 조회
-    customer = db.get_customer(business_number)
+    customer = db.get_customer_by_id(customer_id)
 
     if not customer:
-        st.error(f"거래처를 찾을 수 없습니다: {business_number}")
+        st.error(f"거래처를 찾을 수 없습니다: ID {customer_id}")
         st.session_state.show_edit_form = False
         return
 
@@ -489,10 +538,23 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
             return
 
         # DB 업데이트
+        # 2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응 - customer_id를 첫 인자로 전달
+        # try:
+        #     with st.spinner("거래처 정보 수정 중..."):
+        #         success, message = db.update_customer(
+        #             business_number=business_number,
+        #             order_name=order_name.strip(),
+        #             accounting_name=accounting_name.strip(),
+        #             representative=representative.strip() if representative else None,
+        #         )
+        #
+        #     if success:
+        #         st.success(message)
+        #         logger.info(f"거래처 수정 성공: {business_number}")
         try:
             with st.spinner("거래처 정보 수정 중..."):
                 success, message = db.update_customer(
-                    business_number=business_number,
+                    customer_id=customer_id,
                     order_name=order_name.strip(),
                     accounting_name=accounting_name.strip(),
                     representative=representative.strip() if representative else None,
@@ -500,7 +562,7 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
 
             if success:
                 st.success(message)
-                logger.info(f"거래처 수정 성공: {business_number}")
+                logger.info(f"거래처 수정 성공: ID {customer_id}")
 
                 # 폼 닫기
                 st.session_state.show_edit_form = False
@@ -524,17 +586,84 @@ def show_edit_customer_form(db: CustomerMasterDB, business_number: str):
 # =============================================================================
 
 
-def show_delete_confirmation(business_number: str):
-    """거래처 삭제 확인 다이얼로그"""
+# 2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응 - 식별자 business_number → customer_id 로 변경
+# def show_delete_confirmation(business_number: str):
+#     """거래처 삭제 확인 다이얼로그"""
+#
+#     # DB 인스턴스 생성
+#     db = CustomerMasterDB()
+#
+#     # 거래처 정보 조회
+#     customer = db.get_customer(business_number)
+#
+#     if not customer:
+#         st.error(f"거래처를 찾을 수 없습니다: {business_number}")
+#         return
+#
+#     # 확인 다이얼로그
+#     st.markdown('<div class="warning-box">', unsafe_allow_html=True)
+#     st.warning("⚠️ **거래처 삭제 확인**")
+#     st.write(f"**거래처명:** {customer['발주내역_거래처명']}")
+#     st.write(f"**사업자번호:** {customer['사업자번호']}")
+#     st.write(f"**경리나라 거래처명:** {customer['경리나라_거래처명']}")
+#     st.markdown("</div>", unsafe_allow_html=True)
+#
+#     st.error("**정말로 이 거래처를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.**")
+#
+#     col1, col2, col3 = st.columns([2, 1, 1])
+#
+#     with col2:
+#         confirm_btn = st.button("🗑️ 삭제 확인", type="primary", use_container_width=True)
+#
+#     with col3:
+#         cancel_delete_btn = st.button("❌ 취소", use_container_width=True)
+#
+#     # 삭제 확인
+#     if confirm_btn:
+#         try:
+#             with st.spinner("거래처 삭제 중..."):
+#                 success, message = db.delete_customer(business_number)
+#
+#             if success:
+#                 st.success(message)
+#                 logger.info(f"거래처 삭제 성공: {business_number}")
+#
+#                 # 검색 결과에서 제거
+#                 st.session_state.search_results = st.session_state.search_results[
+#                     st.session_state.search_results["사업자번호"] != business_number
+#                 ]
+#
+#                 st.session_state.selected_customer = None
+#                 st.rerun()
+#             else:
+#                 st.error(message)
+#                 logger.warning(f"거래처 삭제 실패: {message}")
+#
+#         except Exception as e:
+#             logger.error(f"거래처 삭제 오류: {e}", exc_info=True)
+#             st.error(f"거래처 삭제 중 오류가 발생했습니다: {str(e)}")
+#
+#     # 취소
+#     if cancel_delete_btn:
+#         st.session_state.selected_customer = None
+#         st.rerun()
+def show_delete_confirmation(customer_id: int):
+    """거래처 삭제 확인 다이얼로그
+
+    2026-05-24 hoyeon.han: 스키마 id PK 마이그레이션 대응
+    - 인자: business_number(str) → customer_id(int)
+    - 조회/삭제: get_customer_by_id, delete_customer(customer_id)
+    - 검색 결과 필터: 사업자번호 비교 → id 비교
+    """
 
     # DB 인스턴스 생성
     db = CustomerMasterDB()
 
     # 거래처 정보 조회
-    customer = db.get_customer(business_number)
+    customer = db.get_customer_by_id(customer_id)
 
     if not customer:
-        st.error(f"거래처를 찾을 수 없습니다: {business_number}")
+        st.error(f"거래처를 찾을 수 없습니다: ID {customer_id}")
         return
 
     # 확인 다이얼로그
@@ -559,16 +688,17 @@ def show_delete_confirmation(business_number: str):
     if confirm_btn:
         try:
             with st.spinner("거래처 삭제 중..."):
-                success, message = db.delete_customer(business_number)
+                success, message = db.delete_customer(customer_id)
 
             if success:
                 st.success(message)
-                logger.info(f"거래처 삭제 성공: {business_number}")
+                logger.info(f"거래처 삭제 성공: ID {customer_id}")
 
-                # 검색 결과에서 제거
-                st.session_state.search_results = st.session_state.search_results[
-                    st.session_state.search_results["사업자번호"] != business_number
-                ]
+                # 검색 결과에서 제거 (id 기준)
+                if "id" in st.session_state.search_results.columns:
+                    st.session_state.search_results = st.session_state.search_results[
+                        st.session_state.search_results["id"] != customer_id
+                    ]
 
                 st.session_state.selected_customer = None
                 st.rerun()
@@ -807,8 +937,9 @@ def main():
         st.divider()
 
     # 수정 폼
+    # 2026-05-24 hoyeon.han: selected_customer는 이제 customer_id(int) 를 담음
     if st.session_state.show_edit_form and st.session_state.selected_customer:
-        show_edit_customer_form(db, st.session_state.selected_customer)
+        show_edit_customer_form(db, int(st.session_state.selected_customer))
         st.divider()
 
     # 데이터 관리
