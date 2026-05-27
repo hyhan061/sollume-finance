@@ -53,6 +53,7 @@ wheels/
 .tox/
 htmlcov/
 .hypothesis/
+tests/
 
 # 환경 변수
 .env
@@ -98,3 +99,5 @@ logs/
 .gemini/
 CLAUDE.md
 
+.playwright-mcp/
+.sisyphus/
