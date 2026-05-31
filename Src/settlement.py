@@ -318,6 +318,16 @@ def build_output_filename(
 # ===== 출력 작성 =====
 
 
+# 2026-05-31 hoyeon.han: st.color_picker가 반환하는 '#RRGGBB'를 openpyxl이
+# 기대하는 'AARRGGBB'(ARGB) 형식으로 정규화한다.
+def _to_argb(color: str) -> str:
+    """'#RRGGBB' / 'RRGGBB' / 'AARRGGBB' → 'AARRGGBB'. 알파 누락 시 'FF' 선행."""
+    s = str(color).lstrip("#").strip().upper()
+    if len(s) == 6:
+        s = "FF" + s
+    return s
+
+
 def _write_common_header(
     ws,
     title: str,
@@ -341,7 +351,11 @@ def _write_common_header(
     ws.merge_cells(
         start_row=2, start_column=1, end_row=2, end_column=n_cols
     )
-    ws.cell(row=2, column=1).alignment = center
+    # 2026-05-31 hoyeon.han: 2행(작성일자/거래처) 좌측 정렬로 변경
+    # ws.cell(row=2, column=1).alignment = center
+    ws.cell(row=2, column=1).alignment = Alignment(
+        horizontal="left", vertical="center"
+    )
 
     # row 3: 헤더
     for c, col_name in enumerate(header_cols, start=1):
@@ -370,6 +384,12 @@ def write_settlement_xlsx(
     title: str,
     period_line: str,
     sheets: dict[str, pd.DataFrame],
+    # 2026-05-31 hoyeon.han: 전체 시트 금액 합계 강조 옵션 (사용자 지정)
+    highlight_total: bool = True,
+    total_font_size: float = 11,
+    total_font_color: str = "#FF0000",
+    total_fill_color: str = "#FFFF00",
+    total_bold: bool = True,
 ) -> str:
     """정산서 .xlsx 작성.
 
@@ -392,6 +412,19 @@ def write_settlement_xlsx(
         start_color="FFD9E1F2", end_color="FFD9E1F2", fill_type="solid"
     )
     center = Alignment(horizontal="center", vertical="center")
+    # 2026-05-31 hoyeon.han: 전체 시트 합계(수량/금액) 우측 정렬용
+    right = Alignment(horizontal="right", vertical="center")
+    # 2026-05-31 hoyeon.han: 금액 합계 강조 스타일 (옵션 켜짐일 때만 사용)
+    total_font = Font(
+        bold=total_bold,
+        color=_to_argb(total_font_color),
+        size=total_font_size,
+    )
+    total_fill = PatternFill(
+        start_color=_to_argb(total_fill_color),
+        end_color=_to_argb(total_fill_color),
+        fill_type="solid",
+    )
 
     used_names: set[str] = set()
 
@@ -455,10 +488,17 @@ def write_settlement_xlsx(
             # 특수 포맷 — 문자열, 콤마
             ws.cell(row=last_row, column=1, value="")
             ws.cell(row=last_row, column=2, value=f"{len(df_sheet)}건")
-            ws.cell(row=last_row, column=3, value=f"{sum_qty:,}")
+            qty_overall_cell = ws.cell(
+                row=last_row, column=3, value=f"{sum_qty:,}"
+            )
             ws.cell(row=last_row, column=4, value="")
-            ws.cell(row=last_row, column=5, value=f"{sum_total:,}")
+            total_overall_cell = ws.cell(
+                row=last_row, column=5, value=f"{sum_total:,}"
+            )
             ws.cell(row=last_row, column=6, value="")
+            # 2026-05-31 hoyeon.han: 수량/금액 합계 우측 정렬
+            qty_overall_cell.alignment = right
+            total_overall_cell.alignment = right
         else:
             ws.cell(row=last_row, column=1, value="합계")
             ws.cell(row=last_row, column=2, value="")
@@ -472,6 +512,15 @@ def write_settlement_xlsx(
         # 합계 행 굵게
         for c in range(1, len(OUTPUT_COLS) + 1):
             ws.cell(row=last_row, column=c).font = bold_font
+
+        # 2026-05-31 hoyeon.han: 전체 시트 금액 합계 강조 옵션
+        # (사용자 지정 폰트 크기/글씨 색상/채우기 색상). 굵게 루프 이후에
+        # 적용해 font가 덮어쓰이지 않게 한다. alignment는 font/fill과 독립이라
+        # 우측 정렬은 그대로 유지된다.
+        if raw_name == SHEET_OVERALL and highlight_total:
+            total_cell = ws.cell(row=last_row, column=5)
+            total_cell.font = total_font
+            total_cell.fill = total_fill
 
     wb.save(out_path)
     return out_path

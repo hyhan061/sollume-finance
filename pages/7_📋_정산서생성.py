@@ -64,6 +64,23 @@ for k, v in _DEFAULTS.items():
         st.session_state[k] = v
 
 
+# 2026-05-31 hoyeon.han: 생성 옵션 위젯 키 — 데이터 변경 시 함께 제거해
+# 자동 감지 기본값이 다시 계산되도록 한다.
+_OPTION_WIDGET_KEYS = (
+    "settlement_exclude_general",
+    "settlement_highlight_total",
+    "settlement_total_font_size",
+    "settlement_total_font_color",
+    "settlement_total_fill_color",
+)
+
+
+def _reset_option_widgets() -> None:
+    """생성 옵션 위젯 상태 제거 (다음 렌더에서 기본값 재초기화)."""
+    for wk in _OPTION_WIDGET_KEYS:
+        st.session_state.pop(wk, None)
+
+
 def _reset_below_parse() -> None:
     """파일/유형 변경 시 파싱 결과 이하 모든 상태 리셋."""
     for k in (
@@ -79,6 +96,7 @@ def _reset_below_parse() -> None:
         "settlement_output_filename",
     ):
         st.session_state[k] = _DEFAULTS[k]
+    _reset_option_widgets()
 
 
 def _reset_below_period() -> None:
@@ -92,6 +110,7 @@ def _reset_below_period() -> None:
         "settlement_output_filename",
     ):
         st.session_state[k] = _DEFAULTS[k]
+    _reset_option_widgets()
 
 
 def _reset_below_vendor() -> None:
@@ -104,6 +123,7 @@ def _reset_below_vendor() -> None:
         "settlement_output_filename",
     ):
         st.session_state[k] = _DEFAULTS[k]
+    _reset_option_widgets()
 
 
 # ===== 헤더 =====
@@ -406,15 +426,84 @@ if (
     out_path = os.path.join("processed", out_filename)
     period_line = st_mod.build_period_line(start_date, end_date, vendor)
 
+    # 2026-05-31 hoyeon.han: 생성 옵션 (일반 시트 제외 / 전체 시트 금액 합계 강조)
+    st.markdown("#### ⚙️ 생성 옵션")
+    st.caption(
+        "옵션은 최종 생성 파일에만 적용됩니다 (위 미리보기에는 반영되지 않음)."
+    )
+
+    # 일반 시트 중복 자동 감지: 비어있거나 전체 시트와 행 수가 같으면 사실상 중복
+    general_df = sheets.get(st_mod.SHEET_GENERAL)
+    overall_df = sheets.get(st_mod.SHEET_OVERALL)
+    general_redundant = general_df is not None and (
+        len(general_df) == 0
+        or (overall_df is not None and len(general_df) == len(overall_df))
+    )
+    # 위젯 첫 렌더 기본값 선주입 (키 기반 위젯)
+    if "settlement_exclude_general" not in st.session_state:
+        st.session_state["settlement_exclude_general"] = general_redundant
+    if "settlement_highlight_total" not in st.session_state:
+        st.session_state["settlement_highlight_total"] = True
+
+    exclude_general = st.checkbox(
+        "일반 시트 제외",
+        key="settlement_exclude_general",
+        help="일반 시트가 비어있거나 전체 시트와 동일하면 기본 제외됩니다.",
+    )
+    highlight_total = st.checkbox(
+        "전체 시트 금액 합계 강조 (볼드 + 글씨/채우기 색상)",
+        key="settlement_highlight_total",
+    )
+
+    # 강조 켜짐일 때만 세부 스타일 선택 노출
+    total_font_size = 11.0
+    total_font_color = "#FF0000"
+    total_fill_color = "#FFFF00"
+    if highlight_total:
+        oc1, oc2, oc3 = st.columns(3)
+        total_font_size = oc1.number_input(
+            "폰트 크기",
+            min_value=8,
+            max_value=36,
+            value=11,
+            step=1,
+            key="settlement_total_font_size",
+        )
+        total_font_color = oc2.color_picker(
+            "글씨 색상",
+            value="#FF0000",
+            key="settlement_total_font_color",
+        )
+        total_fill_color = oc3.color_picker(
+            "채우기 색상",
+            value="#FFFF00",
+            key="settlement_total_fill_color",
+        )
+
     if st.button(
         "📥 정산서 생성", key="settlement_generate_btn", type="primary"
     ):
         try:
+            # 2026-05-31 hoyeon.han: 일반 시트 제외 옵션 적용
+            sheets_to_write = dict(sheets)
+            if exclude_general and st_mod.SHEET_GENERAL in sheets_to_write:
+                del sheets_to_write[st_mod.SHEET_GENERAL]
+            # 2026-05-31 hoyeon.han: 기존 호출 → 옵션 인자 전달 호출로 변경
+            # st_mod.write_settlement_xlsx(
+            #     out_path=out_path,
+            #     title=parsed["title"],
+            #     period_line=period_line,
+            #     sheets=sheets,
+            # )
             st_mod.write_settlement_xlsx(
                 out_path=out_path,
                 title=parsed["title"],
                 period_line=period_line,
-                sheets=sheets,
+                sheets=sheets_to_write,
+                highlight_total=highlight_total,
+                total_font_size=float(total_font_size),
+                total_font_color=total_font_color,
+                total_fill_color=total_fill_color,
             )
             st.session_state.settlement_output_path = out_path
             st.session_state.settlement_output_filename = out_filename
