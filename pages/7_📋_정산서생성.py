@@ -74,10 +74,18 @@ _OPTION_WIDGET_KEYS = (
     "settlement_total_fill_color",
 )
 
+# 2026-05-31 hoyeon.han: data_editor 위젯 키 — 거래처/기간/파일이 바뀌면
+# 품목·비고 목록이 달라지므로, 행 인덱스 기준 편집 델타가 다른 데이터에
+# 잘못 적용되지 않도록 함께 비운다.
+_EDITOR_WIDGET_KEYS = (
+    "settlement_item_editor",
+    "settlement_remark_editor",
+)
+
 
 def _reset_option_widgets() -> None:
-    """생성 옵션 위젯 상태 제거 (다음 렌더에서 기본값 재초기화)."""
-    for wk in _OPTION_WIDGET_KEYS:
+    """생성 옵션/편집기 위젯 상태 제거 (다음 렌더에서 기본값 재초기화)."""
+    for wk in _OPTION_WIDGET_KEYS + _EDITOR_WIDGET_KEYS:
         st.session_state.pop(wk, None)
 
 
@@ -299,15 +307,20 @@ if parsed is not None and st.session_state.settlement_vendor is not None:
     with st.expander(
         f"품목명 매핑 편집 ({len(items)}건)", expanded=True
     ):
-        item_df = pd.DataFrame(
-            {
-                "원본": items,
-                "변경": [
-                    st.session_state.settlement_item_mapping.get(it, it)
-                    for it in items
-                ],
-            }
-        )
+        # 2026-05-31 hoyeon.han: data_editor 피드백 루프 제거.
+        # 편집 결과(매핑)로 입력 baseline을 다시 만들어 넘기면 매 런마다
+        # baseline이 바뀌어 두 번째 편집이 폐기되는 버그가 발생한다.
+        # → baseline은 항상 원본 items로 고정하고 편집 상태는 위젯이 보존.
+        # item_df = pd.DataFrame(
+        #     {
+        #         "원본": items,
+        #         "변경": [
+        #             st.session_state.settlement_item_mapping.get(it, it)
+        #             for it in items
+        #         ],
+        #     }
+        # )
+        item_df = pd.DataFrame({"원본": items, "변경": items})
         edited_items = st.data_editor(
             item_df,
             disabled=["원본"],
@@ -353,15 +366,18 @@ if parsed is not None and st.session_state.settlement_vendor is not None:
             st.info("비고 값이 없습니다. 모든 데이터가 '일반' 시트로 분류됩니다.")
             remark_df = pd.DataFrame({"비고": [], "배치할 시트": []})
         else:
-            remark_df = pd.DataFrame(
-                {
-                    "비고": remarks,
-                    "배치할 시트": [
-                        st.session_state.settlement_remark_sheet_map.get(r, r)
-                        for r in remarks
-                    ],
-                }
-            )
+            # 2026-05-31 hoyeon.han: data_editor 피드백 루프 제거 (5단계와 동일 사유).
+            # baseline을 원본 remarks로 고정한다.
+            # remark_df = pd.DataFrame(
+            #     {
+            #         "비고": remarks,
+            #         "배치할 시트": [
+            #             st.session_state.settlement_remark_sheet_map.get(r, r)
+            #             for r in remarks
+            #         ],
+            #     }
+            # )
+            remark_df = pd.DataFrame({"비고": remarks, "배치할 시트": remarks})
         edited_remarks = st.data_editor(
             remark_df,
             disabled=["비고"],
