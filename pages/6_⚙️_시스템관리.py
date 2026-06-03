@@ -78,8 +78,14 @@ st.divider()
 # 탭 구성
 # =============================================================================
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📊 시스템 상태", "📁 파일 관리", "🔍 로그 뷰어", "🧹 데이터 정리"]
+# 2026-06-03 hoyeon.han: '발주내역 파일' 관리 탭 추가 (4개 → 5개)
+# --- 기존 코드 (주석 처리) ---
+# tab1, tab2, tab3, tab4 = st.tabs(
+#     ["📊 시스템 상태", "📁 파일 관리", "🔍 로그 뷰어", "🧹 데이터 정리"]
+# )
+# --- 기존 코드 끝 ---
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📊 시스템 상태", "📁 파일 관리", "📥 발주내역 파일", "🔍 로그 뷰어", "🧹 데이터 정리"]
 )
 
 # =============================================================================
@@ -292,10 +298,82 @@ with tab2:
 
 
 # =============================================================================
-# 탭 3: 로그 뷰어
+# 탭 3: 발주내역 파일 (2026-06-03 hoyeon.han: 신규)
 # =============================================================================
 
 with tab3:
+    st.markdown(
+        '<div class="section-header">서버에 저장된 발주내역 파일</div>',
+        unsafe_allow_html=True,
+    )
+
+    from order_file_store import OrderFileStore
+
+    order_store = OrderFileStore()
+    order_stats = order_store.get_stats()
+
+    if order_stats.get("exists"):
+        st.success(
+            f"📄 현재 저장된 발주내역: **{order_stats['original_name']}**"
+        )
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("🕐 업로드 시각", order_stats["uploaded_at"].replace("T", " "))
+        with col2:
+            st.metric("📦 파일 크기", f"{order_stats['size_kb']:.1f} KB")
+        with col3:
+            st.metric("📋 시트 수", f"{order_stats['sheet_count']}개")
+
+        # 시트 목록 (추천 시트는 ⭐ 표시)
+        sheet_names = order_stats.get("sheet_names", [])
+        if sheet_names:
+            with st.expander(f"📋 시트 목록 ({len(sheet_names)}개)", expanded=False):
+                for s in sheet_names:
+                    mark = "⭐ " if s == order_stats.get("recommended_sheet") else "• "
+                    st.write(f"{mark}{s}")
+
+        st.divider()
+
+        col_dl, col_del = st.columns(2)
+        with col_dl:
+            # .xlsm 정확한 MIME 타입 사용
+            st.download_button(
+                label="⬇️ 발주내역 파일 다운로드",
+                data=order_store.get_file_bytes(),
+                file_name=order_stats["original_name"],
+                mime="application/vnd.ms-excel.sheet.macroEnabled.12",
+                use_container_width=True,
+                key="download_order_file",
+            )
+        with col_del:
+            # 2026-06-03 hoyeon.han: 실수 방지를 위해 확인 체크박스 후 삭제 활성화
+            confirm_delete = st.checkbox("삭제 확인", key="confirm_delete_order_file")
+            if st.button(
+                "🗑️ 저장된 발주내역 삭제",
+                type="secondary",
+                disabled=not confirm_delete,
+                use_container_width=True,
+                key="delete_order_file",
+            ):
+                success, message = order_store.delete()
+                if success:
+                    st.success(message)
+                    st.rerun()
+                else:
+                    st.error(message)
+    else:
+        st.info(
+            "📂 저장된 발주내역 파일이 없습니다. "
+            "전표 생성 페이지에서 발주내역 파일을 업로드하면 여기에 표시됩니다."
+        )
+
+
+# =============================================================================
+# 탭 4: 로그 뷰어
+# =============================================================================
+
+with tab4:
     st.markdown(
         '<div class="section-header">애플리케이션 로그</div>', unsafe_allow_html=True
     )
@@ -384,10 +462,10 @@ with tab3:
 
 
 # =============================================================================
-# 탭 4: 데이터 정리
+# 탭 5: 데이터 정리
 # =============================================================================
 
-with tab4:
+with tab5:
     st.markdown('<div class="section-header">데이터 정리</div>', unsafe_allow_html=True)
 
     st.warning(

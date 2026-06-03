@@ -16,6 +16,8 @@ services:
       - ./logs:/app/logs
       - ./processed:/app/processed
       - ./uploads:/app/uploads
+      # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
+      - ./order_data:/app/order_data
       # 거래처마스터 파일 (로컬에 준비 필요)
       - ./거래처마스터.xlsx:/app/Src/거래처마스터.xlsx:ro
     environment:

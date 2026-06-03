@@ -32,6 +32,9 @@ auth.show_user_info_sidebar()
 # 발주내역 기간별 요약 모듈
 from Src.period_summary import process_period_summary
 
+# 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트
+from ui_components import render_order_file_selector
+
 # 디렉토리 생성
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("processed", exist_ok=True)
@@ -104,76 +107,74 @@ st.divider()
 # 2025-12-16 hoyeon.han: tab2 내용을 페이지 레벨로 변경
 # =============================================================================
 
-st.markdown("### 📁 1. 발주내역 파일 업로드")
-
-# 파일 업로드 위젯
-uploaded_file_summary = st.file_uploader(
-    "발주내역 Excel 파일을 선택하세요 (.xlsm)",
-    type=["xlsm", "xlsx"],
-    help="발주내역 데이터가 포함된 Excel 파일을 업로드하세요",
-    key="summary_uploader",
-)
-
-# 시트 선택 UI 변수 초기화
-selected_sheet = None
-
-# 파일이 업로드되면 시트 선택 UI 표시
-if uploaded_file_summary is not None:
-    st.success(
-        f"✅ 파일 선택됨: {uploaded_file_summary.name} ({uploaded_file_summary.size / 1024 / 1024:.2f} MB)"
-    )
-
-    with st.spinner("시트 목록 확인 중..."):
-        try:
-            # Excel 파일 객체 생성
-            excel_file = pd.ExcelFile(uploaded_file_summary)
-            sheet_names = excel_file.sheet_names
-
-            # 스마트 기본값 찾기
-            default_index = 0
-            current_year = datetime.now().year
-
-            for i, sheet in enumerate(sheet_names):
-                if "발주내역" in sheet and str(current_year) in sheet:
-                    default_index = i
-                    break
-
-            # 시트 선택 드롭다운
-            selected_sheet = st.selectbox(
-                "📋 처리할 시트 선택",
-                options=sheet_names,
-                index=default_index,
-                help="발주내역 데이터가 포함된 시트를 선택하세요",
-                key="sheet_selector",
-            )
-
-            st.info(f"📌 선택된 시트: **{selected_sheet}**")
-
-            # 시트 미리보기
-            with st.expander("🔍 시트 미리보기 (상위 5행)"):
-                try:
-                    preview_df = pd.read_excel(
-                        uploaded_file_summary,
-                        sheet_name=selected_sheet,
-                        header=3,
-                        nrows=5,
-                    )
-                    st.dataframe(preview_df, use_container_width=True)
-
-                except Exception as e:
-                    st.warning(f"미리보기를 불러올 수 없습니다: {str(e)}")
-
-        except Exception as e:
-            st.error(f"❌ 시트 목록을 읽을 수 없습니다: {str(e)}")
-            st.info("💡 시트명을 직접 입력해주세요")
-
-            # Fallback: 직접 입력
-            selected_sheet = st.text_input(
-                "시트명 입력",
-                value="(누적)2025년 발주내역",
-                help="Excel 파일 내 시트 이름을 정확히 입력하세요",
-                key="sheet_name_input",
-            )
+# 2026-06-03 hoyeon.han: 발주내역 파일 서버 저장/재사용 컴포넌트로 대체
+# --- 기존 코드 (주석 처리) ---
+# st.markdown("### 📁 1. 발주내역 파일 업로드")
+#
+# # 파일 업로드 위젯
+# uploaded_file_summary = st.file_uploader(
+#     "발주내역 Excel 파일을 선택하세요 (.xlsm)",
+#     type=["xlsm", "xlsx"],
+#     help="발주내역 데이터가 포함된 Excel 파일을 업로드하세요",
+#     key="summary_uploader",
+# )
+#
+# # 시트 선택 UI 변수 초기화
+# selected_sheet = None
+#
+# # 파일이 업로드되면 시트 선택 UI 표시
+# if uploaded_file_summary is not None:
+#     st.success(
+#         f"✅ 파일 선택됨: {uploaded_file_summary.name} ({uploaded_file_summary.size / 1024 / 1024:.2f} MB)"
+#     )
+#
+#     with st.spinner("시트 목록 확인 중..."):
+#         try:
+#             excel_file = pd.ExcelFile(uploaded_file_summary)
+#             sheet_names = excel_file.sheet_names
+#
+#             default_index = 0
+#             current_year = datetime.now().year
+#             for i, sheet in enumerate(sheet_names):
+#                 if "발주내역" in sheet and str(current_year) in sheet:
+#                     default_index = i
+#                     break
+#
+#             selected_sheet = st.selectbox(
+#                 "📋 처리할 시트 선택",
+#                 options=sheet_names,
+#                 index=default_index,
+#                 help="발주내역 데이터가 포함된 시트를 선택하세요",
+#                 key="sheet_selector",
+#             )
+#             st.info(f"📌 선택된 시트: **{selected_sheet}**")
+#
+#             with st.expander("🔍 시트 미리보기 (상위 5행)"):
+#                 try:
+#                     preview_df = pd.read_excel(
+#                         uploaded_file_summary,
+#                         sheet_name=selected_sheet,
+#                         header=3,
+#                         nrows=5,
+#                     )
+#                     st.dataframe(preview_df, use_container_width=True)
+#                 except Exception as e:
+#                     st.warning(f"미리보기를 불러올 수 없습니다: {str(e)}")
+#
+#         except Exception as e:
+#             st.error(f"❌ 시트 목록을 읽을 수 없습니다: {str(e)}")
+#             st.info("💡 시트명을 직접 입력해주세요")
+#             selected_sheet = st.text_input(
+#                 "시트명 입력",
+#                 value="(누적)2025년 발주내역",
+#                 help="Excel 파일 내 시트 이름을 정확히 입력하세요",
+#                 key="sheet_name_input",
+#             )
+# --- 기존 코드 끝 ---
+st.markdown("### 📁 1. 발주내역 파일")
+order_file = render_order_file_selector("summary", sheet_select=True)
+selected_sheet = order_file["sheet_name"] if order_file else None
+order_file_path = order_file["file_path"] if order_file else None
 
 # =============================================================================
 # Section 2: 처리 기간 선택
@@ -224,8 +225,9 @@ process_summary_button = st.button(
     "📊 요약 파일 생성",
     type="primary",
     use_container_width=True,
+    # 2026-06-03 hoyeon.han: uploaded_file_summary → order_file_path 기준으로 변경
     disabled=(
-        uploaded_file_summary is None or selected_sheet is None or start_date > end_date
+        order_file_path is None or selected_sheet is None or start_date > end_date
     ),
     key="process_summary_button",
 )
@@ -263,18 +265,19 @@ if process_summary_button:
                 st.caption(f"✓ {log_msg}")
 
     try:
-        # 임시 파일 저장
-        temp_file_path = os.path.join("uploads", uploaded_file_summary.name)
-
-        with open(temp_file_path, "wb") as f:
-            f.write(uploaded_file_summary.getvalue())
+        # 2026-06-03 hoyeon.han: 발주내역 파일은 이미 서버에 저장됨 (임시 저장 불필요)
+        # --- 기존 코드 (주석 처리) ---
+        # temp_file_path = os.path.join("uploads", uploaded_file_summary.name)
+        # with open(temp_file_path, "wb") as f:
+        #     f.write(uploaded_file_summary.getvalue())
+        # --- 기존 코드 끝 ---
 
         # 요약 처리 실행
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
 
         result = process_period_summary(
-            file_path=temp_file_path,
+            file_path=order_file_path,
             sheet_name=selected_sheet,
             start_date=start_date_str,
             end_date=end_date_str,
@@ -339,11 +342,13 @@ if process_summary_button:
 
                 st.dataframe(daily_df, use_container_width=True)
 
-        # 임시 파일 정리
-        try:
-            os.remove(temp_file_path)
-        except:
-            pass
+        # 2026-06-03 hoyeon.han: 임시 파일을 만들지 않으므로 정리 불필요
+        # --- 기존 코드 (주석 처리) ---
+        # try:
+        #     os.remove(temp_file_path)
+        # except:
+        #     pass
+        # --- 기존 코드 끝 ---
 
     except Exception as e:
         # 에러 처리
@@ -357,12 +362,14 @@ if process_summary_button:
 
             st.code(traceback.format_exc())
 
-        # 임시 파일 정리
-        try:
-            if "temp_file_path" in locals():
-                os.remove(temp_file_path)
-        except:
-            pass
+        # 2026-06-03 hoyeon.han: 임시 파일을 만들지 않으므로 정리 불필요
+        # --- 기존 코드 (주석 처리) ---
+        # try:
+        #     if "temp_file_path" in locals():
+        #         os.remove(temp_file_path)
+        # except:
+        #     pass
+        # --- 기존 코드 끝 ---
 
 # 푸터
 st.divider()

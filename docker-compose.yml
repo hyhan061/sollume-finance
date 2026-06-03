@@ -15,6 +15,8 @@ services:
       - ./uploads:/app/uploads
       # 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 사용
       - ./database:/app/database
+      # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
+      - ./order_data:/app/order_data
       # 개발 시 코드 수정을 즉시 반영 (선택사항)
       # - ./Home.py:/app/Home.py
       # - ./pages:/app/pages

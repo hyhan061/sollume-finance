@@ -28,7 +28,8 @@ spec.loader.exec_module(auth)
 auth.require_auth()
 
 # 2026-04-09 hoyeon.han: 커스텀 사이드바
-from ui_components import render_custom_sidebar
+# 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
+from ui_components import render_custom_sidebar, render_order_file_selector
 
 render_custom_sidebar()
 
@@ -53,55 +54,64 @@ st.title("📆 전표생성-기간")
 st.caption("기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.")
 st.divider()
 
-st.markdown("### 📁 1. 발주내역 파일 업로드")
-uploaded_file = st.file_uploader(
-    "발주내역 Excel 파일을 선택하세요 (.xlsm/.xlsx)",
-    type=["xlsm", "xlsx"],
-    key="period_voucher_uploader",
-)
-
-selected_sheet = None
-
-if uploaded_file is not None:
-    st.success(
-        f"✅ 파일 선택됨: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.2f} MB)"
-    )
-
-    try:
-        excel_file = pd.ExcelFile(uploaded_file)
-        sheet_names = excel_file.sheet_names
-
-        # 2026-04-09 hoyeon.han: 기본 선택 - '발주내역' + 현재 연도 포함 시트 우선
-        default_index = 0
-        current_year = datetime.now().year
-        for i, sheet in enumerate(sheet_names):
-            if "발주내역" in sheet and str(current_year) in sheet:
-                default_index = i
-                break
-
-        selected_sheet = st.selectbox(
-            "📋 처리할 시트 선택",
-            options=sheet_names,
-            index=default_index,
-            key="period_voucher_sheet_selector",
-            help='"발주내역" + 현재 연도 포함 시트를 우선 선택합니다.',
-        )
-
-        # 2026-04-09 hoyeon.han: 시트 미리보기 (상위 5행)
-        with st.expander("🔍 시트 미리보기 (상위 5행)"):
-            try:
-                preview_df = pd.read_excel(
-                    uploaded_file,
-                    sheet_name=selected_sheet,
-                    header=3,
-                    nrows=5,
-                )
-                st.dataframe(preview_df, use_container_width=True)
-            except Exception as e:
-                st.warning(f"시트 미리보기를 불러올 수 없습니다: {str(e)}")
-
-    except Exception as e:
-        st.error(f"시트 목록을 읽을 수 없습니다: {str(e)}")
+# 2026-06-03 hoyeon.han: 발주내역 파일 서버 저장/재사용 기능 적용
+# 기존 업로드/시트선택 로직을 공통 컴포넌트(render_order_file_selector)로 대체한다.
+# --- 기존 코드 (주석 처리) ---
+# st.markdown("### 📁 1. 발주내역 파일 업로드")
+# uploaded_file = st.file_uploader(
+#     "발주내역 Excel 파일을 선택하세요 (.xlsm/.xlsx)",
+#     type=["xlsm", "xlsx"],
+#     key="period_voucher_uploader",
+# )
+#
+# selected_sheet = None
+#
+# if uploaded_file is not None:
+#     st.success(
+#         f"✅ 파일 선택됨: {uploaded_file.name} ({uploaded_file.size / 1024 / 1024:.2f} MB)"
+#     )
+#
+#     try:
+#         excel_file = pd.ExcelFile(uploaded_file)
+#         sheet_names = excel_file.sheet_names
+#
+#         # 2026-04-09 hoyeon.han: 기본 선택 - '발주내역' + 현재 연도 포함 시트 우선
+#         default_index = 0
+#         current_year = datetime.now().year
+#         for i, sheet in enumerate(sheet_names):
+#             if "발주내역" in sheet and str(current_year) in sheet:
+#                 default_index = i
+#                 break
+#
+#         selected_sheet = st.selectbox(
+#             "📋 처리할 시트 선택",
+#             options=sheet_names,
+#             index=default_index,
+#             key="period_voucher_sheet_selector",
+#             help='"발주내역" + 현재 연도 포함 시트를 우선 선택합니다.',
+#         )
+#
+#         # 2026-04-09 hoyeon.han: 시트 미리보기 (상위 5행)
+#         with st.expander("🔍 시트 미리보기 (상위 5행)"):
+#             try:
+#                 preview_df = pd.read_excel(
+#                     uploaded_file,
+#                     sheet_name=selected_sheet,
+#                     header=3,
+#                     nrows=5,
+#                 )
+#                 st.dataframe(preview_df, use_container_width=True)
+#             except Exception as e:
+#                 st.warning(f"시트 미리보기를 불러올 수 없습니다: {str(e)}")
+#
+#     except Exception as e:
+#         st.error(f"시트 목록을 읽을 수 없습니다: {str(e)}")
+# --- 기존 코드 끝 ---
+st.markdown("### 📁 1. 발주내역 파일")
+order_file = render_order_file_selector("period", sheet_select=True)
+selected_sheet = order_file["sheet_name"] if order_file else None
+order_file_path = order_file["file_path"] if order_file else None
+source_display_name = order_file["display_name"] if order_file else None
 
 st.markdown("### 📅 2. 처리 기간 선택")
 today = date.today()
@@ -138,8 +148,9 @@ else:
 st.markdown("### ▶️ 3. 전표 생성")
 
 # 2026-04-09 hoyeon.han: 버튼 활성화 조건 - 업로드/시트/기간 모두 충족
+# 2026-06-03 hoyeon.han: uploaded_file → order_file_path(저장된 파일 경로) 기준으로 변경
 can_process = (
-    uploaded_file is not None
+    order_file_path is not None
     and selected_sheet is not None
     and (not invalid_date_order)
     and (not too_long_range)
@@ -155,27 +166,38 @@ generate_clicked = st.button(
 
 
 # 2026-04-09 hoyeon.han: 기간 통합 전표 처리 오케스트레이션
-def process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date):
+# 2026-06-03 hoyeon.han: 발주내역 서버 저장 적용
+#   - uploaded_file 대신 서버에 저장된 file_path(order_data/current.xlsm)를 직접 사용
+#   - 임시 저장(STEP1)/삭제(STEP5, finally) 단계 제거
+def process_period_vouchers(file_path, source_name, selected_sheet, start_date, end_date):
     start_date_str = start_date.strftime("%Y-%m-%d")
     end_date_str = end_date.strftime("%Y-%m-%d")
 
-    temp_filename = (
-        f"temp_period_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_file.name}"
-    )
-    temp_path = os.path.join("uploads", temp_filename)
+    # 2026-06-03 hoyeon.han: 발주내역 파일은 render_order_file_selector 가 이미
+    # 서버(order_data/current.xlsm)에 저장했으므로 임시 저장/삭제 단계가 불필요하다.
+    # --- 기존 코드 (주석 처리) ---
+    # temp_filename = (
+    #     f"temp_period_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_file.name}"
+    # )
+    # temp_path = os.path.join("uploads", temp_filename)
+    # --- 기존 코드 끝 ---
 
     with st.status("⚙️ 기간 전표 생성 중...", expanded=True) as status:
         try:
-            st.write("📤 **STEP 1/5**: 업로드 파일 임시 저장")
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
-            st.write(f"✅ 임시 저장 완료: `{uploaded_file.name}`")
+            # 2026-06-03 hoyeon.han: STEP 1(임시 저장) 제거 - 저장된 파일을 직접 사용
+            # --- 기존 코드 (주석 처리) ---
+            # st.write("📤 **STEP 1/5**: 업로드 파일 임시 저장")
+            # with open(temp_path, "wb") as f:
+            #     f.write(uploaded_file.getvalue())
+            # st.write(f"✅ 임시 저장 완료: `{uploaded_file.name}`")
+            # --- 기존 코드 끝 ---
+            st.write(f"📂 발주내역 파일: `{source_name}`")
 
             st.write(
-                f"💰 **STEP 2/5**: 매출 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
+                f"💰 **STEP 1/3**: 매출 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
             )
             df_sales = get_sales_by_period(
-                file_path=temp_path,
+                file_path=file_path,
                 start_date=start_date_str,
                 end_date=end_date_str,
                 sheet_name=selected_sheet,
@@ -185,10 +207,10 @@ def process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date)
             st.write(f"✅ 매출 데이터 처리 완료: **{len(df_sales):,}건**")
 
             st.write(
-                f"🛒 **STEP 3/5**: 매입 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
+                f"🛒 **STEP 2/3**: 매입 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
             )
             df_purchase = get_purchase_by_period(
-                file_path=temp_path,
+                file_path=file_path,
                 start_date=start_date_str,
                 end_date=end_date_str,
                 sheet_name=selected_sheet,
@@ -197,7 +219,7 @@ def process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date)
             logging.info(f"기간 매입 처리 완료: {len(df_purchase)}건")
             st.write(f"✅ 매입 데이터 처리 완료: **{len(df_purchase):,}건**")
 
-            st.write("💾 **STEP 4/5**: 경리나라 전표 파일 저장 중...")
+            st.write("💾 **STEP 3/3**: 경리나라 전표 파일 저장 중...")
             sales_filename = f"매출_{start_date_str}~{end_date_str}.xls"
             purchase_filename = f"매입_{start_date_str}~{end_date_str}.xls"
             sales_filepath = os.path.join("processed", sales_filename)
@@ -209,15 +231,18 @@ def process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date)
             st.write(f"   - 매출: `{sales_filename}`")
             st.write(f"   - 매입: `{purchase_filename}`")
 
-            st.write("🧹 **STEP 5/5**: 임시 파일 정리 중...")
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            st.write("✅ 임시 파일 삭제 완료")
+            # 2026-06-03 hoyeon.han: STEP 5(임시 파일 정리) 제거 - 임시 파일을 만들지 않음
+            # --- 기존 코드 (주석 처리) ---
+            # st.write("🧹 **STEP 5/5**: 임시 파일 정리 중...")
+            # if os.path.exists(temp_path):
+            #     os.remove(temp_path)
+            # st.write("✅ 임시 파일 삭제 완료")
+            # --- 기존 코드 끝 ---
 
             status.update(label="✅ 전표 생성 완료", state="complete", expanded=False)
 
             st.session_state.period_voucher_result = {
-                "source_file": uploaded_file.name,
+                "source_file": source_name,
                 "sheet_name": selected_sheet,
                 "start_date": start_date_str,
                 "end_date": end_date_str,
@@ -246,9 +271,12 @@ def process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date)
             with st.expander("🔍 에러 상세 정보"):
                 st.exception(e)
 
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+        # 2026-06-03 hoyeon.han: 임시 파일을 만들지 않으므로 finally 의 임시파일 삭제 제거
+        # --- 기존 코드 (주석 처리) ---
+        # finally:
+        #     if os.path.exists(temp_path):
+        #         os.remove(temp_path)
+        # --- 기존 코드 끝 ---
 
 
 if generate_clicked:
@@ -259,7 +287,10 @@ if generate_clicked:
     # 2026-04-09 hoyeon.han: T6에서 처리 함수 호출로 교체 완료
     # st.info("처리 중...")
     # pass
-    process_period_vouchers(uploaded_file, selected_sheet, start_date, end_date)
+    # 2026-06-03 hoyeon.han: 저장된 발주내역 경로(order_file_path)와 원본명을 전달
+    process_period_vouchers(
+        order_file_path, source_display_name, selected_sheet, start_date, end_date
+    )
 
 st.divider()
 
