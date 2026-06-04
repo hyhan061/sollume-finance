@@ -441,3 +441,150 @@ def workflow_steps(steps, current_step):
             """,
                 unsafe_allow_html=True,
             )
+
+
+# 2026-06-03 hoyeon.han: 발주내역 파일 서버 저장/재사용 공통 컴포넌트
+def render_order_file_selector(key_prefix, sheet_select=False):
+    """발주내역 파일 소스 선택 공통 컴포넌트
+
+    '서버에 저장된 파일 사용' 또는 '새 파일 업로드'를 선택하는 UI를 렌더링한다.
+    새 파일을 업로드하면 즉시 서버에 저장(덮어쓰기=1버전 유지)하고, 어느 경우든
+    처리 함수에 그대로 넘길 파일 경로를 반환한다.
+
+    Args:
+        key_prefix: 페이지별 위젯 key 충돌 방지용 접두사 (예: "period", "daily")
+        sheet_select: True면 시트 선택 드롭다운을 표시한다
+                      (sheet_name 인자를 받는 처리 함수용).
+
+    Returns:
+        준비 완료 시 dict:
+          {"file_path": str,           # 처리 함수에 넘길 경로 (order_data/current.xlsm)
+           "sheet_name": str | None,   # sheet_select=True 일 때만 값
+           "source": "stored" | "uploaded",
+           "display_name": str}        # 원본 파일명 (UI/결과 메타 표기용)
+        파일 미선택/미저장 시 None
+    """
+    # 지역 import (ui_components 가 무거운 의존성을 전역으로 끌어오지 않도록)
+    import pandas as pd
+    from order_file_store import OrderFileStore
+
+    store = OrderFileStore()
+    has_stored = store.exists()
+
+    # 소스 선택: 저장된 파일이 없으면 '새 파일 업로드'만 노출
+    options = (
+        ["서버에 저장된 파일 사용", "새 파일 업로드"]
+        if has_stored
+        else ["새 파일 업로드"]
+    )
+    mode = st.radio(
+        "발주내역 파일 소스",
+        options=options,
+        horizontal=True,
+        key=f"{key_prefix}_file_source_mode",
+    )
+
+    # ----------------------------------------------------------------------
+    # (A) 서버에 저장된 파일 사용
+    # ----------------------------------------------------------------------
+    if mode == "서버에 저장된 파일 사용":
+        meta = store.get_metadata() or {}
+        original_name = meta.get("original_name", "current.xlsm")
+        uploaded_at = meta.get("uploaded_at", "")
+        st.success(
+            f"📎 저장된 발주내역 사용: **{original_name}**"
+            + (f"  (업로드: {uploaded_at})" if uploaded_at else "")
+        )
+
+        sheet_name = None
+        if sheet_select:
+            sheet_names = meta.get("sheet_names", [])
+            if sheet_names:
+                recommended = meta.get("recommended_sheet")
+                default_index = (
+                    sheet_names.index(recommended)
+                    if recommended in sheet_names
+                    else 0
+                )
+                sheet_name = st.selectbox(
+                    "📋 처리할 시트 선택",
+                    options=sheet_names,
+                    index=default_index,
+                    key=f"{key_prefix}_stored_sheet_selector",
+                )
+            else:
+                st.warning("저장된 파일의 시트 목록을 읽을 수 없습니다.")
+
+        return {
+            "file_path": store.get_path(),
+            "sheet_name": sheet_name,
+            "source": "stored",
+            "display_name": original_name,
+        }
+
+    # ----------------------------------------------------------------------
+    # (B) 새 파일 업로드 → 즉시 서버 저장 (덮어쓰기 = 1버전 유지)
+    # ----------------------------------------------------------------------
+    uploaded_file = st.file_uploader(
+        "발주내역 Excel 파일을 선택하세요 (.xlsm/.xlsx)",
+        type=["xlsm", "xlsx"],
+        key=f"{key_prefix}_uploader",
+    )
+
+    if uploaded_file is None:
+        return None
+
+    # 같은 파일이 재실행마다 중복 저장되지 않도록 시그니처로 가드
+    sig = (uploaded_file.name, uploaded_file.size)
+    saved_sig_key = f"{key_prefix}_saved_sig"
+    if st.session_state.get(saved_sig_key) != sig:
+        success, message = store.save(uploaded_file.getvalue(), uploaded_file.name)
+        if not success:
+            st.error(message)
+            return None
+        st.session_state[saved_sig_key] = sig
+
+    st.success(
+        f"✅ 파일: {uploaded_file.name} "
+        f"({uploaded_file.size / 1024 / 1024:.2f} MB) — 서버에 저장되어 다음에 재사용할 수 있습니다."
+    )
+
+    sheet_name = None
+    if sheet_select:
+        try:
+            excel_file = pd.ExcelFile(uploaded_file)
+            sheet_names = excel_file.sheet_names
+
+            default_index = 0
+            current_year = datetime.now().year
+            for i, sheet in enumerate(sheet_names):
+                if "발주내역" in sheet and str(current_year) in sheet:
+                    default_index = i
+                    break
+
+            sheet_name = st.selectbox(
+                "📋 처리할 시트 선택",
+                options=sheet_names,
+                index=default_index,
+                key=f"{key_prefix}_upload_sheet_selector",
+                help='"발주내역" + 현재 연도 포함 시트를 우선 선택합니다.',
+            )
+
+            with st.expander("🔍 시트 미리보기 (상위 5행)"):
+                try:
+                    preview_df = pd.read_excel(
+                        uploaded_file, sheet_name=sheet_name, header=3, nrows=5
+                    )
+                    st.dataframe(preview_df, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"시트 미리보기를 불러올 수 없습니다: {str(e)}")
+        except Exception as e:
+            st.error(f"시트 목록을 읽을 수 없습니다: {str(e)}")
+            return None
+
+    return {
+        "file_path": store.get_path(),
+        "sheet_name": sheet_name,
+        "source": "uploaded",
+        "display_name": uploaded_file.name,
+    }

@@ -5,6 +5,9 @@
 *.xlsx
 *.xlsm
 
+# 2026-06-03 hoyeon.han: 발주내역 서버 저장소 (사용자 데이터, git 추적 제외)
+order_data/
+
 sollumelab-app/
 
 # Database

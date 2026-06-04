@@ -31,7 +31,8 @@ spec.loader.exec_module(auth)
 auth.require_auth()
 
 # 2025-12-22 hoyeon.han: Quick Win #4 - 커스텀 사이드바 로고
-from ui_components import render_custom_sidebar
+# 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
+from ui_components import render_custom_sidebar, render_order_file_selector
 
 render_custom_sidebar()
 
@@ -130,9 +131,10 @@ st.divider()
 # =============================================================================
 
 
-def validate_uploaded_file(uploaded_file):
+def validate_uploaded_file(file_path):
     """
     업로드된 파일을 즉시 검증하여 문제를 미리 발견
+    2026-06-03 hoyeon.han: uploaded_file 객체 대신 저장된 파일 경로(file_path)를 사용
 
     검증 항목:
     1. 파일 크기 (200MB 이하)
@@ -146,7 +148,7 @@ def validate_uploaded_file(uploaded_file):
 
     # 1. 파일 크기 검증
     with col1:
-        file_size_mb = uploaded_file.size / 1024 / 1024
+        file_size_mb = os.path.getsize(file_path) / 1024 / 1024
         if file_size_mb < 200:
             st.metric(
                 "📦 파일 크기",
@@ -169,12 +171,8 @@ def validate_uploaded_file(uploaded_file):
             # 시트 목록만 확인 (데이터 로드 X)
             import openpyxl
 
-            # 파일을 임시로 저장
-            temp_path = f"uploads/temp_{uploaded_file.name}"
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
-
-            wb = openpyxl.load_workbook(temp_path, read_only=True, data_only=True)
+            # 2026-06-03 hoyeon.han: 저장된 파일 경로를 직접 사용 (임시 저장 불필요)
+            wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
             sheet_names = wb.sheetnames
             wb.close()
 
@@ -208,7 +206,7 @@ def validate_uploaded_file(uploaded_file):
         try:
             # 상위 5행만 읽어서 컬럼 확인
             df_sample = pd.read_excel(
-                uploaded_file, sheet_name="(누적)2025년 발주내역", header=3, nrows=5
+                file_path, sheet_name="(누적)2025년 발주내역", header=3, nrows=5
             )
 
             required_cols = ["출고일", "계산서", "업체명", "제품", "상품매출"]
@@ -301,49 +299,52 @@ def validate_uploaded_file(uploaded_file):
 # =============================================================================
 
 
-def process_data(uploaded_file, selected_date):
+def process_data(file_path, source_name, selected_date):
     """
     데이터 처리 함수
     2025-12-22 hoyeon.han: Quick Win #3 - st.status로 진행 상황 개선
+    2026-06-03 hoyeon.han: 발주내역 서버 저장 적용
+      - uploaded_file 대신 저장된 file_path 사용, 임시 저장/삭제 제거
     """
 
     # 2025-12-22 hoyeon.han: st.status를 사용한 실시간 진행 상황 표시
     with st.status("⚙️ 전표 생성 중...", expanded=True) as status:
         try:
-            # 1. 임시 파일 저장
-            # 2025-12-22 hoyeon.han: OSError [Errno 22] 수정 - getvalue() 사용
-            st.write("📤 **STEP 1/5**: 파일 업로드 중...")
-            temp_path = os.path.join("uploads", uploaded_file.name)
-            with open(temp_path, "wb") as f:
-                # uploaded_file.read() 대신 getvalue() 사용 (파일 포인터 이동 방지)
-                f.write(uploaded_file.getvalue())
-
-            logging.info(
-                f"파일 업로드: {uploaded_file.name}, 크기: {uploaded_file.size} bytes"
-            )
-            st.write(f"✅ 파일 업로드 완료 ({uploaded_file.size / 1024 / 1024:.2f} MB)")
+            # 2026-06-03 hoyeon.han: 발주내역 파일은 이미 서버에 저장됨 (임시 저장 제거)
+            # --- 기존 코드 (주석 처리) ---
+            # st.write("📤 **STEP 1/5**: 파일 업로드 중...")
+            # temp_path = os.path.join("uploads", uploaded_file.name)
+            # with open(temp_path, "wb") as f:
+            #     f.write(uploaded_file.getvalue())
+            # logging.info(
+            #     f"파일 업로드: {uploaded_file.name}, 크기: {uploaded_file.size} bytes"
+            # )
+            # st.write(f"✅ 파일 업로드 완료 ({uploaded_file.size / 1024 / 1024:.2f} MB)")
+            # --- 기존 코드 끝 ---
+            st.write(f"📂 발주내역 파일: `{source_name}`")
+            logging.info(f"발주내역 파일 사용: {source_name} (경로: {file_path})")
 
             # 2. 날짜 변환
             date_str = selected_date.strftime("%Y-%m-%d")
 
             # 3. 매출 데이터 처리
-            st.write(f"💰 **STEP 2/5**: 매출 데이터 처리 중... (날짜: {date_str})")
+            st.write(f"💰 **STEP 1/3**: 매출 데이터 처리 중... (날짜: {date_str})")
 
             # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
-            df_sales = get_sales_daily(temp_path, date_str, use_db=True)
+            df_sales = get_sales_daily(file_path, date_str, use_db=True)
             logging.info(f"매출 처리 완료: {len(df_sales)}건")
             st.write(f"✅ 매출 데이터 처리 완료: **{len(df_sales):,}건**")
 
             # 4. 매입 데이터 처리
-            st.write("🛒 **STEP 3/5**: 매입 데이터 처리 중...")
+            st.write("🛒 **STEP 2/3**: 매입 데이터 처리 중...")
 
             # 2025-12-16 hoyeon.han: use_db=True로 DB 사용 (기본값)
-            df_purchase = get_purchase_daily(temp_path, date_str, use_db=True)
+            df_purchase = get_purchase_daily(file_path, date_str, use_db=True)
             logging.info(f"매입 처리 완료: {len(df_purchase)}건")
             st.write(f"✅ 매입 데이터 처리 완료: **{len(df_purchase):,}건**")
 
             # 5. 파일 저장
-            st.write("💾 **STEP 4/5**: 경리나라 전표 파일 저장 중...")
+            st.write("💾 **STEP 3/3**: 경리나라 전표 파일 저장 중...")
 
             sales_filename = f"매출_{date_str}.xls"
             purchase_filename = f"매입_{date_str}.xls"
@@ -357,14 +358,15 @@ def process_data(uploaded_file, selected_date):
             st.write(f"   - 매출: `{sales_filename}`")
             st.write(f"   - 매입: `{purchase_filename}`")
 
-            # 6. 임시 파일 삭제
-            st.write("🧹 **STEP 5/5**: 임시 파일 정리 중...")
-            # 2025-12-16 hoyeon.han: 파일이 없어도 에러 없이 진행
-            try:
-                os.remove(temp_path)
-                st.write("✅ 임시 파일 삭제 완료")
-            except FileNotFoundError:
-                st.write("⚠️ 임시 파일이 이미 삭제되었습니다")
+            # 2026-06-03 hoyeon.han: 임시 파일을 만들지 않으므로 정리 단계 제거
+            # --- 기존 코드 (주석 처리) ---
+            # st.write("🧹 **STEP 5/5**: 임시 파일 정리 중...")
+            # try:
+            #     os.remove(temp_path)
+            #     st.write("✅ 임시 파일 삭제 완료")
+            # except FileNotFoundError:
+            #     st.write("⚠️ 임시 파일이 이미 삭제되었습니다")
+            # --- 기존 코드 끝 ---
 
             # 7. 완료
             status.update(label="✅ 전표 생성 완료!", state="complete", expanded=False)
@@ -379,7 +381,7 @@ def process_data(uploaded_file, selected_date):
             # 2025-12-16 hoyeon.han: 처리 결과를 Session State에 저장
             st.session_state.last_result = {
                 "date": date_str,
-                "file": uploaded_file.name,
+                "file": source_name,
                 "sales_count": len(df_sales),
                 "purchase_count": len(df_purchase),
                 "df_sales": df_sales,
@@ -396,7 +398,7 @@ def process_data(uploaded_file, selected_date):
                 {
                     "timestamp": datetime.now(),
                     "date": date_str,
-                    "file": uploaded_file.name,
+                    "file": source_name,
                     "sales_count": len(df_sales),
                     "purchase_count": len(df_purchase),
                 }
@@ -450,7 +452,7 @@ def process_data(uploaded_file, selected_date):
                 "기술_상세": e.technical_details,
                 "해결_힌트": e.solution_hints,
                 "컨텍스트": e.context,
-                "파일명": uploaded_file.name if uploaded_file else "N/A",
+                "파일명": source_name if source_name else "N/A",
                 "선택_날짜": date_str,
             }
 
@@ -498,15 +500,22 @@ def upload_and_process_section():
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns([3, 2, 1])
+    # 2026-06-03 hoyeon.han: 발주내역 파일 서버 저장/재사용 컴포넌트 적용
+    # 기존 file_uploader(col1)를 공통 컴포넌트로 대체 (1번은 시트 고정이라 sheet_select=False)
+    # --- 기존 코드 (주석 처리) ---
+    # col1, col2, col3 = st.columns([3, 2, 1])
+    #
+    # with col1:
+    #     uploaded_file = st.file_uploader(
+    #         "📁 발주내역 파일 선택 (.xlsm)",
+    #         type=["xlsm"],
+    #         help="솔루미랩 발주내역 파일을 선택하세요. (누적)2025년 발주내역 시트가 포함되어야 합니다.",
+    #         key="main_uploader",
+    #     )
+    # --- 기존 코드 끝 ---
+    order_file = render_order_file_selector("daily", sheet_select=False)
 
-    with col1:
-        uploaded_file = st.file_uploader(
-            "📁 발주내역 파일 선택 (.xlsm)",
-            type=["xlsm"],
-            help="솔루미랩 발주내역 파일을 선택하세요. (누적)2025년 발주내역 시트가 포함되어야 합니다.",
-            key="main_uploader",
-        )
+    col2, col3 = st.columns([2, 1])
 
     with col2:
         selected_date = st.date_input(
@@ -524,22 +533,19 @@ def upload_and_process_section():
             "▶️ 처리", type="primary", use_container_width=True, key="process_button"
         )
 
-    # 2025-12-22 hoyeon.han: Quick Win #5 - 파일 업로드 후 즉시 검증
-    if uploaded_file:
-        st.info(
-            f"📎 선택된 파일: **{uploaded_file.name}** "
-            f"({uploaded_file.size / 1024 / 1024:.2f} MB)"
-        )
-
-        # 파일 검증 카드
+    # 2025-12-22 hoyeon.han: Quick Win #5 - 파일 검증
+    # 2026-06-03 hoyeon.han: 저장된 파일 경로 기반으로 검증
+    if order_file:
         with st.expander("🔍 파일 검증", expanded=True):
-            validate_uploaded_file(uploaded_file)
+            validate_uploaded_file(order_file["file_path"])
 
     if process_button:
-        if not uploaded_file:
+        if not order_file:
             st.error("⚠️ 파일을 먼저 선택해주세요.")
         else:
-            process_data(uploaded_file, selected_date)
+            process_data(
+                order_file["file_path"], order_file["display_name"], selected_date
+            )
 
     st.divider()
 
