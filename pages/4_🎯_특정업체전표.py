@@ -117,7 +117,11 @@ def process_vendor_vouchers(
                 st.write(f"- ({idx}/{total}) **{vendor_name}** 처리 중...")
 
                 df_sales = get_sales_by_period_vendor(
-                    file_path=temp_path,
+                    # 2026-06-10 hoyeon.han: temp_path → file_path 수정
+                    #   리팩토링(2026-06-03) 시 temp_path 정의를 제거했으나 사용처 변경을 누락하여
+                    #   NameError('temp_path' is not defined) 발생. 전달받은 file_path 파라미터를 사용한다.
+                    # file_path=temp_path,
+                    file_path=file_path,
                     start_date=start_date_str,
                     end_date=end_date_str,
                     vendor_name=vendor_name,
@@ -125,7 +129,9 @@ def process_vendor_vouchers(
                     use_db=True,
                 )
                 df_purchase = get_purchase_by_period_vendor(
-                    file_path=temp_path,
+                    # 2026-06-10 hoyeon.han: temp_path → file_path 수정 (위와 동일 사유)
+                    # file_path=temp_path,
+                    file_path=file_path,
                     start_date=start_date_str,
                     end_date=end_date_str,
                     vendor_name=vendor_name,
@@ -194,14 +200,24 @@ def process_vendor_vouchers(
         except SollumeBaseException as e:
             status.update(label="❌ 처리 실패", state="error", expanded=True)
             st.error(e.user_message)
-            with st.expander("🔍 에러 상세 정보"):
-                st.exception(e)
+            # 2026-06-10 hoyeon.han: st.status 내부에서는 expander 중첩 불가
+            #   (StreamlitAPIException: Expanders may not be nested inside other expanders)
+            #   → expander 제거 후 직접 표시. 에러 시 status 가 이미 펼쳐진 상태(expanded=True)이다.
+            # --- 기존 코드 (주석 처리) ---
+            # with st.expander("🔍 에러 상세 정보"):
+            #     st.exception(e)
+            # --- 기존 코드 끝 ---
+            st.exception(e)
 
         except Exception as e:
             status.update(label="❌ 처리 실패", state="error", expanded=True)
             st.error(f"처리 중 오류가 발생했습니다: {str(e)}")
-            with st.expander("🔍 에러 상세 정보"):
-                st.exception(e)
+            # 2026-06-10 hoyeon.han: st.status 내부에서는 expander 중첩 불가 (위와 동일 사유)
+            # --- 기존 코드 (주석 처리) ---
+            # with st.expander("🔍 에러 상세 정보"):
+            #     st.exception(e)
+            # --- 기존 코드 끝 ---
+            st.exception(e)
 
         # 2026-06-03 hoyeon.han: 임시 파일을 만들지 않으므로 finally 의 임시파일 삭제 제거
         # --- 기존 코드 (주석 처리) ---
