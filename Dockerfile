@@ -32,7 +32,8 @@ COPY .streamlit/ ./.streamlit/
 RUN mkdir -p logs uploads processed database
 
 # 포트 노출
-EXPOSE 8501
+# 2026-06-11 hoyeon.han: 8502 = 발주내역 API (Src/api_server.py, compose 에서 command 교체로 실행)
+EXPOSE 8501 8502
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -34,6 +34,53 @@ services:
     networks:
       - sollume-network
 
+  # 2026-06-11 hoyeon.han: 발주내역 API 서버 (OpenClaw 등 외부 에이전트 연동용, 신규)
+  # Streamlit 과 같은 이미지를 쓰되 시작 명령만 gunicorn(Flask) 으로 바꾼다.
+  sollume-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sollume-finance-api
+    command: gunicorn --bind 0.0.0.0:8502 --workers 2 --timeout 120 --pythonpath /app/Src api_server:app
+    expose:
+      - "8502"  # 호스트에 직접 열지 않고 nginx 경유로만 접근 (docker 내부 전용)
+    volumes:
+      - ./logs:/app/logs
+      # 읽기 전용(:ro) 마운트 - API 는 파일을 내어주기만 하므로 수정/삭제 차단
+      - ./order_data:/app/order_data:ro
+    environment:
+      - TZ=Asia/Seoul
+      - PYTHONUNBUFFERED=1
+      # 같은 폴더의 .env 파일에서 주입 (.env.example 참고)
+      - ORDER_API_KEY=${ORDER_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - sollume-network
+
+  # 2026-06-11 hoyeon.han: nginx 리버스 프록시 (외부 단일 진입점, 신규)
+  # /api/ → sollume-api:8502, 그 외 → sollume-app:8501 (nginx.conf 참고)
+  nginx:
+    image: nginx:alpine
+    container_name: sollume-nginx
+    ports:
+      - "80:80"
+      # - "443:443"  # HTTPS 인증서 준비 후 활성화 (nginx.conf 의 443 블록 참고)
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./ssl:/etc/nginx/ssl:ro  # HTTPS 인증서 준비 후 활성화
+    depends_on:
+      - sollume-app
+      - sollume-api
+    restart: unless-stopped
+    networks:
+      - sollume-network
+
 networks:
   sollume-network:
     driver: bridge
