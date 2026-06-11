@@ -22,7 +22,11 @@ bcrypt==4.1.2
 apscheduler==3.11.1
 tzlocal==5.3.1
 
+# 2026-06-11 hoyeon.han: 발주내역 API 서버 운영용 WSGI 서버 (Src/api_server.py)
+gunicorn==23.0.0
+
 # Optional: Flask (기존 서버 - 필요 시)
+# 2026-06-11 hoyeon.han: Src/api_server.py (발주내역 API) 에서 사용 - 더 이상 Optional 아님
 Flask==3.1.0
 Flask-Cors==5.0.0
 blinker==1.9.0
