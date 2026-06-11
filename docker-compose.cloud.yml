@@ -16,6 +16,9 @@ services:
       - ./logs:/app/logs
       - ./processed:/app/processed
       - ./uploads:/app/uploads
+      # 2026-06-11 hoyeon.han: 2025-12-16 DB 전환(9c75f89) 때 이 파일만 누락된 마운트 복원
+      # read_only 환경에서 database/backups 생성 오류(Errno 30) 및 재배포 시 DB 유실 방지
+      - ./database:/app/database
       # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
       - ./order_data:/app/order_data
       # 거래처마스터 파일 (로컬에 준비 필요)

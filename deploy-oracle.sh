@@ -39,6 +39,12 @@ echo ""
 echo "📥 최신 Compose 파일 다운로드 (GitHub main)..."
 if curl -fsSL "${RAW_BASE}/docker-compose.cloud.yml" -o "${COMPOSE_FILE}.tmp" \
    && ORDER_API_KEY="${ORDER_API_KEY:-dummy}" docker compose -f "${COMPOSE_FILE}.tmp" config --quiet 2>/dev/null; then
+    # 2026-06-11 hoyeon.han: 교체 전 기존 compose 백업 (이전 운영 설정 추적/복구용)
+    if [ -f "${COMPOSE_FILE}" ]; then
+        BACKUP_FILE="${COMPOSE_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
+        cp "${COMPOSE_FILE}" "${BACKUP_FILE}"
+        echo "   (기존 파일 백업: ${BACKUP_FILE})"
+    fi
     mv "${COMPOSE_FILE}.tmp" "${COMPOSE_FILE}"
     echo "✅ 최신 Compose 파일 적용 완료"
 elif [ -f "${COMPOSE_FILE}" ]; then
