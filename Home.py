@@ -12,6 +12,11 @@ import os
 import sys
 from pathlib import Path
 
+# 2026-07-09 hoyeon.han: 디자인 개선 - Src 경로 추가 후 공통 UI 모듈(테마/사이드바) import
+sys.path.insert(0, str(Path(__file__).parent / "Src"))
+from ui_components import render_custom_sidebar
+from ui_theme import inject_global_css, render_page_header
+
 # 2025-12-17 hoyeon.han: 인증 모듈 직접 import (Src/__init__.py 우회)
 import importlib.util
 
@@ -52,47 +57,26 @@ st.set_page_config(
 # 2025-12-17 hoyeon.han: 세션 상태 초기화
 init_session_state()
 
-# CSS 커스터마이징 (로그인 전에도 필요)
-st.markdown(
-    """
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-        text-align: center;
-    }
-    .section-box {
-        padding: 1.5rem;
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        border-left: 4px solid #3498db;
-        margin: 1rem 0;
-    }
-    .section-title {
-        font-size: 1.3rem;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-bottom: 0.5rem;
-    }
-    .section-desc {
-        color: #555;
-        font-size: 0.95rem;
-        line-height: 1.6;
-    }
-    .feature-list {
-        margin-left: 1.5rem;
-        color: #555;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 전역 테마 CSS 주입(로그인 화면 포함 적용)
+inject_global_css()
 
-# 메인 타이틀 (로그인 전에도 표시)
-st.markdown(
-    '<div class="main-header">📊 SollumeLab 회계 시스템</div>', unsafe_allow_html=True
+# CSS 커스터마이징 (로그인 전에도 필요)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 페이지 로컬 <style> 제거
+#   (.main-header/.section-box/.section-title/.section-desc/.feature-list 는
+#    Src/ui_theme.py inject_global_css() 가 새 인디고 테마로 전역 제공)
+# st.markdown(
+#     """<style> ...구 팔레트(#1f77b4/#3498db), main-header 중앙정렬 2.5rem... </style>""",
+#     unsafe_allow_html=True,
+# )
+
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체 (로그인 전에도 표시)
+# st.markdown(
+#     '<div class="main-header">📊 SollumeLab 회계 시스템</div>', unsafe_allow_html=True
+# )
+render_page_header(
+    "SollumeLab 회계 시스템",
+    "발주내역 엑셀을 경리나라 매출·매입 전표로 변환합니다.",
+    icon="📊",
 )
 
 # 2025-12-17 hoyeon.han: 인증 체크 - 미인증 시 로그인 페이지 표시
@@ -100,8 +84,9 @@ if not is_session_valid():
     show_login_page()
     st.stop()
 
-# 2025-12-17 hoyeon.han: 사이드바에 사용자 정보 표시
-show_user_info_sidebar()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바 공통화(로고+사용자정보+로그아웃)
+# show_user_info_sidebar()
+render_custom_sidebar()
 
 # 홈 화면 (로그인 후)
 st.markdown("### 환영합니다! 👋")

@@ -27,7 +27,13 @@ spec = importlib.util.spec_from_file_location(
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 auth.require_auth()
-auth.show_user_info_sidebar()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바를 공통(render_custom_sidebar: 로고+사용자정보+로그아웃)으로 통일
+# auth.show_user_info_sidebar()
+from ui_components import render_custom_sidebar
+from ui_theme import inject_global_css, render_page_header
+
+render_custom_sidebar()
+inject_global_css()
 
 # 발주내역 기간별 요약 모듈
 from Src.period_summary import process_period_summary
@@ -40,67 +46,29 @@ os.makedirs("uploads", exist_ok=True)
 os.makedirs("processed", exist_ok=True)
 
 # CSS 스타일
-st.markdown(
-    """
-<style>
-    .main-header {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 0.5rem;
-    }
-    .success-box {
-        padding: 1rem;
-        background-color: #d4edda;
-        border-left: 4px solid #28a745;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .error-box {
-        padding: 1rem;
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .info-box {
-        padding: 1rem;
-        background-color: #d1ecf1;
-        border-left: 4px solid #17a2b8;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .warning-box {
-        padding: 1rem;
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 페이지 로컬 <style> 제거
+#   (.main-header/.section-header/.success-box/.error-box/.info-box/.warning-box 는
+#    Src/ui_theme.py inject_global_css() 가 새 인디고 테마로 전역 제공)
+# st.markdown(
+#     """<style> ...구 팔레트(#1f77b4/#3498db)+Bootstrap 알림색... </style>""",
+#     unsafe_allow_html=True,
+# )
 
 # =============================================================================
 # 페이지 타이틀
 # =============================================================================
 
-st.markdown('<div class="main-header">📊 발주내역 요약</div>', unsafe_allow_html=True)
-st.caption(
-    "특정 기간 동안의 발주내역을 일자별/업체별로 요약하여 Excel 파일로 제공합니다."
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.markdown('<div class="main-header">📊 발주내역 요약</div>', unsafe_allow_html=True)
+# st.caption(
+#     "특정 기간 동안의 발주내역을 일자별/업체별로 요약하여 Excel 파일로 제공합니다."
+# )
+# st.divider()
+render_page_header(
+    "발주내역 요약",
+    "특정 기간 동안의 발주내역을 일자별/업체별로 요약하여 Excel 파일로 제공합니다.",
+    icon="📊",
 )
-
-st.divider()
 
 # =============================================================================
 # Section 1: 파일 업로드 및 시트 선택

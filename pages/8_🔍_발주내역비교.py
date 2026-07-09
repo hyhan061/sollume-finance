@@ -30,7 +30,12 @@ auth.require_auth()
 # 커스텀 사이드바 (발주내역 파일 선택 컴포넌트는 사용하지 않음 — 덮어쓰기 방지)
 from ui_components import render_custom_sidebar
 
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
+from ui_theme import inject_global_css, render_page_header
+
 render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바 렌더 이후 전역 CSS 주입
+inject_global_css()
 
 # 비교 로직 (순수 모듈) 및 저장소
 from order_compare import (
@@ -43,42 +48,49 @@ from order_compare import (
 from order_file_store import OrderFileStore
 
 # CSS 스타일 (기존 페이지와 동일 톤)
-st.markdown(
-    """
-<style>
-    .main-header {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 0.5rem;
-    }
-    .info-box {
-        padding: 1rem;
-        background-color: #d1ecf1;
-        border-left: 4px solid #17a2b8;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 페이지 로컬 <style> 제거(.main-header 등 유틸 클래스는 ui_theme.inject_global_css()가 전역 제공)
+# st.markdown(
+#     """
+# <style>
+#     .main-header {
+#         font-size: 2rem;
+#         font-weight: bold;
+#         color: #1f77b4;
+#         margin-bottom: 1rem;
+#     }
+#     .section-header {
+#         font-size: 1.5rem;
+#         font-weight: bold;
+#         color: #2c3e50;
+#         margin-top: 2rem;
+#         margin-bottom: 1rem;
+#         border-bottom: 2px solid #3498db;
+#         padding-bottom: 0.5rem;
+#     }
+#     .info-box {
+#         padding: 1rem;
+#         background-color: #d1ecf1;
+#         border-left: 4px solid #17a2b8;
+#         border-radius: 4px;
+#         margin: 1rem 0;
+#     }
+# </style>
+# """,
+#     unsafe_allow_html=True,
+# )
 
-st.markdown('<div class="main-header">🔍 발주내역 비교</div>', unsafe_allow_html=True)
-st.caption(
-    "서버에 저장된 기존 발주내역과 새로 올린 발주내역을 비교해 "
-    "추가·삭제·변경된 항목을 찾습니다. (전표는 기존 전표생성 페이지에서 만드세요)"
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.markdown('<div class="main-header">🔍 발주내역 비교</div>', unsafe_allow_html=True)
+# st.caption(
+#     "서버에 저장된 기존 발주내역과 새로 올린 발주내역을 비교해 "
+#     "추가·삭제·변경된 항목을 찾습니다. (전표는 기존 전표생성 페이지에서 만드세요)"
+# )
+# st.divider()
+render_page_header(
+    "발주내역 비교",
+    "기준·신규 발주내역을 비교해 매출·매입 차이를 확인합니다.",
+    icon="🔍",
 )
-st.divider()
 
 
 # =============================================================================
