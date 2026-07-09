@@ -34,7 +34,12 @@ auth.require_auth()
 # 커스텀 사이드바
 from ui_components import render_custom_sidebar  # noqa: E402
 
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
+from ui_theme import inject_global_css, render_page_header  # noqa: E402
+
 render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바(화면 폭 설정) 렌더 이후 전역 CSS 주입
+inject_global_css()
 
 # 셀러 정산서 비즈니스 로직 / 발주내역 저장소
 import seller_settlement as ss  # noqa: E402
@@ -139,10 +144,17 @@ def _reset_below_file() -> None:
 
 # ===== 헤더 =====
 
-st.title("🧾 정산서 생성 [셀러]")
-st.caption(
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.title("🧾 정산서 생성 [셀러]")
+# st.caption(
+#     "서버에 저장된 발주내역 하나로 일자·거래처·셀러(비고)별 정산서를 생성합니다. "
+#     "(매출 기준 — 매입 정산서는 추후 지원 예정)"
+# )
+render_page_header(
+    "정산서 생성 [셀러]",
     "서버에 저장된 발주내역 하나로 일자·거래처·셀러(비고)별 정산서를 생성합니다. "
-    "(매출 기준 — 매입 정산서는 추후 지원 예정)"
+    "(매출 기준 — 매입 정산서는 추후 지원 예정)",
+    icon="🧾",
 )
 
 

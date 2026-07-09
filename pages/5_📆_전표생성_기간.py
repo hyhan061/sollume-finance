@@ -31,7 +31,12 @@ auth.require_auth()
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
 from ui_components import render_custom_sidebar, render_order_file_selector
 
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
+from ui_theme import inject_global_css, render_page_header
+
 render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바(화면 폭 설정) 렌더 이후 전역 CSS 주입
+inject_global_css()
 
 # 2026-04-09 hoyeon.han: 기간 통합 전표 처리에 필요한 import
 from processing import (
@@ -50,9 +55,15 @@ os.makedirs("processed", exist_ok=True)
 if "period_voucher_result" not in st.session_state:
     st.session_state.period_voucher_result = None
 
-st.title("📆 전표생성-기간")
-st.caption("기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.")
-st.divider()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.title("📆 전표생성-기간")
+# st.caption("기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.")
+# st.divider()
+render_page_header(
+    "전표생성-기간",
+    "기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.",
+    icon="📆",
+)
 
 # 2026-06-03 hoyeon.han: 발주내역 파일 서버 저장/재사용 기능 적용
 # 기존 업로드/시트선택 로직을 공통 컴포넌트(render_order_file_selector)로 대체한다.
@@ -156,13 +167,16 @@ can_process = (
     and (not too_long_range)
 )
 
-generate_clicked = st.button(
-    "📆 전표 생성",
-    type="primary",
-    use_container_width=True,
-    disabled=not can_process,
-    key="period_voucher_generate_button",
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 버튼이 와이드 화면에서 과도하게 퍼지지 않도록 폭 제한(컬럼 배치)
+_btn_col, _ = st.columns([1, 2])
+with _btn_col:
+    generate_clicked = st.button(
+        "📆 전표 생성",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_process,
+        key="period_voucher_generate_button",
+    )
 
 
 # 2026-04-09 hoyeon.han: 기간 통합 전표 처리 오케스트레이션

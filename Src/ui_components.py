@@ -247,6 +247,10 @@ def render_custom_sidebar():
     render_sidebar_quick_actions()
     render_sidebar_recent_files()  # 2025-04-13 hoyeon.han: 최근 파일 위젯 추가
     render_sidebar_system_status()
+    # 2026-07-09 hoyeon.han: 디자인 개선 - 콘텐츠 폭(본문 최대 폭) 사용자 설정 셀렉터
+    from ui_theme import render_width_setting
+
+    render_width_setting()
 
 
 def card(title, content, status="info"):

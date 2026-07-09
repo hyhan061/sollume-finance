@@ -25,21 +25,29 @@ serverPort = 8501
 
 # 2025-12-22 hoyeon.han: Quick Win #1 - 경리나라 스타일 테마 적용
 # 참고: .claude/UI_DESIGN_IMPROVEMENT_PLAN.md
+# 2026-07-09 hoyeon.han: 디자인 개선 - Stripe 계열 밝은 핀테크 팔레트로 변경
+#   (딥네이비 텍스트 + 인디고 포인트). 상세 스타일/폰트는 Src/ui_theme.py (CSS 주입).
+#   포인트색을 기존 경리나라 블루(#0066FF)로 되돌리려면 아래 primaryColor만 교체하면 됨.
 [theme]
-# 메인 색상: 경리나라 블루 (신뢰감과 전문성)
-primaryColor = "#0066FF"
+# 메인 색상: Stripe 인디고 (포인트/버튼/포커스)
+# 2026-07-09 hoyeon.han: 기존 #0066FF → #533afd
+# primaryColor = "#0066FF"
+primaryColor = "#533afd"
 
 # 배경 색상: 깨끗한 흰색
 backgroundColor = "#FFFFFF"
 
 # 보조 배경: 연한 회색 (카드 섹션, 입력창)
-secondaryBackgroundColor = "#F5F7FA"
+# 2026-07-09 hoyeon.han: 기존 #F5F7FA → #F6F9FC (Stripe canvas-soft)
+# secondaryBackgroundColor = "#F5F7FA"
+secondaryBackgroundColor = "#F6F9FC"
 
-# 텍스트: 가독성 높은 차콜 그레이
-textColor = "#2C3E50"
+# 텍스트: 딥네이비 (가독성 + 절제된 전문성)
+# 2026-07-09 hoyeon.han: 기존 #2C3E50 → #0D253D
+# textColor = "#2C3E50"
+textColor = "#0D253D"
 
-# 폰트: 한글 최적화 (Pretendard fallback)
-# 시스템에 Pretendard가 없으면 Apple SD Gothic Neo, Malgun Gothic 사용
+# 폰트: 한글 최적화 (실제 Pretendard 웹폰트 로딩은 Src/ui_theme.py 의 CSS @import 담당)
 font = "sans serif"
 
 [logger]
