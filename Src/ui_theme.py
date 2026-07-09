@@ -178,13 +178,36 @@ h3 { font-size: 1.08rem; }
 [data-baseweb="input"], [data-baseweb="select"] > div, .stTextArea textarea,
 .stNumberInput div[data-baseweb="input"] { border-radius: 8px; }
 
+/* 2026-07-09 hoyeon.han: 폼 컨트롤 측정폭(measure) - 단독 배치 시 본문 폭 전체로 퍼지지 않게 */
+[data-testid="stSelectbox"], [data-testid="stTextInput"],
+[data-testid="stDateInput"], [data-testid="stNumberInput"] { max-width: 480px; }
+[data-testid="stMultiSelect"] { max-width: 640px; }
+.stTextArea textarea { max-width: 720px; }
+/* st.columns 안에서는 컬럼 비율이 폭을 지배하도록 캡 해제(의도된 레이아웃 존중) */
+[data-testid="stHorizontalBlock"] [data-testid="stSelectbox"],
+[data-testid="stHorizontalBlock"] [data-testid="stTextInput"],
+[data-testid="stHorizontalBlock"] [data-testid="stDateInput"],
+[data-testid="stHorizontalBlock"] [data-testid="stNumberInput"],
+[data-testid="stHorizontalBlock"] [data-testid="stMultiSelect"] { max-width: none; }
+
 [data-testid="stMetric"] {
   background: var(--sl-canvas-soft);
   border: 1px solid var(--sl-line);
   border-radius: 12px;
   padding: 14px 16px;
+  overflow: visible;
 }
-[data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* 2026-07-09 hoyeon.han: 긴 값('YYYY-MM-DD ~ YYYY-MM-DD' 등) 잘림('…') 방지 - 폰트 축소 + 공백 줄바꿈 허용 */
+[data-testid="stMetricValue"] {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+[data-testid="stMetricValue"] > * { white-space: inherit; overflow: visible; }
 [data-testid="stMetricLabel"] { color: var(--sl-ink-mute); }
 
 [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
@@ -194,7 +217,7 @@ h3 { font-size: 1.08rem; }
   border-right: 1px solid var(--sl-line);
 }
 
-[data-baseweb="tab-list"] { gap: 4px; }
+[data-baseweb="tab-list"] { gap: 4px; overflow-x: auto; }
 
 [data-testid="stExpander"] { border-radius: 8px; }
 [data-testid="stExpander"] > details { border-radius: 8px; border-color: var(--sl-line); }

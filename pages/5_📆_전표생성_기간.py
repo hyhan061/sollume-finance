@@ -325,14 +325,24 @@ if result:
         f"매출 {result['sales_count']:,}건 / 매입 {result['purchase_count']:,}건"
     )
 
-    col1, col2, col3, col4 = st.columns(4)
+    # 2026-07-09 hoyeon.han: 디자인 개선 - 날짜범위는 KPI가 아닌 맥락이라 metric에서 잘림('…') 발생
+    #   → 캡션으로 이동하고 metric은 숫자 지표만 유지 (전역 CSS의 metric 견고화와 병행)
+    # col1, col2, col3, col4 = st.columns(4)
+    # with col1:
+    #     st.metric("📅 처리 기간", f"{result['start_date']}~{result['end_date']}")
+    # with col2:
+    #     st.metric("💰 매출 건수", f"{result['sales_count']:,}건")
+    # with col3:
+    #     st.metric("🛒 매입 건수", f"{result['purchase_count']:,}건")
+    # with col4:
+    #     st.metric("⏰ 처리 시각", result["timestamp"].strftime("%H:%M:%S"))
+    st.caption(f"📅 처리 기간  {result['start_date']} ~ {result['end_date']}")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("📅 처리 기간", f"{result['start_date']}~{result['end_date']}")
-    with col2:
         st.metric("💰 매출 건수", f"{result['sales_count']:,}건")
-    with col3:
+    with col2:
         st.metric("🛒 매입 건수", f"{result['purchase_count']:,}건")
-    with col4:
+    with col3:
         st.metric("⏰ 처리 시각", result["timestamp"].strftime("%H:%M:%S"))
 
     tab1, tab2 = st.tabs(["💰 매출 데이터", "🛒 매입 데이터"])
@@ -350,7 +360,8 @@ if result:
                     file_name=result["sales_filename"],
                     mime="application/vnd.ms-excel",
                     type="primary",
-                    use_container_width=True,
+                    # 2026-07-09 hoyeon.han: 디자인 개선 - 와이드에서 버튼 과확장 방지(내용폭)
+                    use_container_width=False,
                     key="period_download_sales",
                 )
         else:
@@ -371,7 +382,8 @@ if result:
                     file_name=result["purchase_filename"],
                     mime="application/vnd.ms-excel",
                     type="primary",
-                    use_container_width=True,
+                    # 2026-07-09 hoyeon.han: 디자인 개선 - 와이드에서 버튼 과확장 방지(내용폭)
+                    use_container_width=False,
                     key="period_download_purchase",
                 )
         else:
