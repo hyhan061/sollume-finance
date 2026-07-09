@@ -45,7 +45,8 @@ def render_sidebar_logo():
             unsafe_allow_html=True,
         )
 
-        st.divider()
+        # 2026-07-09 hoyeon.han: 디자인 개선 - 아래 사용자정보(auth)가 자체 divider를 그려 중복 → 로고 divider 제거
+        # st.divider()
 
 
 def render_sidebar_user_info():
@@ -243,14 +244,20 @@ def render_custom_sidebar():
     ```
     """
     render_sidebar_logo()
-    render_sidebar_user_info()
-    render_sidebar_quick_actions()
-    render_sidebar_recent_files()  # 2025-04-13 hoyeon.han: 최근 파일 위젯 추가
-    render_sidebar_system_status()
-    # 2026-07-09 hoyeon.han: 디자인 개선 - 콘텐츠 폭(본문 최대 폭) 사용자 설정 셀렉터
-    from ui_theme import render_width_setting
+    # 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바 간결화
+    #   빠른작업/최근파일/시스템상태는 pages/6(시스템관리)에 더 나은 버전이 있어 사이드바에서 제거,
+    #   화면 폭 설정은 pages/6 상단 popover로 이전.
+    #   죽은 사용자정보 카드(render_sidebar_user_info: session_state["user"]를 읽으나 실제 저장은 user_info)
+    #   대신 실제 세션을 읽고 로그아웃까지 있는 auth.show_user_info_sidebar()로 교체(Home/2/3과 통일).
+    # render_sidebar_user_info()
+    # render_sidebar_quick_actions()
+    # render_sidebar_recent_files()  # 2025-04-13 hoyeon.han: 최근 파일 위젯 추가
+    # render_sidebar_system_status()
+    # from ui_theme import render_width_setting
+    # render_width_setting()
+    import auth  # 로컬 import (세션 기반이라 모듈 인스턴스와 무관하게 st.session_state 공유)
 
-    render_width_setting()
+    auth.show_user_info_sidebar()
 
 
 def card(title, content, status="info"):

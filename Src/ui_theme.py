@@ -105,28 +105,28 @@ def get_content_width():
 
 
 def render_width_setting():
-    """사이드바 콘텐츠 폭 설정 셀렉터.
+    """콘텐츠 폭 설정 위젯 (호출한 컨테이너에 그대로 렌더).
 
-    render_custom_sidebar()에서 호출된다. 값 변경 시 세션과 JSON에 저장하며,
-    inject_global_css()가 이 값을 읽어 본문 최대 폭을 적용한다.
+    2026-07-09 hoyeon.han: 사이드바 전용 → 컨테이너 비의존 위젯으로 변경.
+      (시스템관리 pages/6 상단 popover에서 호출) 값 변경 시 세션+JSON 저장,
+      inject_global_css()가 이 값을 읽어 본문 최대 폭을 적용한다.
     """
-    with st.sidebar:
-        with st.expander("🖥️ 화면 폭", expanded=False):
-            labels = list(WIDTH_PRESETS.keys())
-            kwargs = {}
-            # 위젯이 아직 세션에 없을 때만 초기값(저장값) 지정
-            if _WIDTH_KEY not in st.session_state:
-                kwargs["index"] = labels.index(get_width_label())
-            choice = st.radio(
-                "본문 최대 폭",
-                options=labels,
-                key=_WIDTH_KEY,
-                help="와이드 모니터에서 본문이 너무 퍼지면 좁게, 표가 많으면 넓게 선택하세요.",
-                **kwargs,
-            )
-            # 저장값과 다르면 JSON 갱신
-            if choice != _load_prefs().get("content_width", DEFAULT_WIDTH_LABEL):
-                _save_width_label(choice)
+    labels = list(WIDTH_PRESETS.keys())
+    kwargs = {}
+    # 위젯이 아직 세션에 없을 때만 초기값(저장값) 지정
+    if _WIDTH_KEY not in st.session_state:
+        kwargs["index"] = labels.index(get_width_label())
+    choice = st.radio(
+        "본문 최대 폭",
+        options=labels,
+        key=_WIDTH_KEY,
+        horizontal=True,
+        help="와이드 모니터에서 본문이 너무 퍼지면 좁게, 표가 많으면 넓게 선택하세요.",
+        **kwargs,
+    )
+    # 저장값과 다르면 JSON 갱신
+    if choice != _load_prefs().get("content_width", DEFAULT_WIDTH_LABEL):
+        _save_width_label(choice)
 
 
 # ---------------------------------------------------------------------------
