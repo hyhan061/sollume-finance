@@ -18,7 +18,8 @@ import logging
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(page_title="거래처 관리", page_icon="🏢", layout="wide")
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(page_title="거래처 관리", page_icon="🏢", layout="wide")
 
 # 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
 import importlib.util
@@ -28,14 +29,14 @@ spec = importlib.util.spec_from_file_location(
 )
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
+# auth.require_auth()
 # 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바를 공통(render_custom_sidebar)으로 통일
 # auth.show_user_info_sidebar()
 from ui_components import render_custom_sidebar
 from ui_theme import inject_global_css, render_page_header
 
-render_custom_sidebar()
-inject_global_css()
+# render_custom_sidebar()
+# inject_global_css()
 
 # 거래처 마스터 DB 클래스
 from customer_master_db import CustomerMasterDB

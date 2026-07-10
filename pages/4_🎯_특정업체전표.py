@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(page_title="특정업체 전표", page_icon="🎯", layout="wide")
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(page_title="특정업체 전표", page_icon="🎯", layout="wide")
 
 # 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
 import importlib.util
@@ -27,7 +28,7 @@ if spec is None or spec.loader is None:
     raise ImportError("auth 모듈을 불러올 수 없습니다.")
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
+# auth.require_auth()
 
 # 2025-12-22 hoyeon.han: Quick Win #4 - 커스텀 사이드바
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
@@ -36,9 +37,9 @@ from ui_components import render_custom_sidebar, render_order_file_selector
 # 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
 from ui_theme import inject_global_css, render_page_header
 
-render_custom_sidebar()
+# render_custom_sidebar()
 # 2026-07-09 hoyeon.han: 사이드바 렌더 이후 전역 CSS 주입
-inject_global_css()
+# inject_global_css()
 
 from processing import (
     get_sales_by_period_vendor,
