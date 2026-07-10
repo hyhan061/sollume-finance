@@ -226,6 +226,12 @@ h3 { font-size: 1.08rem; }
 .sl-ph-title { font-size: 1.55rem; font-weight: 700; color: var(--sl-ink); letter-spacing: -0.02em; line-height: 1.2; }
 .sl-ph-sub { font-size: 0.9rem; color: var(--sl-ink-mute); margin-top: 0.3rem; }
 
+/* 2026-07-10 hoyeon.han: 디자인 개선 - 사이드바 심플 사용자 블록(아바타/이름/역할) */
+.sl-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--sl-primary-soft); color: var(--sl-primary-deep); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.sl-uname { font-size: 13px; font-weight: 600; color: var(--sl-ink); line-height: 1.2; }
+.sl-urole { font-size: 11px; color: var(--sl-ink-mute); line-height: 1.2; }
+.sl-user { display: flex; align-items: center; gap: 8px; margin: 6px 2px 10px; }
+
 .main-header { font-size: 1.55rem; font-weight: 700; color: var(--sl-ink); margin-bottom: 0.5rem; letter-spacing: -0.02em; }
 .section-header { font-size: 1.2rem; font-weight: 700; color: var(--sl-ink); margin: 1.5rem 0 0.75rem; border-bottom: 2px solid var(--sl-primary); padding-bottom: 0.4rem; }
 .section-box { padding: 1.25rem; background: var(--sl-canvas-soft); border: 1px solid var(--sl-line); border-radius: 12px; margin: 1rem 0; }

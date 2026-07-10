@@ -14,39 +14,54 @@ def render_sidebar_logo():
     """
     사이드바 로고 및 브랜딩
     Quick Win #4 구현
+    2026-07-10 hoyeon.han: 디자인 개선 - 브랜드 심볼/BI(SOLLUME ESTHÉ)를 사이드바 최상단
+      (페이지 메뉴 위)에 st.logo()로 표시. 기존 그라디언트 원 + 한글("솔루미랩/회계 전표 시스템")
+      로고는 제거. 로고 파일: <repo>/assets/sollume_logo.svg
     """
+    # st.logo 는 with st.sidebar 밖에서도 항상 사이드바 최상단(메뉴 위)에 렌더된다.
+    logo_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "assets", "sollume_logo.svg"
+    )
+    try:
+        st.logo(logo_path, size="large")
+    except TypeError:  # size 파라미터 미지원(구버전) 대비
+        st.logo(logo_path)
+
+    # --- 기존 로고(그라디언트 원 📊 + 솔루미랩/회계 전표 시스템) 주석 처리 ---
+    # with st.sidebar:
+    #     st.markdown(
+    #         """<div ...linear-gradient(135deg,#0066FF,#0052CC) 원 + 📊
+    #              + <h2>솔루미랩</h2> + <p>회계 전표 시스템</p>...>""",
+    #         unsafe_allow_html=True,
+    #     )
+    #     # st.divider()
+
+
+def render_sidebar_user_simple():
+    """사이드바 간소화 사용자 블록 — 아바타 + 이름/역할 + 로그아웃.
+    2026-07-10 hoyeon.han: 디자인 개선 - 기존 auth.show_user_info_sidebar()의
+      제목/로그인시각/세션만료를 덜어낸 심플 버전. 세션·로그아웃 로직은 auth 재사용.
+    """
+    import auth  # 로컬 import (세션 기반)
+
     with st.sidebar:
-        # 로고 및 타이틀
+        if not auth.is_session_valid():
+            return
+        user = auth.get_current_user() or {}
+        name = user.get("full_name") or user.get("username") or "사용자"
+        role = "관리자" if user.get("is_admin") else "사용자"
+        initial = name.strip()[0] if name.strip() else "·"
+
+        st.divider()
         st.markdown(
-            """
-        <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
-            <div style="
-                width: 80px;
-                height: 80px;
-                margin: 0 auto;
-                background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 2.5rem;
-                box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
-            ">
-                📊
-            </div>
-            <h2 style="margin: 1rem 0 0.25rem 0; color: #2C3E50; font-size: 1.5rem;">
-                솔루미랩
-            </h2>
-            <p style="color: #718096; font-size: 0.875rem; margin: 0;">
-                회계 전표 시스템
-            </p>
-        </div>
-        """,
+            f'<div class="sl-user"><div class="sl-avatar">{initial}</div>'
+            f'<div><div class="sl-uname">{name}</div>'
+            f'<div class="sl-urole">{role}</div></div></div>',
             unsafe_allow_html=True,
         )
-
-        # 2026-07-09 hoyeon.han: 디자인 개선 - 아래 사용자정보(auth)가 자체 divider를 그려 중복 → 로고 divider 제거
-        # st.divider()
+        if st.button("⏻ 로그아웃", use_container_width=True, key="sidebar_logout_btn"):
+            auth.logout()
+            st.rerun()
 
 
 def render_sidebar_user_info():
@@ -255,9 +270,10 @@ def render_custom_sidebar():
     # render_sidebar_system_status()
     # from ui_theme import render_width_setting
     # render_width_setting()
-    import auth  # 로컬 import (세션 기반이라 모듈 인스턴스와 무관하게 st.session_state 공유)
-
-    auth.show_user_info_sidebar()
+    # 2026-07-10 hoyeon.han: 디자인 개선 - 사용자 블록을 심플 버전(아바타+이름/역할+로그아웃)으로 교체
+    # import auth
+    # auth.show_user_info_sidebar()
+    render_sidebar_user_simple()
 
 
 def card(title, content, status="info"):
