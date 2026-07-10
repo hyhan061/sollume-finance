@@ -24,31 +24,39 @@ serverAddress = "localhost"
 serverPort = 8501
 
 # 2025-12-22 hoyeon.han: Quick Win #1 - 경리나라 스타일 테마 적용
-# 참고: .claude/UI_DESIGN_IMPROVEMENT_PLAN.md
-# 2026-07-09 hoyeon.han: 디자인 개선 - Stripe 계열 밝은 핀테크 팔레트로 변경
-#   (딥네이비 텍스트 + 인디고 포인트). 상세 스타일/폰트는 Src/ui_theme.py (CSS 주입).
-#   포인트색을 기존 경리나라 블루(#0066FF)로 되돌리려면 아래 primaryColor만 교체하면 됨.
+# 2026-07-09 hoyeon.han: 디자인 개선 - Stripe 계열 밝은 핀테크 팔레트
+# 2026-07-10 hoyeon.han: 라이트/다크 커스텀 테마 분리 ([theme.light]/[theme.dark]).
+#   사용자는 우측 상단 ☰ 설정 메뉴에서 라이트/다크 전환(표 포함 네이티브 일관 전환).
+#   컴포넌트 세부 스타일/폰트(Pretendard)는 Src/ui_theme.py inject_global_css() 가 테마 적응형으로 담당.
+#   포인트색을 경리나라 블루(#0066FF)로 되돌리려면 [theme.light] primaryColor 교체.
+# --- 기존 단일 [theme] 블록 (주석 보존) ---
+# [theme]
+# primaryColor = "#533afd"                # (이전 #0066FF)
+# backgroundColor = "#FFFFFF"
+# secondaryBackgroundColor = "#F6F9FC"    # (이전 #F5F7FA)
+# textColor = "#0D253D"                   # (이전 #2C3E50)
+# font = "sans serif"
+# --- 기존 끝 ---
 [theme]
-# 메인 색상: Stripe 인디고 (포인트/버튼/포커스)
-# 2026-07-09 hoyeon.han: 기존 #0066FF → #533afd
-# primaryColor = "#0066FF"
-primaryColor = "#533afd"
-
-# 배경 색상: 깨끗한 흰색
-backgroundColor = "#FFFFFF"
-
-# 보조 배경: 연한 회색 (카드 섹션, 입력창)
-# 2026-07-09 hoyeon.han: 기존 #F5F7FA → #F6F9FC (Stripe canvas-soft)
-# secondaryBackgroundColor = "#F5F7FA"
-secondaryBackgroundColor = "#F6F9FC"
-
-# 텍스트: 딥네이비 (가독성 + 절제된 전문성)
-# 2026-07-09 hoyeon.han: 기존 #2C3E50 → #0D253D
-# textColor = "#2C3E50"
-textColor = "#0D253D"
-
-# 폰트: 한글 최적화 (실제 Pretendard 웹폰트 로딩은 Src/ui_theme.py 의 CSS @import 담당)
+base = "light"
 font = "sans serif"
+baseRadius = "medium"
+
+# 라이트(기본) — Stripe 계열 밝은 핀테크
+[theme.light]
+primaryColor = "#533AFD"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6F9FC"
+textColor = "#0D253D"
+borderColor = "#E3E8EE"
+
+# 다크 — 우아한 블랙 브랜드 톤
+[theme.dark]
+primaryColor = "#8B83FF"
+backgroundColor = "#14161B"
+secondaryBackgroundColor = "#1B1E25"
+textColor = "#ECEEF2"
+borderColor = "#2A2E37"
 
 [logger]
 # 로깅 레벨

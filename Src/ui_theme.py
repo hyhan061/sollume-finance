@@ -20,23 +20,29 @@ import os
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# 디자인 토큰 (단일 소스) — Stripe 계열 밝은 핀테크
+# 디자인 토큰 (단일 소스)
+# 2026-07-10 hoyeon.han: 라이트/다크 네이티브 테마 대응 - 색을 "테마 무관"으로 전환.
+#   배경/텍스트/위젯 색은 config.toml [theme.light]/[theme.dark]가 네이티브로 처리하고,
+#   우리 커스텀 컴포넌트는 이 토큰(=본문색 currentColor 상속 + 중립 반투명 + 시맨틱 색)으로
+#   두 테마에 '즉시' 적응한다(Python 테마 감지 불필요 → 전환 지연 없음).
+#   ※ 이전 Stripe 라이트 전용 값: primary #533afd / canvas_soft #f6f9fc / ink #0d253d /
+#     ink_mute #64748d / hairline #e3e8ee / success #12805c / warning #9a6a00 / error #cd3d64
 # ---------------------------------------------------------------------------
 TOKENS = {
-    "primary": "#533afd",       # 인디고 (버튼/링크/포커스/포인트)
-    "primary_deep": "#4434d4",  # hover/press
-    "primary_soft": "#eff0ff",  # 연한 강조 배경
+    "primary": "#6d64f2",                       # 인디고 액센트 (라이트/다크 공용)
+    "primary_deep": "#574ee0",                  # hover/press
+    "primary_soft": "rgba(109,100,242,0.14)",   # 연한 강조 배경 (반투명 → 양 테마 적응)
     "canvas": "#ffffff",
-    "canvas_soft": "#f6f9fc",   # 카드/보조배경/사이드바
-    "ink": "#0d253d",           # 본문 텍스트 (딥네이비)
-    "ink_mute": "#64748d",      # 라벨/캡션
-    "hairline": "#e3e8ee",      # 테두리/구분선
-    "success": "#12805c",
-    "success_bg": "#e7f4ec",
-    "warning": "#9a6a00",
-    "warning_bg": "#fdf3e2",
-    "error": "#cd3d64",
-    "error_bg": "#fbe9ef",
+    "canvas_soft": "rgba(136,136,136,0.08)",    # 카드/보조배경 (중립 반투명)
+    "ink": "currentColor",                      # 본문 텍스트 = 테마 텍스트색 상속
+    "ink_mute": "#8a94a3",                      # 라벨/캡션 (중간 회색, 양 테마 가독)
+    "hairline": "rgba(128,128,128,0.22)",       # 테두리/구분선 (중립 반투명)
+    "success": "#17976a",
+    "success_bg": "rgba(23,151,106,0.15)",
+    "warning": "#b5820f",
+    "warning_bg": "rgba(181,130,15,0.16)",
+    "error": "#d6486a",
+    "error_bg": "rgba(214,72,106,0.15)",
     "font": (
         "'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, "
         "'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI', sans-serif"
@@ -213,7 +219,6 @@ h3 { font-size: 1.08rem; }
 [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 12px; }
 
 [data-testid="stSidebar"] {
-  background: var(--sl-canvas-soft);
   border-right: 1px solid var(--sl-line);
 }
 

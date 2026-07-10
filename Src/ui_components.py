@@ -19,8 +19,15 @@ def render_sidebar_logo():
       로고는 제거. 로고 파일: <repo>/assets/sollume_logo.svg
     """
     # st.logo 는 with st.sidebar 밖에서도 항상 사이드바 최상단(메뉴 위)에 렌더된다.
+    # 2026-07-10 hoyeon.han: 다크 테마에선 흰색 로고, 라이트에선 검정 로고로 전환
+    #   (st.context.theme.type). 테마 전환 직후 1회는 직전 값이라 다음 상호작용에 갱신될 수 있음.
+    assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+    try:
+        _is_dark = st.context.theme.type == "dark"
+    except Exception:
+        _is_dark = False
     logo_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "assets", "sollume_logo.svg"
+        assets_dir, "sollume_logo_white.svg" if _is_dark else "sollume_logo.svg"
     )
     try:
         st.logo(logo_path, size="large")
