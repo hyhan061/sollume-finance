@@ -1442,6 +1442,9 @@ def get_purchase_by_period(
     master_file_path="거래처마스터.xlsx",
     use_db=True,
     db_path="database/customer_master.db",
+    # 2026-07-13 hoyeon.han: 개별 날짜 목록 / 업체(매입처) 다중 선택 지원 인자 추가
+    dates=None,  # list[date|str] | None — 주면 기간 대신 이 날짜들만 처리(isin)
+    vendor_names=None,  # list[str] | None — 주면 해당 업체(매입처)만, None/빈값이면 전체
 ) -> pd.DataFrame:
     """
     기간별 매입 데이터 처리 함수
@@ -1555,13 +1558,31 @@ def get_purchase_by_period(
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
         df["출고일"] = pd.to_datetime(df["출고일"], errors="coerce")
-        df_buy_today = df[
-            (df["출고일"] >= start_dt)
-            & (df["출고일"] <= end_dt)
+        # --- 기존 코드 (주석 처리) 2026-07-13 hoyeon.han ---
+        # df_buy_today = df[
+        #     (df["출고일"] >= start_dt)
+        #     & (df["출고일"] <= end_dt)
+        #     & (df["특이사항"] != "솔루미재고")
+        #     & (df["매입처"] != "당사재고")
+        #     & (df["매입처"] != "솔루미랩")
+        # ].copy()
+        # --- 기존 코드 끝 ---
+        # 2026-07-13 hoyeon.han: 개별 날짜(dates) 지정 시 isin, 아니면 기간 범위
+        if dates:
+            _wanted = pd.to_datetime(list(dates)).normalize()
+            _date_mask = df["출고일"].dt.normalize().isin(_wanted)
+        else:
+            _date_mask = (df["출고일"] >= start_dt) & (df["출고일"] <= end_dt)
+        _mask = (
+            _date_mask
             & (df["특이사항"] != "솔루미재고")
             & (df["매입처"] != "당사재고")
             & (df["매입처"] != "솔루미랩")
-        ].copy()
+        )
+        # 2026-07-13 hoyeon.han: 업체(매입처) 다중 선택 필터 (미지정=전체)
+        if vendor_names:
+            _mask &= df["매입처"].isin(list(vendor_names))
+        df_buy_today = df[_mask].copy()
 
         if len(df_buy_today) == 0:
             logger.log_info("필터링 결과 데이터 없음 - 빈 데이터프레임 반환")
@@ -1779,6 +1800,9 @@ def get_sales_by_period(
     master_file_path: str = "거래처마스터.xlsx",
     use_db: bool = True,
     db_path: str = "database/customer_master.db",
+    # 2026-07-13 hoyeon.han: 개별 날짜 목록 / 업체(업체명) 다중 선택 지원 인자 추가
+    dates=None,  # list[date|str] | None — 주면 기간 대신 이 날짜들만 처리(isin)
+    vendor_names=None,  # list[str] | None — 주면 해당 업체(업체명)만, None/빈값이면 전체
 ) -> pd.DataFrame:
     """
     # 2026-04-09 hoyeon.han: 기간 통합 매출 전표 생성 함수 추가
@@ -1893,11 +1917,24 @@ def get_sales_by_period(
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
         df["출고일"] = pd.to_datetime(df["출고일"], errors="coerce")
-        df_sales_today = df[
-            (df["출고일"] >= start_dt)
-            & (df["출고일"] <= end_dt)
-            & (df["계산서"] == "대상")
-        ].copy()
+        # --- 기존 코드 (주석 처리) 2026-07-13 hoyeon.han ---
+        # df_sales_today = df[
+        #     (df["출고일"] >= start_dt)
+        #     & (df["출고일"] <= end_dt)
+        #     & (df["계산서"] == "대상")
+        # ].copy()
+        # --- 기존 코드 끝 ---
+        # 2026-07-13 hoyeon.han: 개별 날짜(dates) 지정 시 isin, 아니면 기간 범위
+        if dates:
+            _wanted = pd.to_datetime(list(dates)).normalize()
+            _date_mask = df["출고일"].dt.normalize().isin(_wanted)
+        else:
+            _date_mask = (df["출고일"] >= start_dt) & (df["출고일"] <= end_dt)
+        _mask = _date_mask & (df["계산서"] == "대상")
+        # 2026-07-13 hoyeon.han: 업체(업체명) 다중 선택 필터 (미지정=전체)
+        if vendor_names:
+            _mask &= df["업체명"].isin(list(vendor_names))
+        df_sales_today = df[_mask].copy()
 
         if len(df_sales_today) == 0:
             logger.log_info("필터링 결과 데이터 없음 - 빈 데이터프레임 반환")

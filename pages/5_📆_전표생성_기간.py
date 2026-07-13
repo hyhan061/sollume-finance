@@ -42,9 +42,35 @@ from processing import (
 from exceptions import SollumeBaseException
 import logging
 
+# 2026-07-13 hoyeon.han: 개별 날짜 목록 추출 재사용 (정산서생성_셀러 순수 함수)
+from seller_settlement import extract_order_dates
+
 # 디렉토리 생성
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("processed", exist_ok=True)
+
+
+# 2026-07-13 hoyeon.han: 개별 날짜/업체 선택지 추출용 발주내역 로더 (캐시)
+#   - 개별 날짜 모드이거나 업체 부분선택 시에만 호출된다.
+#   - mtime 을 캐시 키에 포함해 파일 교체 시 자동 무효화된다.
+@st.cache_data(show_spinner="발주내역 로드 중...")
+def _load_period_source(file_path, sheet_name, mtime):
+    df = pd.read_excel(file_path, engine="openpyxl", sheet_name=sheet_name, header=3)
+    df["출고일"] = pd.to_datetime(df["출고일"], errors="coerce")
+    return df
+
+
+# 2026-07-13 hoyeon.han: 업체 선택지 = 매출(업체명) ∪ 매입(매입처) 합집합
+#   - 매출은 업체명, 매입은 매입처 컬럼에 필터가 걸리므로 두 컬럼 모두에서 뽑는다.
+#   - 매입 sentinel(당사재고/솔루미랩)은 실제 거래처가 아니므로 제외.
+def _extract_vendor_options(df):
+    names = set()
+    for col in ("업체명", "매입처"):
+        if col in df.columns:
+            s = df[col].fillna("").astype(str).str.strip()
+            names.update(v for v in s.unique().tolist() if v)
+    names -= {"당사재고", "솔루미랩"}
+    return sorted(names)
 
 # 2026-04-09 hoyeon.han: session_state 초기화
 if "period_voucher_result" not in st.session_state:
@@ -113,47 +139,153 @@ selected_sheet = order_file["sheet_name"] if order_file else None
 order_file_path = order_file["file_path"] if order_file else None
 source_display_name = order_file["display_name"] if order_file else None
 
-st.markdown("### 📅 2. 처리 기간 선택")
+# 2026-07-13 hoyeon.han: 기간/개별 날짜 선택 모드 추가 (정산서생성_셀러 화면과 동일 방식)
+st.markdown("### 📅 2. 일자 선택")
 today = date.today()
 month_first_day = date(today.year, today.month, 1)
 
-col1, col2 = st.columns(2)
-with col1:
-    start_date = st.date_input(
-        "시작일",
-        value=month_first_day,
-        max_value=today,
-        key="period_voucher_start_date",
-    )
-with col2:
-    end_date = st.date_input(
-        "종료일",
-        value=today,
-        max_value=today,
-        key="period_voucher_end_date",
-    )
+MODE_RANGE = "기간 선택"
+MODE_DATES = "개별 날짜 선택"
+date_mode = st.radio(
+    "일자 선택 방식",
+    options=[MODE_RANGE, MODE_DATES],
+    horizontal=True,
+    key="period_date_mode",
+)
 
-# 2026-04-09 hoyeon.han: 기간 유효성 검사
-invalid_date_order = start_date > end_date
-date_range_days = (end_date - start_date).days + 1 if not invalid_date_order else 0
-too_long_range = date_range_days > 365
+# 2026-07-13 hoyeon.han: 아래 두 값을 두 모드에서 공통으로 채운다.
+#   - start_date/end_date: 함수 호출·파일명용 (개별 날짜 모드면 선택 날짜의 min/max)
+#   - dates_arg: 개별 날짜 모드면 list[date], 기간 모드면 None
+#   - date_selection_valid: 생성 가능 여부
+start_date = end_date = today
+dates_arg = None
+date_selection_valid = False
 
-if invalid_date_order:
-    st.warning("⚠️ 시작일은 종료일보다 이전 또는 같아야 합니다.")
-elif too_long_range:
-    st.warning(f"⚠️ 처리 기간이 {date_range_days}일입니다. 최대 365일까지만 지원합니다.")
+if date_mode == MODE_RANGE:
+    # --- 기간 선택 (기존 UI 유지) ---
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input(
+            "시작일",
+            value=month_first_day,
+            max_value=today,
+            key="period_voucher_start_date",
+        )
+    with col2:
+        end_date = st.date_input(
+            "종료일",
+            value=today,
+            max_value=today,
+            key="period_voucher_end_date",
+        )
+
+    # 2026-04-09 hoyeon.han: 기간 유효성 검사
+    invalid_date_order = start_date > end_date
+    date_range_days = (
+        (end_date - start_date).days + 1 if not invalid_date_order else 0
+    )
+    too_long_range = date_range_days > 365
+
+    if invalid_date_order:
+        st.warning("⚠️ 시작일은 종료일보다 이전 또는 같아야 합니다.")
+    elif too_long_range:
+        st.warning(
+            f"⚠️ 처리 기간이 {date_range_days}일입니다. 최대 365일까지만 지원합니다."
+        )
+    else:
+        st.info(f"📌 선택 기간: **{start_date} ~ {end_date}** ({date_range_days}일)")
+
+    date_selection_valid = (not invalid_date_order) and (not too_long_range)
 else:
-    st.info(f"📌 선택 기간: **{start_date} ~ {end_date}** ({date_range_days}일)")
+    # --- 개별 날짜 선택 (발주내역에 존재하는 출고일만 표시) ---
+    if not (order_file_path and selected_sheet):
+        st.info("먼저 위에서 발주내역 파일과 시트를 선택하세요.")
+    else:
+        df_src = _load_period_source(
+            order_file_path, selected_sheet, os.path.getmtime(order_file_path)
+        )
+        available_dates = extract_order_dates(df_src)
+        if not available_dates:
+            st.warning("발주내역에서 유효한 출고일을 찾을 수 없습니다.")
+        else:
+            date_strs = [d.isoformat() for d in available_dates]
+            # 파일 교체로 목록이 바뀌면 세션에 남은 무효 선택값을 정리 (multiselect 예외 방지)
+            if "period_dates_multiselect" in st.session_state:
+                st.session_state["period_dates_multiselect"] = [
+                    s
+                    for s in st.session_state["period_dates_multiselect"]
+                    if s in date_strs
+                ]
+            picked = st.multiselect(
+                "출고일 선택 (발주내역에 있는 날짜만 표시됩니다)",
+                options=date_strs,
+                key="period_dates_multiselect",
+            )
+            if picked:
+                dates_arg = sorted(date.fromisoformat(s) for s in picked)
+                start_date, end_date = dates_arg[0], dates_arg[-1]
+                date_selection_valid = True
+                _preview = ", ".join(d.isoformat() for d in dates_arg[:5])
+                _more = " ..." if len(dates_arg) > 5 else ""
+                st.info(f"📌 선택 날짜: **{len(dates_arg)}일** ({_preview}{_more})")
+            else:
+                st.info("📌 날짜를 1개 이상 선택하세요.")
 
-st.markdown("### ▶️ 3. 전표 생성")
+# 2026-07-13 hoyeon.han: 업체 선택 섹션 신규
+#   - '전체 업체'(기본 on) = 필터 없음 = 기존과 완전히 동일한 동작.
+#   - 해제 시에만 발주내역 파일에서 업체 목록을 뽑아 부분선택. (매출=업체명, 매입=매입처)
+st.markdown("### 🏢 3. 업체 선택")
+all_vendor = st.checkbox("전체 업체 (기존과 동일)", value=True, key="period_all_vendor")
+vendor_names = None
+vendor_selection_valid = True
+
+if all_vendor:
+    st.caption("전체 업체를 대상으로 전표를 생성합니다. (기존 동작)")
+else:
+    if not (order_file_path and selected_sheet):
+        st.info("먼저 위에서 발주내역 파일과 시트를 선택하세요.")
+        vendor_selection_valid = False
+    else:
+        df_src = _load_period_source(
+            order_file_path, selected_sheet, os.path.getmtime(order_file_path)
+        )
+        vendor_options = _extract_vendor_options(df_src)
+        if not vendor_options:
+            st.warning("발주내역에서 업체를 찾을 수 없습니다.")
+            vendor_selection_valid = False
+        else:
+            # 파일 교체로 목록이 바뀌면 세션에 남은 무효 선택값을 정리 (multiselect 예외 방지)
+            if "period_vendor_multiselect" in st.session_state:
+                st.session_state["period_vendor_multiselect"] = [
+                    v
+                    for v in st.session_state["period_vendor_multiselect"]
+                    if v in vendor_options
+                ]
+            if st.button("전체 선택", key="period_vendor_select_all"):
+                st.session_state["period_vendor_multiselect"] = vendor_options
+                st.rerun()
+            selected_vendors = st.multiselect(
+                f"전표를 생성할 업체 선택 (총 {len(vendor_options)}개, 복수 선택 가능)",
+                options=vendor_options,
+                key="period_vendor_multiselect",
+            )
+            if selected_vendors:
+                vendor_names = selected_vendors
+                st.caption(f"선택 업체 수: {len(selected_vendors)}개")
+            else:
+                st.warning("업체를 1개 이상 선택하거나 '전체 업체'를 체크하세요.")
+                vendor_selection_valid = False
+
+st.markdown("### ▶️ 4. 전표 생성")
 
 # 2026-04-09 hoyeon.han: 버튼 활성화 조건 - 업로드/시트/기간 모두 충족
 # 2026-06-03 hoyeon.han: uploaded_file → order_file_path(저장된 파일 경로) 기준으로 변경
+# 2026-07-13 hoyeon.han: 일자(기간/개별)·업체 선택 유효성까지 반영
 can_process = (
     order_file_path is not None
     and selected_sheet is not None
-    and (not invalid_date_order)
-    and (not too_long_range)
+    and date_selection_valid
+    and vendor_selection_valid
 )
 
 generate_clicked = st.button(
@@ -169,9 +301,25 @@ generate_clicked = st.button(
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장 적용
 #   - uploaded_file 대신 서버에 저장된 file_path(order_data/current.xlsm)를 직접 사용
 #   - 임시 저장(STEP1)/삭제(STEP5, finally) 단계 제거
-def process_period_vouchers(file_path, source_name, selected_sheet, start_date, end_date):
+def process_period_vouchers(
+    file_path,
+    source_name,
+    selected_sheet,
+    start_date,
+    end_date,
+    # 2026-07-13 hoyeon.han: 개별 날짜 목록 / 업체 다중 선택 전달
+    dates=None,
+    vendor_names=None,
+):
     start_date_str = start_date.strftime("%Y-%m-%d")
     end_date_str = end_date.strftime("%Y-%m-%d")
+
+    # 2026-07-13 hoyeon.han: 진행 메시지/파일명에 쓸 라벨
+    if dates:
+        period_label = f"개별 {len(dates)}일 ({start_date_str}~{end_date_str})"
+    else:
+        period_label = f"{start_date_str} ~ {end_date_str}"
+    vendor_label = f"업체 {len(vendor_names)}개" if vendor_names else "전체 업체"
 
     # 2026-06-03 hoyeon.han: 발주내역 파일은 render_order_file_selector 가 이미
     # 서버(order_data/current.xlsm)에 저장했으므로 임시 저장/삭제 단계가 불필요하다.
@@ -192,36 +340,46 @@ def process_period_vouchers(file_path, source_name, selected_sheet, start_date, 
             # st.write(f"✅ 임시 저장 완료: `{uploaded_file.name}`")
             # --- 기존 코드 끝 ---
             st.write(f"📂 발주내역 파일: `{source_name}`")
+            # 2026-07-13 hoyeon.han: 일자 방식/대상 업체 표기
+            st.write(f"🗓️ 대상 일자: {period_label} · 🏢 대상 업체: {vendor_label}")
 
-            st.write(
-                f"💰 **STEP 1/3**: 매출 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
-            )
+            st.write(f"💰 **STEP 1/3**: 매출 데이터 처리 중... ({period_label})")
             df_sales = get_sales_by_period(
                 file_path=file_path,
                 start_date=start_date_str,
                 end_date=end_date_str,
                 sheet_name=selected_sheet,
                 use_db=True,
+                # 2026-07-13 hoyeon.han: 개별 날짜/업체 필터 전달
+                dates=dates,
+                vendor_names=vendor_names,
             )
             logging.info(f"기간 매출 처리 완료: {len(df_sales)}건")
             st.write(f"✅ 매출 데이터 처리 완료: **{len(df_sales):,}건**")
 
-            st.write(
-                f"🛒 **STEP 2/3**: 매입 데이터 처리 중... ({start_date_str} ~ {end_date_str})"
-            )
+            st.write(f"🛒 **STEP 2/3**: 매입 데이터 처리 중... ({period_label})")
             df_purchase = get_purchase_by_period(
                 file_path=file_path,
                 start_date=start_date_str,
                 end_date=end_date_str,
                 sheet_name=selected_sheet,
                 use_db=True,
+                # 2026-07-13 hoyeon.han: 개별 날짜/업체 필터 전달
+                dates=dates,
+                vendor_names=vendor_names,
             )
             logging.info(f"기간 매입 처리 완료: {len(df_purchase)}건")
             st.write(f"✅ 매입 데이터 처리 완료: **{len(df_purchase):,}건**")
 
             st.write("💾 **STEP 3/3**: 경리나라 전표 파일 저장 중...")
-            sales_filename = f"매출_{start_date_str}~{end_date_str}.xls"
-            purchase_filename = f"매입_{start_date_str}~{end_date_str}.xls"
+            # 2026-07-13 hoyeon.han: 개별 날짜/업체 부분선택 시 파일명에 반영
+            if dates:
+                date_part = f"선택{len(dates)}일_{start_date_str}~{end_date_str}"
+            else:
+                date_part = f"{start_date_str}~{end_date_str}"
+            vendor_part = f"_업체{len(vendor_names)}개" if vendor_names else ""
+            sales_filename = f"매출_{date_part}{vendor_part}.xls"
+            purchase_filename = f"매입_{date_part}{vendor_part}.xls"
             sales_filepath = os.path.join("processed", sales_filename)
             purchase_filepath = os.path.join("processed", purchase_filename)
 
@@ -246,6 +404,11 @@ def process_period_vouchers(file_path, source_name, selected_sheet, start_date, 
                 "sheet_name": selected_sheet,
                 "start_date": start_date_str,
                 "end_date": end_date_str,
+                # 2026-07-13 hoyeon.han: 일자 방식/대상 업체 정보
+                "dates_count": len(dates) if dates else 0,
+                "vendor_count": len(vendor_names) if vendor_names else 0,
+                "period_label": period_label,
+                "vendor_label": vendor_label,
                 "sales_count": len(df_sales),
                 "purchase_count": len(df_purchase),
                 "df_sales": df_sales,
@@ -288,8 +451,15 @@ if generate_clicked:
     # st.info("처리 중...")
     # pass
     # 2026-06-03 hoyeon.han: 저장된 발주내역 경로(order_file_path)와 원본명을 전달
+    # 2026-07-13 hoyeon.han: 개별 날짜(dates_arg)·업체(vendor_names) 전달
     process_period_vouchers(
-        order_file_path, source_display_name, selected_sheet, start_date, end_date
+        order_file_path,
+        source_display_name,
+        selected_sheet,
+        start_date,
+        end_date,
+        dates=dates_arg,
+        vendor_names=vendor_names,
     )
 
 st.divider()
@@ -309,6 +479,11 @@ if result:
     st.success(
         f"✅ 처리 완료 | 기간: {result['start_date']}~{result['end_date']} | "
         f"매출 {result['sales_count']:,}건 / 매입 {result['purchase_count']:,}건"
+    )
+    # 2026-07-13 hoyeon.han: 일자 방식/대상 업체 표기
+    st.caption(
+        f"🗓️ 대상 일자: {result.get('period_label', result['start_date'] + '~' + result['end_date'])}"
+        f" · 🏢 대상 업체: {result.get('vendor_label', '전체 업체')}"
     )
 
     col1, col2, col3, col4 = st.columns(4)
