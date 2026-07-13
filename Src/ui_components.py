@@ -29,36 +29,34 @@ def _logo_data_uri():
         return None
 
 
-def _home_url():
-    """앱 홈(기본 페이지) URL — 같은 탭 이동용.
-    2026-07-13 hoyeon.han: 루트 서빙 기준(scheme://host/). baseUrlPath 사용 시 이 부분 조정 필요.
-    """
-    try:
-        from urllib.parse import urlparse
+def render_sidebar_logo(home_page=None):
+    """사이드바 최상단 로고 — 클릭 시 앱 내부 이동으로 홈으로(세션 유지).
 
-        u = urlparse(st.context.url)
-        return f"{u.scheme}://{u.netloc}/"
-    except Exception:
-        return "/"
-
-
-def render_sidebar_logo():
-    """사이드바 최상단 로고 — 클릭 시 같은 탭에서 홈으로 이동.
-
-    2026-07-13 hoyeon.han: 디자인 개선 - st.logo(link=)는 새 탭(target=_blank)이라,
-      커스텀 <a target="_self"> + data URI 이미지로 '같은 탭 홈 이동'을 구현. 테마별 공식
-      PNG(라이트=검정/다크=흰색). st.navigation(position="hidden") 커스텀 네비 전제
-      — 자동 네비가 없으므로 이 마크다운이 사이드바 최상단에 위치한다.
+    2026-07-13 hoyeon.han(v2): 기존 <a href> 방식은 전체 페이지 리로드 → st.session_state
+      초기화 → 재로그인 문제가 있어, st.button + st.switch_page(home_page) 로 '내부 이동'하도록
+      변경(인증 유지). 버튼을 CSS(st-key 클래스)로 테마별 공식 로고 이미지처럼 표시하고,
+      사이드바 상단 여백을 줄여 로고를 최상단에 붙인다. (st.navigation position="hidden" 전제)
     """
     uri = _logo_data_uri()
     with st.sidebar:
+        css = (
+            "<style>"
+            "section[data-testid='stSidebar'] > div{padding-top:0.6rem !important;}"
+        )
         if uri:
-            st.markdown(
-                f'<a href="{_home_url()}" target="_self" title="홈으로" '
-                f'style="display:block;text-align:center;padding:12px 0 6px;">'
-                f'<img src="{uri}" alt="SOLLUME ESTHÉ" style="width:78%;max-width:190px;"/></a>',
-                unsafe_allow_html=True,
+            css += (
+                ".st-key-sl_home_logo button{background:url('" + uri + "') no-repeat "
+                "center/contain !important;height:58px;padding:0 !important;border:none !important;"
+                "box-shadow:none !important;background-color:transparent !important;color:transparent !important;}"
+                ".st-key-sl_home_logo button:hover{opacity:.82;}"
+                ".st-key-sl_home_logo button:active,.st-key-sl_home_logo button:focus{"
+                "border:none !important;box-shadow:none !important;}"
             )
+        css += "</style>"
+        st.markdown(css, unsafe_allow_html=True)
+        if st.button(" ", key="sl_home_logo", help="홈으로", use_container_width=True):
+            if home_page is not None:
+                st.switch_page(home_page)
 
 
 def render_home_logo():
@@ -74,6 +72,30 @@ def render_home_logo():
         )
     else:
         st.title("SollumeLab 회계 시스템")
+
+
+def render_login_screen(auth):
+    """심플 로그인 화면 — 중앙 로고 + 최소 폼 (홈처럼 심플).
+    2026-07-13 hoyeon.han: 기존 auth.show_login_page(제목/도움말/경고박스 등)를 대체.
+      로그인 로직은 auth.login() 재사용.
+    """
+    uri = _logo_data_uri()
+    _, mid, _ = st.columns([1, 1.3, 1])
+    with mid:
+        if uri:
+            st.markdown(
+                '<div style="text-align:center;padding:7vh 0 3vh;">'
+                '<img src="' + uri + '" alt="SOLLUME ESTHÉ" style="width:75%;max-width:320px;"/></div>',
+                unsafe_allow_html=True,
+            )
+        with st.form("sollume_login", border=False):
+            uid = st.text_input("아이디", placeholder="아이디를 입력하세요")
+            pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+            if st.form_submit_button("로그인", type="primary", use_container_width=True):
+                if auth.login(uid, pw):
+                    st.rerun()
+                else:
+                    st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
 
 
 def render_sidebar_user_simple():

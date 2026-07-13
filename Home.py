@@ -24,8 +24,9 @@ from ui_components import (  # noqa: E402
     render_sidebar_logo,
     render_sidebar_user_simple,
     render_home_logo,
+    render_login_screen,
 )
-from ui_theme import inject_global_css, render_page_header  # noqa: E402
+from ui_theme import inject_global_css  # noqa: E402
 
 # 인증 모듈 직접 import (Src/__init__.py 우회)
 _spec = importlib.util.spec_from_file_location(
@@ -57,12 +58,8 @@ inject_global_css()
 # 로그인 페이지 (미인증 시)
 # ---------------------------------------------------------------------------
 def _login_page():
-    render_page_header(
-        "SollumeLab 회계 시스템",
-        "발주내역 엑셀을 경리나라 매출·매입 전표로 변환합니다.",
-        icon="📊",
-    )
-    auth.show_login_page()
+    # 2026-07-13 hoyeon.han: 로그인 화면도 홈처럼 심플하게 (중앙 로고 + 최소 폼)
+    render_login_screen(auth)
 
 
 # ---------------------------------------------------------------------------
@@ -111,8 +108,8 @@ else:
         position="hidden",
     )
 
-    # 사이드바: 최상단 로고(클릭→홈) → 그룹 네비(page_link) → 사용자 블록(하단)
-    render_sidebar_logo()
+    # 사이드바: 최상단 로고(클릭→홈, 내부 이동으로 세션 유지) → 그룹 네비(page_link) → 사용자 블록(하단)
+    render_sidebar_logo(_home)
     with st.sidebar:
         st.markdown("**전표 생성**")
         st.page_link(_p_daily)
