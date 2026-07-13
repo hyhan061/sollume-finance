@@ -41,10 +41,15 @@ _spec.loader.exec_module(auth)
 for _d in ("logs", "uploads", "processed", "database", "database/backups"):
     os.makedirs(_d, exist_ok=True)
 
+# 2026-07-13 hoyeon.han: 브라우저 탭 아이콘(파비콘)을 브랜드 심볼로. 파일 없으면 이모지 폴백.
+#   (브라우저 탭은 보통 밝은 배경이라 dark-ink 심볼 사용)
+_favicon = Path(__file__).parent / "assets" / "sollume-symbol-dark-ink.png"
+_page_icon = str(_favicon) if _favicon.exists() else "📊"
+
 # 페이지 설정 (st.navigation 앱에서는 진입점에서만 호출)
 st.set_page_config(
     page_title="SollumeLab 회계 시스템",
-    page_icon="📊",
+    page_icon=_page_icon,
     layout="wide",
     initial_sidebar_state="expanded",
 )
