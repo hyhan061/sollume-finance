@@ -16,7 +16,7 @@ def render_sidebar_logo():
     Quick Win #4 구현
     2026-07-10 hoyeon.han: 디자인 개선 - 브랜드 심볼/BI(SOLLUME ESTHÉ)를 사이드바 최상단
       (페이지 메뉴 위)에 st.logo()로 표시. 기존 그라디언트 원 + 한글("솔루미랩/회계 전표 시스템")
-      로고는 제거. 로고 파일: <repo>/assets/sollume_logo.svg
+      로고는 제거. 로고 파일: assets/logo_dark.png(라이트)·logo_white.png(다크) — 공식 PNG
     """
     # st.logo 는 with st.sidebar 밖에서도 항상 사이드바 최상단(메뉴 위)에 렌더된다.
     # 2026-07-10 hoyeon.han: 다크 테마에선 흰색 로고, 라이트에선 검정 로고로 전환
@@ -26,8 +26,9 @@ def render_sidebar_logo():
         _is_dark = st.context.theme.type == "dark"
     except Exception:
         _is_dark = False
+    # 2026-07-13 hoyeon.han: 근사 SVG → 공식 로고 PNG 교체 (라이트=검정, 다크=흰색)
     logo_path = os.path.join(
-        assets_dir, "sollume_logo_white.svg" if _is_dark else "sollume_logo.svg"
+        assets_dir, "logo_white.png" if _is_dark else "logo_dark.png"
     )
     try:
         st.logo(logo_path, size="large")
