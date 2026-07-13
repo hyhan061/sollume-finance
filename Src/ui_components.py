@@ -10,39 +10,70 @@ from datetime import datetime
 import os
 
 
-def render_sidebar_logo():
+def _logo_data_uri():
+    """현재 테마에 맞는 로고 PNG를 data URI로 반환 (라이트=검정 logo_dark / 다크=흰색 logo_white).
+    2026-07-13 hoyeon.han: 신규 - 커스텀 <a> 사이드바 로고와 홈 중앙 로고에서 공용.
     """
-    사이드바 로고 및 브랜딩
-    Quick Win #4 구현
-    2026-07-10 hoyeon.han: 디자인 개선 - 브랜드 심볼/BI(SOLLUME ESTHÉ)를 사이드바 최상단
-      (페이지 메뉴 위)에 st.logo()로 표시. 기존 그라디언트 원 + 한글("솔루미랩/회계 전표 시스템")
-      로고는 제거. 로고 파일: assets/logo_dark.png(라이트)·logo_white.png(다크) — 공식 PNG
-    """
-    # st.logo 는 with st.sidebar 밖에서도 항상 사이드바 최상단(메뉴 위)에 렌더된다.
-    # 2026-07-10 hoyeon.han: 다크 테마에선 흰색 로고, 라이트에선 검정 로고로 전환
-    #   (st.context.theme.type). 테마 전환 직후 1회는 직전 값이라 다음 상호작용에 갱신될 수 있음.
+    import base64
+
     assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
     try:
-        _is_dark = st.context.theme.type == "dark"
+        is_dark = st.context.theme.type == "dark"
     except Exception:
-        _is_dark = False
-    # 2026-07-13 hoyeon.han: 근사 SVG → 공식 로고 PNG 교체 (라이트=검정, 다크=흰색)
-    logo_path = os.path.join(
-        assets_dir, "logo_white.png" if _is_dark else "logo_dark.png"
-    )
+        is_dark = False
+    fname = "logo_white.png" if is_dark else "logo_dark.png"
     try:
-        st.logo(logo_path, size="large")
-    except TypeError:  # size 파라미터 미지원(구버전) 대비
-        st.logo(logo_path)
+        with open(os.path.join(assets_dir, fname), "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
 
-    # --- 기존 로고(그라디언트 원 📊 + 솔루미랩/회계 전표 시스템) 주석 처리 ---
-    # with st.sidebar:
-    #     st.markdown(
-    #         """<div ...linear-gradient(135deg,#0066FF,#0052CC) 원 + 📊
-    #              + <h2>솔루미랩</h2> + <p>회계 전표 시스템</p>...>""",
-    #         unsafe_allow_html=True,
-    #     )
-    #     # st.divider()
+
+def _home_url():
+    """앱 홈(기본 페이지) URL — 같은 탭 이동용.
+    2026-07-13 hoyeon.han: 루트 서빙 기준(scheme://host/). baseUrlPath 사용 시 이 부분 조정 필요.
+    """
+    try:
+        from urllib.parse import urlparse
+
+        u = urlparse(st.context.url)
+        return f"{u.scheme}://{u.netloc}/"
+    except Exception:
+        return "/"
+
+
+def render_sidebar_logo():
+    """사이드바 최상단 로고 — 클릭 시 같은 탭에서 홈으로 이동.
+
+    2026-07-13 hoyeon.han: 디자인 개선 - st.logo(link=)는 새 탭(target=_blank)이라,
+      커스텀 <a target="_self"> + data URI 이미지로 '같은 탭 홈 이동'을 구현. 테마별 공식
+      PNG(라이트=검정/다크=흰색). st.navigation(position="hidden") 커스텀 네비 전제
+      — 자동 네비가 없으므로 이 마크다운이 사이드바 최상단에 위치한다.
+    """
+    uri = _logo_data_uri()
+    with st.sidebar:
+        if uri:
+            st.markdown(
+                f'<a href="{_home_url()}" target="_self" title="홈으로" '
+                f'style="display:block;text-align:center;padding:12px 0 6px;">'
+                f'<img src="{uri}" alt="SOLLUME ESTHÉ" style="width:78%;max-width:190px;"/></a>',
+                unsafe_allow_html=True,
+            )
+
+
+def render_home_logo():
+    """홈(기본 페이지) 중앙 큰 로고 — 심플 랜딩(로고만 가운데).
+    2026-07-13 hoyeon.han: 디자인 개선 - 기존 환영/기능카드/사용법/시스템정보 랜딩을 대체.
+    """
+    uri = _logo_data_uri()
+    if uri:
+        st.markdown(
+            f'<div style="display:flex;justify-content:center;align-items:center;min-height:62vh;">'
+            f'<img src="{uri}" alt="SOLLUME ESTHÉ" style="width:55%;max-width:440px;"/></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.title("SollumeLab 회계 시스템")
 
 
 def render_sidebar_user_simple():
