@@ -82,18 +82,22 @@ if not auth.is_session_valid():
     _pg = st.navigation([st.Page(_login_page, title="로그인")], position="hidden")
 else:
     # 인증: 자동 네비를 숨기고(position="hidden") 사이드바를 직접 구성한다.
+    # 2026-07-13 hoyeon.han: 페이지 파일명 영문화(구 "pages/1_📝_전표생성.py" 등 → 영문 파일명).
+    #   한글 파일명이 터미널/git/에디터에서 깨지고 URL도 한글로 인코딩되던 문제 해결.
+    #   url_path를 영문으로 명시해 URL을 /daily-voucher 등으로 고정. 화면 라벨/아이콘은 한글 유지.
+    #   구→신 파일명 매핑은 git 이력 및 .claude/rename-pages-to-english-plan.md 참고.
     _home = st.Page(_home_page, title="홈", icon="📊", default=True)
-    _p_daily = st.Page("pages/1_📝_전표생성.py", title="일별 전표", icon="📝")
-    _p_period = st.Page("pages/5_📆_전표생성_기간.py", title="기간 전표", icon="📆")
-    _p_vendor = st.Page("pages/4_🎯_특정업체전표.py", title="특정업체 전표", icon="🎯")
-    _p_settle = st.Page("pages/7_📋_정산서생성.py", title="정산서 생성", icon="📋")
+    _p_daily = st.Page("pages/daily_voucher.py", title="일별 전표", icon="📝", url_path="daily-voucher")
+    _p_period = st.Page("pages/period_voucher.py", title="기간 전표", icon="📆", url_path="period-voucher")
+    _p_vendor = st.Page("pages/vendor_voucher.py", title="특정업체 전표", icon="🎯", url_path="vendor-voucher")
+    _p_settle = st.Page("pages/settlement.py", title="정산서 생성", icon="📋", url_path="settlement")
     _p_settle_seller = st.Page(
-        "pages/9_🧾_정산서생성_셀러.py", title="정산서 생성(셀러)", icon="🧾"
+        "pages/settlement_seller.py", title="정산서 생성(셀러)", icon="🧾", url_path="settlement-seller"
     )
-    _p_summary = st.Page("pages/2_📊_발주내역요약.py", title="요약", icon="📊")
-    _p_compare = st.Page("pages/8_🔍_발주내역비교.py", title="비교", icon="🔍")
-    _p_customer = st.Page("pages/3_🏢_거래처관리.py", title="거래처 관리", icon="🏢")
-    _p_system = st.Page("pages/6_⚙️_시스템관리.py", title="시스템 관리", icon="⚙️")
+    _p_summary = st.Page("pages/order_summary.py", title="요약", icon="📊", url_path="order-summary")
+    _p_compare = st.Page("pages/order_compare.py", title="비교", icon="🔍", url_path="order-compare")
+    _p_customer = st.Page("pages/customers.py", title="거래처 관리", icon="🏢", url_path="customers")
+    _p_system = st.Page("pages/system.py", title="시스템 관리", icon="⚙️", url_path="system")
 
     # 홈은 기본(default) 페이지로 라우팅만 하고, 아래 커스텀 네비에는 노출하지 않는다
     # (홈 이동은 최상단 로고 클릭으로). 나머지는 그룹별 page_link 로 노출.

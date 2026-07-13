@@ -167,13 +167,15 @@ def render_sidebar_quick_actions():
 
         with col1:
             if st.button("📝 신규\n전표", use_container_width=True, key="quick_new"):
-                st.switch_page("pages/1_📝_전표생성.py")
+                # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/1_📝_전표생성.py)
+                st.switch_page("pages/daily_voucher.py")
 
         with col2:
             if st.button(
                 "📊 발주\n요약", use_container_width=True, key="quick_summary"
             ):
-                st.switch_page("pages/2_📊_발주내역요약.py")
+                # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/2_📊_발주내역요약.py)
+                st.switch_page("pages/order_summary.py")
 
         st.divider()
 
@@ -251,7 +253,8 @@ def render_sidebar_recent_files():
         if st.button(
             "📂 전체 파일 보기", use_container_width=True, key="sidebar_all_files"
         ):
-            st.switch_page("pages/6_⚙️_시스템관리.py")
+            # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/6_⚙️_시스템관리.py)
+            st.switch_page("pages/system.py")
 
         st.divider()
 
@@ -321,8 +324,8 @@ def render_custom_sidebar():
     """
     render_sidebar_logo()
     # 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바 간결화
-    #   빠른작업/최근파일/시스템상태는 pages/6(시스템관리)에 더 나은 버전이 있어 사이드바에서 제거,
-    #   화면 폭 설정은 pages/6 상단 popover로 이전.
+    #   빠른작업/최근파일/시스템상태는 pages/system.py(시스템관리)에 더 나은 버전이 있어 사이드바에서 제거,
+    #   화면 폭 설정은 pages/system.py 상단 popover로 이전.
     #   죽은 사용자정보 카드(render_sidebar_user_info: session_state["user"]를 읽으나 실제 저장은 user_info)
     #   대신 실제 세션을 읽고 로그아웃까지 있는 auth.show_user_info_sidebar()로 교체(Home/2/3과 통일).
     # render_sidebar_user_info()

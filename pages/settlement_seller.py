@@ -456,7 +456,7 @@ with st.expander(f"품목명 매핑 편집 ({len(items)}건)", expanded=True):
 
 
 # ===== 6. 시트 배치 설정 =====
-# 2026-07-06 hoyeon.han: 셀러 다중 선택 → 기존 정산서생성(pages/7) 방식으로
+# 2026-07-06 hoyeon.han: 셀러 다중 선택 → 기존 정산서생성(pages/settlement.py) 방식으로
 # 각 셀러(비고)를 어느 시트에 배치할지 지정. 같은 시트명으로 묶으면 통합된다.
 
 st.markdown("### 🏷️ 6. 시트 배치 설정")

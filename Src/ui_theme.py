@@ -114,7 +114,7 @@ def render_width_setting():
     """콘텐츠 폭 설정 위젯 (호출한 컨테이너에 그대로 렌더).
 
     2026-07-09 hoyeon.han: 사이드바 전용 → 컨테이너 비의존 위젯으로 변경.
-      (시스템관리 pages/6 상단 popover에서 호출) 값 변경 시 세션+JSON 저장,
+      (시스템관리 pages/system.py 상단 popover에서 호출) 값 변경 시 세션+JSON 저장,
       inject_global_css()가 이 값을 읽어 본문 최대 폭을 적용한다.
     """
     labels = list(WIDTH_PRESETS.keys())

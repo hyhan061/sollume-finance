@@ -759,7 +759,8 @@ with control_col:
     st.divider()
     st.info("📂 파일 목록, 로그 확인은 **⚙️ 시스템 관리** 페이지에서")
     if st.button("⚙️ 시스템 관리로 이동", use_container_width=True, key="goto_settings"):
-        st.switch_page("pages/6_⚙️_시스템관리.py")
+        # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/6_⚙️_시스템관리.py)
+        st.switch_page("pages/system.py")
 
 # ========== RIGHT: 결과 패널 (2/3) ==========
 with result_col:

@@ -173,7 +173,7 @@ class OrderFileStore:
     def _extract_sheet_names(self) -> List[str]:
         """저장된 파일에서 시트 목록을 추출한다.
 
-        pages/1_📝_전표생성.py 의 시트 검증 로직과 동일하게 read_only 모드 사용.
+        pages/daily_voucher.py 의 시트 검증 로직과 동일하게 read_only 모드 사용.
         실패 시 빈 리스트 반환.
         """
         try:
@@ -191,7 +191,7 @@ class OrderFileStore:
     def _pick_recommended_sheet(sheet_names: List[str]) -> Optional[str]:
         """'발주내역' + 현재 연도를 포함한 시트를 우선 추천한다.
 
-        pages/5_📆_전표생성_기간.py 의 기본 시트 선택 로직을 차용.
+        pages/period_voucher.py 의 기본 시트 선택 로직을 차용.
         매칭 실패 시 첫 번째 시트, 시트가 없으면 None.
         """
         if not sheet_names:
