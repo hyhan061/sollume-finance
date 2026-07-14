@@ -27,6 +27,11 @@ COPY scripts/ ./scripts/
 # Streamlit 설정 파일 복사
 COPY .streamlit/ ./.streamlit/
 
+# 2026-07-14 hoyeon.han: 브랜드 자산(로고/심볼 PNG) 복사 추가.
+#   누락 시 사이드바 로고·홈 로고·파비콘이 폴백(빈 박스/텍스트/이모지)으로 표시됨.
+#   코드가 /app/assets 참조 (Home.py:46, Src/ui_components.py:19).
+COPY assets/ ./assets/
+
 # 디렉토리 생성
 # 2025-12-16 hoyeon.han: database 디렉토리 추가
 RUN mkdir -p logs uploads processed database
