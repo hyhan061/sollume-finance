@@ -392,7 +392,7 @@ def resolve_sheet_map(
 ) -> dict[str, list[str]]:
     """셀러 → 배치할 시트 매핑을 {시트명: [셀러...]} 로 뒤집는다.
 
-    기존 정산서생성(pages/7)의 시트 배치 방식과 동일한 철학:
+    기존 정산서생성(pages/settlement.py)의 시트 배치 방식과 동일한 철학:
       - seller_to_sheet 에 없거나 값이 빈 문자열이면 셀러명 자신을 시트명으로.
       - 같은 시트명으로 여러 셀러를 묶으면 한 시트로 통합된다.
       - 시트명은 sanitize_sheet_name 규칙(31자, 금지문자) 적용.

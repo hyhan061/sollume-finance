@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(page_title="시스템 관리", page_icon="⚙️", layout="wide")
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(page_title="시스템 관리", page_icon="⚙️", layout="wide")
 
 # 인증 체크
 import importlib.util
@@ -25,54 +26,55 @@ spec = importlib.util.spec_from_file_location(
 )
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
+# auth.require_auth()
 
 # 커스텀 사이드바
 from ui_components import render_custom_sidebar
 
-render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더/화면폭 설정 모듈
+from ui_theme import inject_global_css, render_page_header, render_width_setting
+
+# render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바 이후 전역 CSS 주입(.section-header 등 공통 클래스 포함)
+# inject_global_css()
 
 # =============================================================================
 # CSS 스타일
 # =============================================================================
 
-st.markdown(
-    """
-<style>
-    .main-header {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 0.5rem;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 1rem;
-        border-left: 4px solid #3498db;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 로컬 <style>(구 팔레트 #1f77b4/#3498db) 제거
+#   .main-header/.section-header 는 Src/ui_theme.py inject_global_css()가 새 인디고 테마로 제공,
+#   .metric-card 는 미사용. (페이지 헤더는 render_page_header 로 대체)
+# st.markdown(
+#     """
+# <style>
+#     .main-header { font-size: 2rem; font-weight: bold; color: #1f77b4; margin-bottom: 1rem; }
+#     .section-header { font-size: 1.5rem; font-weight: bold; color: #2c3e50; margin-top: 2rem;
+#                       margin-bottom: 1rem; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
+#     .metric-card { background-color: #f8f9fa; border-radius: 8px; padding: 1rem; border-left: 4px solid #3498db; }
+# </style>
+# """,
+#     unsafe_allow_html=True,
+# )
 
 # =============================================================================
 # 페이지 타이틀
 # =============================================================================
 
-st.markdown('<div class="main-header">⚙️ 시스템 관리</div>', unsafe_allow_html=True)
-st.caption("시스템 상태 모니터링, 파일 관리, 로그 확인, 데이터 정리 기능을 제공합니다.")
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.markdown('<div class="main-header">⚙️ 시스템 관리</div>', unsafe_allow_html=True)
+# st.caption("시스템 상태 모니터링, 파일 관리, 로그 확인, 데이터 정리 기능을 제공합니다.")
+# st.divider()
+render_page_header(
+    "시스템 관리",
+    "시스템 상태·파일·로그·데이터 정리와 화면 표시 설정을 제공합니다.",
+    icon="⚙️",
+)
 
-st.divider()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 화면 폭 설정을 사이드바에서 이곳 상단 popover로 이전
+with st.popover("🖥️ 화면 표시 설정"):
+    st.caption("본문 최대 폭을 선택하세요. 테마가 적용된 화면에 반영되고 재접속 후에도 유지됩니다.")
+    render_width_setting()
 
 # =============================================================================
 # 탭 구성
@@ -183,7 +185,7 @@ with tab1:
         st.markdown("**ℹ️ 앱 정보**")
         st.write("📊 버전: v3.0.0")
         st.write("🐍 Python: 3.11")
-        st.write("🌐 Streamlit: 1.39.0")
+        st.write("🌐 Streamlit: 1.51.0")
 
 
 # =============================================================================

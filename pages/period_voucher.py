@@ -13,7 +13,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(page_title="전표생성-기간", page_icon="📆", layout="wide")
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(page_title="전표생성-기간", page_icon="📆", layout="wide")
 
 # 2026-04-09 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
 import importlib.util
@@ -25,13 +26,18 @@ if spec is None or spec.loader is None:
     raise ImportError("auth 모듈을 불러올 수 없습니다.")
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
+# auth.require_auth()
 
 # 2026-04-09 hoyeon.han: 커스텀 사이드바
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
 from ui_components import render_custom_sidebar, render_order_file_selector
 
-render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
+from ui_theme import inject_global_css, render_page_header
+
+# render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바(화면 폭 설정) 렌더 이후 전역 CSS 주입
+# inject_global_css()
 
 # 2026-04-09 hoyeon.han: 기간 통합 전표 처리에 필요한 import
 from processing import (
@@ -76,9 +82,15 @@ def _extract_vendor_options(df):
 if "period_voucher_result" not in st.session_state:
     st.session_state.period_voucher_result = None
 
-st.title("📆 전표생성-기간")
-st.caption("기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.")
-st.divider()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.title("📆 전표생성-기간")
+# st.caption("기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.")
+# st.divider()
+render_page_header(
+    "전표생성-기간",
+    "기간 내 전체 거래의 매출/매입 전표를 통합 생성합니다.",
+    icon="📆",
+)
 
 # 2026-06-03 hoyeon.han: 발주내역 파일 서버 저장/재사용 기능 적용
 # 기존 업로드/시트선택 로직을 공통 컴포넌트(render_order_file_selector)로 대체한다.
@@ -288,13 +300,16 @@ can_process = (
     and vendor_selection_valid
 )
 
-generate_clicked = st.button(
-    "📆 전표 생성",
-    type="primary",
-    use_container_width=True,
-    disabled=not can_process,
-    key="period_voucher_generate_button",
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 버튼이 와이드 화면에서 과도하게 퍼지지 않도록 폭 제한(컬럼 배치)
+_btn_col, _ = st.columns([1, 2])
+with _btn_col:
+    generate_clicked = st.button(
+        "📆 전표 생성",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_process,
+        key="period_voucher_generate_button",
+    )
 
 
 # 2026-04-09 hoyeon.han: 기간 통합 전표 처리 오케스트레이션
@@ -486,14 +501,24 @@ if result:
         f" · 🏢 대상 업체: {result.get('vendor_label', '전체 업체')}"
     )
 
-    col1, col2, col3, col4 = st.columns(4)
+    # 2026-07-09 hoyeon.han: 디자인 개선 - 날짜범위는 KPI가 아닌 맥락이라 metric에서 잘림('…') 발생
+    #   → 캡션으로 이동하고 metric은 숫자 지표만 유지 (전역 CSS의 metric 견고화와 병행)
+    # col1, col2, col3, col4 = st.columns(4)
+    # with col1:
+    #     st.metric("📅 처리 기간", f"{result['start_date']}~{result['end_date']}")
+    # with col2:
+    #     st.metric("💰 매출 건수", f"{result['sales_count']:,}건")
+    # with col3:
+    #     st.metric("🛒 매입 건수", f"{result['purchase_count']:,}건")
+    # with col4:
+    #     st.metric("⏰ 처리 시각", result["timestamp"].strftime("%H:%M:%S"))
+    st.caption(f"📅 처리 기간  {result['start_date']} ~ {result['end_date']}")
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("📅 처리 기간", f"{result['start_date']}~{result['end_date']}")
-    with col2:
         st.metric("💰 매출 건수", f"{result['sales_count']:,}건")
-    with col3:
+    with col2:
         st.metric("🛒 매입 건수", f"{result['purchase_count']:,}건")
-    with col4:
+    with col3:
         st.metric("⏰ 처리 시각", result["timestamp"].strftime("%H:%M:%S"))
 
     tab1, tab2 = st.tabs(["💰 매출 데이터", "🛒 매입 데이터"])
@@ -511,7 +536,8 @@ if result:
                     file_name=result["sales_filename"],
                     mime="application/vnd.ms-excel",
                     type="primary",
-                    use_container_width=True,
+                    # 2026-07-09 hoyeon.han: 디자인 개선 - 와이드에서 버튼 과확장 방지(내용폭)
+                    use_container_width=False,
                     key="period_download_sales",
                 )
         else:
@@ -532,7 +558,8 @@ if result:
                     file_name=result["purchase_filename"],
                     mime="application/vnd.ms-excel",
                     type="primary",
-                    use_container_width=True,
+                    # 2026-07-09 hoyeon.han: 디자인 개선 - 와이드에서 버튼 과확장 방지(내용폭)
+                    use_container_width=False,
                     key="period_download_purchase",
                 )
         else:

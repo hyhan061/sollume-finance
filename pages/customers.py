@@ -18,7 +18,8 @@ import logging
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(page_title="거래처 관리", page_icon="🏢", layout="wide")
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(page_title="거래처 관리", page_icon="🏢", layout="wide")
 
 # 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
 import importlib.util
@@ -28,8 +29,14 @@ spec = importlib.util.spec_from_file_location(
 )
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
-auth.show_user_info_sidebar()
+# auth.require_auth()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바를 공통(render_custom_sidebar)으로 통일
+# auth.show_user_info_sidebar()
+from ui_components import render_custom_sidebar
+from ui_theme import inject_global_css, render_page_header
+
+# render_custom_sidebar()
+# inject_global_css()
 
 # 거래처 마스터 DB 클래스
 from customer_master_db import CustomerMasterDB
@@ -56,63 +63,13 @@ logger = logging.getLogger(__name__)
 # 2025-12-16 hoyeon.han: CSS 스타일 정의
 # =============================================================================
 
-st.markdown(
-    """
-<style>
-    .main-header {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 0.5rem;
-    }
-    .success-box {
-        padding: 1rem;
-        background-color: #d4edda;
-        border-left: 4px solid #28a745;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .error-box {
-        padding: 1rem;
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .info-box {
-        padding: 1rem;
-        background-color: #d1ecf1;
-        border-left: 4px solid #17a2b8;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .warning-box {
-        padding: 1rem;
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .card-box {
-        padding: 1.5rem;
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        border-left: 4px solid #3498db;
-        margin: 1rem 0;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 페이지 로컬 <style> 제거
+#   (.main-header/.section-header/.success-box/.error-box/.info-box/.warning-box/.card-box 는
+#    Src/ui_theme.py inject_global_css() 가 새 인디고 테마로 전역 제공)
+# st.markdown(
+#     """<style> ...구 팔레트(#1f77b4/#3498db)+Bootstrap 알림색... </style>""",
+#     unsafe_allow_html=True,
+# )
 
 # =============================================================================
 # 2025-12-16 hoyeon.han: Session State 초기화
@@ -893,14 +850,18 @@ def main():
     """메인 페이지"""
 
     # 페이지 헤더
-    st.markdown('<div class="main-header">🏢 거래처 관리</div>', unsafe_allow_html=True)
-
-    st.markdown("""
-    거래처 정보를 조회, 등록, 수정, 삭제할 수 있습니다.
-    Excel 파일로 가져오기/내보내기도 가능합니다.
-    """)
-
-    st.divider()
+    # 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+    # st.markdown('<div class="main-header">🏢 거래처 관리</div>', unsafe_allow_html=True)
+    # st.markdown("""
+    # 거래처 정보를 조회, 등록, 수정, 삭제할 수 있습니다.
+    # Excel 파일로 가져오기/내보내기도 가능합니다.
+    # """)
+    # st.divider()
+    render_page_header(
+        "거래처 관리",
+        "거래처 정보를 조회·등록·수정·삭제하고 Excel로 가져오기/내보내기 합니다.",
+        icon="🏢",
+    )
 
     # DB 인스턴스 생성
     try:

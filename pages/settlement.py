@@ -15,9 +15,10 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(
-    page_title="정산서 생성", page_icon="📋", layout="wide"
-)
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(
+#     page_title="정산서 생성", page_icon="📋", layout="wide"
+# )
 
 # 인증 체크 (Src/__init__.py 우회 — 기존 페이지 패턴 동일)
 spec = importlib.util.spec_from_file_location(
@@ -27,12 +28,17 @@ if spec is None or spec.loader is None:
     raise ImportError("auth 모듈을 불러올 수 없습니다.")
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
+# auth.require_auth()
 
 # 커스텀 사이드바
 from ui_components import render_custom_sidebar  # noqa: E402
 
-render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
+from ui_theme import inject_global_css, render_page_header  # noqa: E402
+
+# render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바 렌더 이후 전역 CSS 주입
+# inject_global_css()
 
 # 정산서 비즈니스 로직
 import settlement as st_mod  # noqa: E402
@@ -136,9 +142,15 @@ def _reset_below_vendor() -> None:
 
 # ===== 헤더 =====
 
-st.title("📋 정산서 생성")
-st.caption("기간 내 거래처별 매출/매입 정산서를 생성합니다.")
-st.divider()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.title("📋 정산서 생성")
+# st.caption("기간 내 거래처별 매출/매입 정산서를 생성합니다.")
+# st.divider()
+render_page_header(
+    "정산서 생성",
+    "원본 정산서(.xls)를 업로드해 비고별 시트로 정리·발행합니다.",
+    icon="📋",
+)
 
 
 # ===== 1. 정산서 유형 선택 =====

@@ -18,7 +18,8 @@ import json
 sys.path.insert(0, str(Path(__file__).parent.parent / "Src"))
 
 # 페이지 설정 (Streamlit 명령 중 가장 먼저 실행되어야 함)
-st.set_page_config(page_title="전표 생성", page_icon="📝", layout="wide")
+# 2026-07-10 hoyeon.han: st.navigation 라우터(Home.py)로 이전 - 진입점에서 처리
+# st.set_page_config(page_title="전표 생성", page_icon="📝", layout="wide")
 
 # 2025-12-17 hoyeon.han: 인증 체크 (Src/__init__.py 우회)
 import importlib.util
@@ -28,13 +29,18 @@ spec = importlib.util.spec_from_file_location(
 )
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
-auth.require_auth()
+# auth.require_auth()
 
 # 2025-12-22 hoyeon.han: Quick Win #4 - 커스텀 사이드바 로고
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
 from ui_components import render_custom_sidebar, render_order_file_selector
 
-render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 공통 테마 CSS/헤더 모듈
+from ui_theme import inject_global_css, render_page_header
+
+# render_custom_sidebar()
+# 2026-07-09 hoyeon.han: 사이드바 렌더 이후 전역 CSS 주입
+# inject_global_css()
 
 # 전표 생성 모듈
 from processing import get_sales_daily, get_purchase_daily, save_dataframe_to_xls
@@ -65,65 +71,71 @@ if "last_result" not in st.session_state:
     st.session_state.last_result = None
 
 # CSS 스타일
-st.markdown(
-    """
-<style>
-    .main-header {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 0.5rem;
-    }
-    .success-box {
-        padding: 1rem;
-        background-color: #d4edda;
-        border-left: 4px solid #28a745;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .error-box {
-        padding: 1rem;
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .info-box {
-        padding: 1rem;
-        background-color: #d1ecf1;
-        border-left: 4px solid #17a2b8;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-    .warning-box {
-        padding: 1rem;
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        border-radius: 4px;
-        margin: 1rem 0;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# 2026-07-09 hoyeon.han: 디자인 개선 - 페이지 로컬 <style> 제거(.main-header 등 유틸 클래스는 ui_theme.inject_global_css()가 전역 제공)
+# st.markdown(
+#     """
+# <style>
+#     .main-header {
+#         font-size: 2rem;
+#         font-weight: bold;
+#         color: #1f77b4;
+#         margin-bottom: 1rem;
+#     }
+#     .section-header {
+#         font-size: 1.5rem;
+#         font-weight: bold;
+#         color: #2c3e50;
+#         margin-top: 2rem;
+#         margin-bottom: 1rem;
+#         border-bottom: 2px solid #3498db;
+#         padding-bottom: 0.5rem;
+#     }
+#     .success-box {
+#         padding: 1rem;
+#         background-color: #d4edda;
+#         border-left: 4px solid #28a745;
+#         border-radius: 4px;
+#         margin: 1rem 0;
+#     }
+#     .error-box {
+#         padding: 1rem;
+#         background-color: #f8d7da;
+#         border-left: 4px solid #dc3545;
+#         border-radius: 4px;
+#         margin: 1rem 0;
+#     }
+#     .info-box {
+#         padding: 1rem;
+#         background-color: #d1ecf1;
+#         border-left: 4px solid #17a2b8;
+#         border-radius: 4px;
+#         margin: 1rem 0;
+#     }
+#     .warning-box {
+#         padding: 1rem;
+#         background-color: #fff3cd;
+#         border-left: 4px solid #ffc107;
+#         border-radius: 4px;
+#         margin: 1rem 0;
+#     }
+# </style>
+# """,
+#     unsafe_allow_html=True,
+# )
 
 # =============================================================================
 # 페이지 타이틀
 # =============================================================================
 
-st.markdown('<div class="main-header">📝 전표 생성</div>', unsafe_allow_html=True)
-st.caption("발주내역 파일에서 경리나라 전표 파일을 생성합니다.")
-
-st.divider()
+# 2026-07-09 hoyeon.han: 디자인 개선 - 통일 페이지 헤더로 교체
+# st.markdown('<div class="main-header">📝 전표 생성</div>', unsafe_allow_html=True)
+# st.caption("발주내역 파일에서 경리나라 전표 파일을 생성합니다.")
+# st.divider()
+render_page_header(
+    "전표 생성",
+    "발주내역 엑셀에서 날짜별 매출·매입 전표를 생성합니다.",
+    icon="📝",
+)
 
 # =============================================================================
 # 2025-12-22 hoyeon.han: validate_uploaded_file() 함수 추가
@@ -747,7 +759,8 @@ with control_col:
     st.divider()
     st.info("📂 파일 목록, 로그 확인은 **⚙️ 시스템 관리** 페이지에서")
     if st.button("⚙️ 시스템 관리로 이동", use_container_width=True, key="goto_settings"):
-        st.switch_page("pages/6_⚙️_시스템관리.py")
+        # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/6_⚙️_시스템관리.py)
+        st.switch_page("pages/system.py")
 
 # ========== RIGHT: 결과 패널 (2/3) ==========
 with result_col:

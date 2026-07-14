@@ -10,42 +10,119 @@ from datetime import datetime
 import os
 
 
-def render_sidebar_logo():
+def _logo_data_uri():
+    """현재 테마에 맞는 로고 PNG를 data URI로 반환 (라이트=검정 logo_dark / 다크=흰색 logo_white).
+    2026-07-13 hoyeon.han: 신규 - 커스텀 <a> 사이드바 로고와 홈 중앙 로고에서 공용.
     """
-    사이드바 로고 및 브랜딩
-    Quick Win #4 구현
+    import base64
+
+    assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+    try:
+        is_dark = st.context.theme.type == "dark"
+    except Exception:
+        is_dark = False
+    fname = "logo_white.png" if is_dark else "logo_dark.png"
+    try:
+        with open(os.path.join(assets_dir, fname), "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
+
+
+def render_sidebar_logo(home_page=None):
+    """사이드바 최상단 로고 — 클릭 시 앱 내부 이동으로 홈으로(세션 유지).
+
+    2026-07-13 hoyeon.han(v2): 기존 <a href> 방식은 전체 페이지 리로드 → st.session_state
+      초기화 → 재로그인 문제가 있어, st.button + st.switch_page(home_page) 로 '내부 이동'하도록
+      변경(인증 유지). 버튼을 CSS(st-key 클래스)로 테마별 공식 로고 이미지처럼 표시하고,
+      사이드바 상단 여백을 줄여 로고를 최상단에 붙인다. (st.navigation position="hidden" 전제)
     """
+    uri = _logo_data_uri()
     with st.sidebar:
-        # 로고 및 타이틀
+        css = (
+            "<style>"
+            "section[data-testid='stSidebar'] > div{padding-top:0.6rem !important;}"
+        )
+        if uri:
+            css += (
+                ".st-key-sl_home_logo button{background:url('" + uri + "') no-repeat "
+                "center/contain !important;height:58px;padding:0 !important;border:none !important;"
+                "box-shadow:none !important;background-color:transparent !important;color:transparent !important;}"
+                ".st-key-sl_home_logo button:hover{opacity:.82;}"
+                ".st-key-sl_home_logo button:active,.st-key-sl_home_logo button:focus{"
+                "border:none !important;box-shadow:none !important;}"
+            )
+        css += "</style>"
+        st.markdown(css, unsafe_allow_html=True)
+        if st.button(" ", key="sl_home_logo", help="홈으로", use_container_width=True):
+            if home_page is not None:
+                st.switch_page(home_page)
+
+
+def render_home_logo():
+    """홈(기본 페이지) 중앙 큰 로고 — 심플 랜딩(로고만 가운데).
+    2026-07-13 hoyeon.han: 디자인 개선 - 기존 환영/기능카드/사용법/시스템정보 랜딩을 대체.
+    """
+    uri = _logo_data_uri()
+    if uri:
         st.markdown(
-            """
-        <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
-            <div style="
-                width: 80px;
-                height: 80px;
-                margin: 0 auto;
-                background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 2.5rem;
-                box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
-            ">
-                📊
-            </div>
-            <h2 style="margin: 1rem 0 0.25rem 0; color: #2C3E50; font-size: 1.5rem;">
-                솔루미랩
-            </h2>
-            <p style="color: #718096; font-size: 0.875rem; margin: 0;">
-                회계 전표 시스템
-            </p>
-        </div>
-        """,
+            f'<div style="display:flex;justify-content:center;align-items:center;min-height:62vh;">'
+            f'<img src="{uri}" alt="SOLLUME ESTHÉ" style="width:55%;max-width:440px;"/></div>',
             unsafe_allow_html=True,
         )
+    else:
+        st.title("SollumeLab 회계 시스템")
+
+
+def render_login_screen(auth):
+    """심플 로그인 화면 — 중앙 로고 + 최소 폼 (홈처럼 심플).
+    2026-07-13 hoyeon.han: 기존 auth.show_login_page(제목/도움말/경고박스 등)를 대체.
+      로그인 로직은 auth.login() 재사용.
+    """
+    uri = _logo_data_uri()
+    _, mid, _ = st.columns([1, 1.3, 1])
+    with mid:
+        if uri:
+            st.markdown(
+                '<div style="text-align:center;padding:7vh 0 3vh;">'
+                '<img src="' + uri + '" alt="SOLLUME ESTHÉ" style="width:75%;max-width:320px;"/></div>',
+                unsafe_allow_html=True,
+            )
+        with st.form("sollume_login", border=False):
+            uid = st.text_input("아이디", placeholder="아이디를 입력하세요")
+            pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+            if st.form_submit_button("로그인", type="primary", use_container_width=True):
+                if auth.login(uid, pw):
+                    st.rerun()
+                else:
+                    st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
+
+
+def render_sidebar_user_simple():
+    """사이드바 간소화 사용자 블록 — 아바타 + 이름/역할 + 로그아웃.
+    2026-07-10 hoyeon.han: 디자인 개선 - 기존 auth.show_user_info_sidebar()의
+      제목/로그인시각/세션만료를 덜어낸 심플 버전. 세션·로그아웃 로직은 auth 재사용.
+    """
+    import auth  # 로컬 import (세션 기반)
+
+    with st.sidebar:
+        if not auth.is_session_valid():
+            return
+        user = auth.get_current_user() or {}
+        name = user.get("full_name") or user.get("username") or "사용자"
+        role = "관리자" if user.get("is_admin") else "사용자"
+        initial = name.strip()[0] if name.strip() else "·"
 
         st.divider()
+        st.markdown(
+            f'<div class="sl-user"><div class="sl-avatar">{initial}</div>'
+            f'<div><div class="sl-uname">{name}</div>'
+            f'<div class="sl-urole">{role}</div></div></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("⏻ 로그아웃", use_container_width=True, key="sidebar_logout_btn"):
+            auth.logout()
+            st.rerun()
 
 
 def render_sidebar_user_info():
@@ -90,13 +167,15 @@ def render_sidebar_quick_actions():
 
         with col1:
             if st.button("📝 신규\n전표", use_container_width=True, key="quick_new"):
-                st.switch_page("pages/1_📝_전표생성.py")
+                # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/1_📝_전표생성.py)
+                st.switch_page("pages/daily_voucher.py")
 
         with col2:
             if st.button(
                 "📊 발주\n요약", use_container_width=True, key="quick_summary"
             ):
-                st.switch_page("pages/2_📊_발주내역요약.py")
+                # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/2_📊_발주내역요약.py)
+                st.switch_page("pages/order_summary.py")
 
         st.divider()
 
@@ -174,7 +253,8 @@ def render_sidebar_recent_files():
         if st.button(
             "📂 전체 파일 보기", use_container_width=True, key="sidebar_all_files"
         ):
-            st.switch_page("pages/6_⚙️_시스템관리.py")
+            # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/6_⚙️_시스템관리.py)
+            st.switch_page("pages/system.py")
 
         st.divider()
 
@@ -243,10 +323,21 @@ def render_custom_sidebar():
     ```
     """
     render_sidebar_logo()
-    render_sidebar_user_info()
-    render_sidebar_quick_actions()
-    render_sidebar_recent_files()  # 2025-04-13 hoyeon.han: 최근 파일 위젯 추가
-    render_sidebar_system_status()
+    # 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바 간결화
+    #   빠른작업/최근파일/시스템상태는 pages/system.py(시스템관리)에 더 나은 버전이 있어 사이드바에서 제거,
+    #   화면 폭 설정은 pages/system.py 상단 popover로 이전.
+    #   죽은 사용자정보 카드(render_sidebar_user_info: session_state["user"]를 읽으나 실제 저장은 user_info)
+    #   대신 실제 세션을 읽고 로그아웃까지 있는 auth.show_user_info_sidebar()로 교체(Home/2/3과 통일).
+    # render_sidebar_user_info()
+    # render_sidebar_quick_actions()
+    # render_sidebar_recent_files()  # 2025-04-13 hoyeon.han: 최근 파일 위젯 추가
+    # render_sidebar_system_status()
+    # from ui_theme import render_width_setting
+    # render_width_setting()
+    # 2026-07-10 hoyeon.han: 디자인 개선 - 사용자 블록을 심플 버전(아바타+이름/역할+로그아웃)으로 교체
+    # import auth
+    # auth.show_user_info_sidebar()
+    render_sidebar_user_simple()
 
 
 def card(title, content, status="info"):
