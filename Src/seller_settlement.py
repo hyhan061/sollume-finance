@@ -3,8 +3,9 @@
 
 서버에 저장된 발주내역(.xlsm) 하나를 원본으로,
 일자(기간/개별 날짜)·거래처·셀러(특이사항) 기준으로 필터한 데이터를
-'품목별판매현황' 형식의 셀러 시트와 '상세내역' 시트로 구성된
-.xlsx 정산서로 생성한다. (매출 기준. 매입은 COLUMN_MAP_PURCHASE 추가로 확장)
+'품목별판매현황'/'품목별구매현황' 형식의 셀러 시트와 '상세내역' 시트로 구성된
+.xlsx 정산서로 생성한다.
+(2026-07-23 hoyeon.han: 매출/매입 모두 지원 — column_map=COLUMN_MAP_SALE/PURCHASE 로 전환)
 
 발주내역 양식이 바뀌면 COLUMN_MAP_SALE 만 수정하면 되도록
 모든 함수는 논리명(column_map 키) 기반으로 동작한다.
@@ -31,6 +32,7 @@ from processing import to_num
 from settlement import (
     OUTPUT_COLS,
     TYPE_SALE,
+    TYPE_PURCHASE,  # 2026-07-23 hoyeon.han: 매입 정산서 파일명(doc_type)용
     _sanitize_filename_part,
     _to_argb,
     apply_mapping,
@@ -57,9 +59,28 @@ COLUMN_MAP_SALE: dict[str, str] = {
     "ferry": "도선료",
 }
 
-# COLUMN_MAP_PURCHASE = {...}  # 매입 정산서 확장 자리 (추후 구현)
+# 2026-07-23 hoyeon.han: 매입 정산서 컬럼 매핑 (기존 자리표시자 주석 → 실제 구현).
+# 매출과 대칭이며 4개 키만 다르다(vendor/amount/delivery/ferry). ferry 의
+# '매입도선료'는 원본 '도선료.1'을 load_orders 에서 정규화한 이름. 나머지는 동일.
+COLUMN_MAP_PURCHASE: dict[str, str] = {
+    "date": "출고일",
+    "vendor": "매입처",
+    "category": "구분",
+    "consignee": "수하인명",
+    "address": "수하인주소",
+    "product": "제품",
+    "phone1": "연락처1",
+    "phone2": "연락처2",
+    "seller": "특이사항",  # 셀러(비고) 값 — 매출과 동일
+    "qty": "수량",
+    "amount": "상품매입",
+    "delivery": "매입배송비",
+    "ferry": "매입도선료",  # 원본 '도선료.1' → load_orders 에서 rename
+}
 
 TITLE_SALE = "품목별판매현황"  # 셀러 시트 제목 (참고 정산서 row0과 동일)
+# 2026-07-23 hoyeon.han: 매입 셀러 시트 제목 (경리나라 '품목별 구매 현황' 표기)
+TITLE_PURCHASE = "품목별구매현황"
 DETAIL_SHEET_NAME = "상세내역"  # 예약 시트명
 
 ITEM_FERRY = "도선료"  # 도선료 라인 품목명
@@ -102,6 +123,12 @@ def load_orders(
         ValueError: 필수 컬럼 누락 시
     """
     df = read_order_sheet(source, sheet_name)
+
+    # 2026-07-23 hoyeon.han: 발주내역은 '도선료' 헤더가 매출·매입 2개 → pandas 가
+    # 두 번째를 '도선료.1'로 자동 접미한다. 매입 맵(COLUMN_MAP_PURCHASE)이 표준명
+    # '매입도선료'로 참조하도록 정규화 (매출 경로는 첫 '도선료'만 쓰므로 무영향).
+    if "도선료.1" in df.columns:
+        df = df.rename(columns={"도선료.1": "매입도선료"})
 
     missing = [src for src in column_map.values() if src not in df.columns]
     if missing:
