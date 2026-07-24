@@ -31,6 +31,7 @@ from order_compare import read_order_sheet
 from processing import to_num
 from settlement import (
     OUTPUT_COLS,
+    SHEET_MAX_LEN,  # 2026-07-24 hoyeon.han: per_seller 상세시트명 31자 절단용
     TYPE_SALE,
     TYPE_PURCHASE,  # 2026-07-23 hoyeon.han: 매입 정산서 파일명(doc_type)용
     _sanitize_filename_part,
@@ -82,6 +83,12 @@ TITLE_SALE = "품목별판매현황"  # 셀러 시트 제목 (참고 정산서 r
 # 2026-07-23 hoyeon.han: 매입 셀러 시트 제목 (경리나라 '품목별 구매 현황' 표기)
 TITLE_PURCHASE = "품목별구매현황"
 DETAIL_SHEET_NAME = "상세내역"  # 예약 시트명
+
+# 2026-07-24 hoyeon.han: 상세내역 생성 모드 3택 (발주내역 기반 정산서생성에서 사용).
+# 기본값은 SINGLE(현재 동작 = 전체 하나로) 이라 기존 셀러 화면과 하위호환.
+DETAIL_MODE_NONE = "none"               # 생성 안 함
+DETAIL_MODE_SINGLE = "single"           # 전체 하나로 (선택 셀러 전체를 상세 1장)
+DETAIL_MODE_PER_SELLER = "per_seller"   # 셀러별 상세 시트 분리
 
 ITEM_FERRY = "도선료"  # 도선료 라인 품목명
 ITEM_PARCEL = "택배비"  # 판매배송비 라인 품목명
@@ -442,12 +449,48 @@ def resolve_sheet_map(
     return sheet_map
 
 
+def _build_per_seller_detail(
+    df_filtered: pd.DataFrame,
+    seller_list: list[str],
+    reserved_sheet_names: Iterable[str],
+    item_mapping: dict[str, str] | None = None,
+    column_map: dict[str, str] = COLUMN_MAP_SALE,
+) -> dict[str, pd.DataFrame]:
+    """셀러별 상세내역 시트 매핑 생성 (per_seller 모드) — 2026-07-24 hoyeon.han.
+
+    각 셀러의 상세내역을 '상세내역_{셀러}' 시트로 분리한다. 시트배치로 여러
+    셀러를 한 요약시트로 묶어도 상세는 셀러 단위로 나뉜다.
+
+    - 시트명: sanitize_sheet_name('상세내역_{셀러}') (31자·금지문자 처리)
+    - 중복(31자 절단 충돌 포함)은 '_2','_3' 접미로 회피
+    - reserved_sheet_names(셀러 요약 시트명)와도 겹치지 않도록 seed
+    - 데이터 없는 셀러는 건너뜀 (build_sheet_plan 의 빈 셀러 스킵과 동일)
+    """
+    used: set[str] = set(reserved_sheet_names)
+    out: dict[str, pd.DataFrame] = {}
+    for seller in seller_list:
+        ddf = build_detail_df(df_filtered, [seller], item_mapping, column_map)
+        if ddf.empty:
+            continue
+        base = sanitize_sheet_name(f"{DETAIL_SHEET_NAME}_{seller}")
+        name = base
+        n = 1
+        while name in used:
+            n += 1
+            suffix = f"_{n}"
+            name = base[: SHEET_MAX_LEN - len(suffix)] + suffix
+        used.add(name)
+        out[name] = ddf
+    return out
+
+
 def build_sheet_plan(
     df_filtered: pd.DataFrame,
     sellers: Iterable[str],
     seller_to_sheet: dict[str, str] | None = None,
     item_mapping: dict[str, str] | None = None,
     column_map: dict[str, str] = COLUMN_MAP_SALE,
+    detail_mode: str = DETAIL_MODE_SINGLE,  # 2026-07-24 hoyeon.han: 상세내역 3택
 ) -> dict[str, Any]:
     """정산서 구성 계획 생성 (셀러 여러 개 → 시트 배치 매핑 지원).
 
@@ -456,15 +499,19 @@ def build_sheet_plan(
         seller_to_sheet: {셀러: 배치할 시트명}. 빈 값이면 셀러명을 시트명으로 사용.
             같은 시트명으로 여러 셀러를 묶으면 통합 배치.
         item_mapping: 품목명 정리 매핑
+        detail_mode: 상세내역 생성 모드 (DETAIL_MODE_NONE/SINGLE/PER_SELLER).
+            기본 SINGLE = 현재 동작(전체 하나로). — 2026-07-24 hoyeon.han
 
     Returns:
         {
           'seller_sheets': {시트명: aggregate_item_sheet 결과 DataFrame},  # 배치 순서 유지
-          'detail_df':     build_detail_df 결과 (선택된 모든 셀러의 원본 행),
+          'detail_mode':   전달된 detail_mode 값,
+          'detail_df':     single 일 때 선택 셀러 전체 상세 DataFrame (그 외 None),
+          'detail_sheets': per_seller 일 때 {'상세내역_{셀러}': DataFrame} (그 외 None),
         }
 
     Raises:
-        ValueError: 셀러 미선택, 시트명 예약어 충돌, 데이터 없음
+        ValueError: 셀러 미선택, 시트명 예약어 충돌, 데이터 없음, 알 수 없는 detail_mode
     """
     seller_list = [str(s).strip() for s in sellers if str(s).strip()]
     if not seller_list:
@@ -484,12 +531,33 @@ def build_sheet_plan(
     if not seller_sheets:
         raise ValueError("선택한 조건에 해당하는 셀러 데이터가 없습니다.")
 
-    return {
+    # 2026-07-24 hoyeon.han: 상세내역 3택(detail_mode) 지원.
+    # 기본 SINGLE 이면 기존과 동일하게 detail_df 를 담아 하위호환을 유지한다.
+    # (기존 반환)
+    # return {
+    #     "seller_sheets": seller_sheets,
+    #     "detail_df": build_detail_df(
+    #         df_filtered, seller_list, item_mapping, column_map
+    #     ),
+    # }
+    plan: dict[str, Any] = {
         "seller_sheets": seller_sheets,
-        "detail_df": build_detail_df(
-            df_filtered, seller_list, item_mapping, column_map
-        ),
+        "detail_mode": detail_mode,
+        "detail_df": None,
+        "detail_sheets": None,
     }
+    if detail_mode == DETAIL_MODE_SINGLE:
+        plan["detail_df"] = build_detail_df(
+            df_filtered, seller_list, item_mapping, column_map
+        )
+    elif detail_mode == DETAIL_MODE_PER_SELLER:
+        plan["detail_sheets"] = _build_per_seller_detail(
+            df_filtered, seller_list, list(seller_sheets.keys()),
+            item_mapping, column_map,
+        )
+    elif detail_mode != DETAIL_MODE_NONE:
+        raise ValueError(f"알 수 없는 상세내역 모드입니다: {detail_mode}")
+    return plan
 
 
 # ===== 헤더 텍스트 / 파일명 =====
@@ -738,11 +806,17 @@ def write_seller_settlement_xlsx(
       1) 셀러 시트들: plan['seller_sheets'] 순서대로 (셀러 1개면 1장,
          비고를 시트별로 배치/통합한 만큼 여러 장). 전체 셀 seller_font_size,
          합계행은 굵게 + 합계 셀만 색상 강조.
-      2) 상세내역 시트: 선택된 모든 셀러의 원본 행 + 열별 합계행 + 빈 2행 + 총합계행
-         (기본 폰트 크기)
+      2) 상세내역 시트 (2026-07-24 hoyeon.han: plan['detail_mode'] 로 0/1/N장):
+         - none: 생성 안 함
+         - single(기본): 선택된 모든 셀러의 원본 행 1장('상세내역')
+         - per_seller: 셀러별 '상세내역_{셀러}' N장 (셀러 시트 뒤)
+         각 상세시트 = 원본 행 + 열별 합계행 + 빈 2행 + 총합계행 (기본 폰트 크기)
     """
     seller_sheets: dict[str, pd.DataFrame] = plan["seller_sheets"]
-    detail_df: pd.DataFrame = plan["detail_df"]
+    # 2026-07-24 hoyeon.han: 상세내역 3택 지원 — detail_mode 를 읽어 상세시트 0/1/N장.
+    # 키 없는 수동 plan 은 SINGLE 로 폴백(하위호환).
+    # detail_df: pd.DataFrame = plan["detail_df"]
+    detail_mode = plan.get("detail_mode", DETAIL_MODE_SINGLE)
     if not seller_sheets:
         raise ValueError("생성할 셀러 시트가 없습니다.")
     for name in seller_sheets:
@@ -767,9 +841,21 @@ def write_seller_settlement_xlsx(
             total_font_color, total_fill_color, total_bold,
         )
 
-    # ---------- 상세내역 시트 ----------
-    ws_detail = wb.create_sheet(title=DETAIL_SHEET_NAME)
-    _write_detail_sheet(ws_detail, detail_df, column_map)
+    # ---------- 상세내역 시트 (2026-07-24 hoyeon.han: 모드별 0/1/N장) ----------
+    # (기존: 항상 1장)
+    # ws_detail = wb.create_sheet(title=DETAIL_SHEET_NAME)
+    # _write_detail_sheet(ws_detail, detail_df, column_map)
+    if detail_mode == DETAIL_MODE_NONE:
+        pass  # 상세내역 생성 안 함
+    elif detail_mode == DETAIL_MODE_PER_SELLER:
+        for sheet_name, ddf in (plan.get("detail_sheets") or {}).items():
+            _write_detail_sheet(
+                wb.create_sheet(title=sheet_name), ddf, column_map
+            )
+    else:  # SINGLE (또는 키 없는 수동 plan) → 현재 동작
+        _write_detail_sheet(
+            wb.create_sheet(title=DETAIL_SHEET_NAME), plan["detail_df"], column_map
+        )
 
     wb.save(out_path)
     return out_path
