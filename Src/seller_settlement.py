@@ -32,6 +32,7 @@ from processing import to_num
 from settlement import (
     OUTPUT_COLS,
     SHEET_MAX_LEN,  # 2026-07-24 hoyeon.han: per_seller 상세시트명 31자 절단용
+    SHEET_OVERALL,  # 2026-07-31 hoyeon.han: 발주내역 방식 '전체' 시트명("전체")
     TYPE_SALE,
     TYPE_PURCHASE,  # 2026-07-23 hoyeon.han: 매입 정산서 파일명(doc_type)용
     _sanitize_filename_part,
@@ -491,6 +492,7 @@ def build_sheet_plan(
     item_mapping: dict[str, str] | None = None,
     column_map: dict[str, str] = COLUMN_MAP_SALE,
     detail_mode: str = DETAIL_MODE_SINGLE,  # 2026-07-24 hoyeon.han: 상세내역 3택
+    include_overall: bool = False,  # 2026-07-31 hoyeon.han: '전체' 시트 포함
 ) -> dict[str, Any]:
     """정산서 구성 계획 생성 (셀러 여러 개 → 시트 배치 매핑 지원).
 
@@ -501,6 +503,8 @@ def build_sheet_plan(
         item_mapping: 품목명 정리 매핑
         detail_mode: 상세내역 생성 모드 (DETAIL_MODE_NONE/SINGLE/PER_SELLER).
             기본 SINGLE = 현재 동작(전체 하나로). — 2026-07-24 hoyeon.han
+        include_overall: True 면 선택 셀러 전체를 한 시트로 집계한 '전체' 시트를
+            plan['overall_df'] 에 담는다 (기본 False). — 2026-07-31 hoyeon.han
 
     Returns:
         {
@@ -508,10 +512,12 @@ def build_sheet_plan(
           'detail_mode':   전달된 detail_mode 값,
           'detail_df':     single 일 때 선택 셀러 전체 상세 DataFrame (그 외 None),
           'detail_sheets': per_seller 일 때 {'상세내역_{셀러}': DataFrame} (그 외 None),
+          'overall_df':    include_overall=True 일 때 '전체' 집계 DataFrame (그 외 None),
         }
 
     Raises:
-        ValueError: 셀러 미선택, 시트명 예약어 충돌, 데이터 없음, 알 수 없는 detail_mode
+        ValueError: 셀러 미선택, 시트명 예약어 충돌('상세내역'/'전체'), 데이터 없음,
+            알 수 없는 detail_mode
     """
     seller_list = [str(s).strip() for s in sellers if str(s).strip()]
     if not seller_list:
@@ -545,6 +551,7 @@ def build_sheet_plan(
         "detail_mode": detail_mode,
         "detail_df": None,
         "detail_sheets": None,
+        "overall_df": None,  # 2026-07-31 hoyeon.han: '전체' 시트(옵션)
     }
     if detail_mode == DETAIL_MODE_SINGLE:
         plan["detail_df"] = build_detail_df(
@@ -557,6 +564,17 @@ def build_sheet_plan(
         )
     elif detail_mode != DETAIL_MODE_NONE:
         raise ValueError(f"알 수 없는 상세내역 모드입니다: {detail_mode}")
+
+    # 2026-07-31 hoyeon.han: '전체' 시트 — 선택한 셀러 전체를 한 시트로 집계.
+    # (파일 업로드 방식의 '전체' 시트와 동일 개념. seller_sheets 와 별개 키)
+    if include_overall:
+        if SHEET_OVERALL in seller_sheets:
+            raise ValueError(
+                f"시트명 '{SHEET_OVERALL}'은(는) '전체 시트 포함' 옵션의 예약 이름입니다. "
+                "해당 시트명을 바꾸거나 옵션을 끄세요."
+            )
+        all_rows = filter_by_sellers(df_filtered, seller_list, column_map)
+        plan["overall_df"] = aggregate_item_sheet(all_rows, item_mapping, column_map)
     return plan
 
 
@@ -802,7 +820,9 @@ def write_seller_settlement_xlsx(
 ) -> str:
     """셀러 정산서 .xlsx 작성 (2026-07-06 hoyeon.han: 셀러 다중 시트 지원).
 
-    시트 구성 (요구사항 — '전체'/'일반' 시트 없음):
+    시트 구성 ('일반' 시트 없음. '전체'는 plan['overall_df'] 있을 때만 맨 앞):
+      0) (옵션) '전체' 시트: plan['overall_df'] 가 있으면 첫 시트로 —
+         선택 셀러 전체를 한 시트로 집계 (2026-07-31 hoyeon.han)
       1) 셀러 시트들: plan['seller_sheets'] 순서대로 (셀러 1개면 1장,
          비고를 시트별로 배치/통합한 만큼 여러 장). 전체 셀 seller_font_size,
          합계행은 굵게 + 합계 셀만 색상 강조.
@@ -817,18 +837,32 @@ def write_seller_settlement_xlsx(
     # 키 없는 수동 plan 은 SINGLE 로 폴백(하위호환).
     # detail_df: pd.DataFrame = plan["detail_df"]
     detail_mode = plan.get("detail_mode", DETAIL_MODE_SINGLE)
+    overall_df = plan.get("overall_df")  # 2026-07-31 hoyeon.han: '전체' 시트(옵션)
     if not seller_sheets:
         raise ValueError("생성할 셀러 시트가 없습니다.")
     for name in seller_sheets:
         if name == DETAIL_SHEET_NAME:  # build_sheet_plan에서 검증되지만 방어
             raise ValueError(f"시트명 '{DETAIL_SHEET_NAME}'은(는) 예약된 이름입니다.")
+        if overall_df is not None and name == SHEET_OVERALL:  # 2026-07-31 hoyeon.han
+            raise ValueError(f"시트명 '{SHEET_OVERALL}'은(는) '전체' 시트와 충돌합니다.")
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
     wb = Workbook()
 
-    # ---------- 셀러 시트들 ----------
+    # ---------- '전체' 시트 (2026-07-31 hoyeon.han: include_overall 옵션) ----------
+    # 선택한 셀러 전체를 한 시트로 집계. seller_sheets 앞(첫 시트)에 배치.
     first = True
+    if overall_df is not None:
+        ws = wb.active
+        ws.title = SHEET_OVERALL
+        _write_seller_sheet(
+            ws, overall_df, title, period_line, seller_font_size,
+            total_font_color, total_fill_color, total_bold,
+        )
+        first = False
+
+    # ---------- 셀러 시트들 ----------
     for sheet_name, seller_df in seller_sheets.items():
         if first:
             ws = wb.active
