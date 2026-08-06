@@ -177,6 +177,7 @@ _ORDER_DEFAULTS = {
     "settle_order_item_mapping": None,
     "settle_order_seller_sheet_map": None,
     "settle_order_detail_mode": ss.DETAIL_MODE_SINGLE,  # 기본: 전체 하나로
+    "settle_order_include_overall": True,  # 2026-07-31 hoyeon.han: '전체' 시트 포함(기본 켬)
     "settle_order_plan": None,
     "settle_order_output_path": None,
     "settle_order_output_filename": None,
@@ -197,6 +198,7 @@ _ORDER_OPTION_WIDGETS = (
     "settle_order_font_color",
     "settle_order_fill_color",
     "settle_order_detail_mode_radio",
+    "settle_order_include_overall_cb",  # 2026-07-31 hoyeon.han
 )
 
 
@@ -218,6 +220,7 @@ def _reset_order_below_sellers() -> None:
         "settle_order_item_mapping",
         "settle_order_seller_sheet_map",
         "settle_order_detail_mode",
+        "settle_order_include_overall",  # 2026-07-31 hoyeon.han
         "settle_order_plan",
         "settle_order_output_path",
         "settle_order_output_filename",
@@ -575,8 +578,22 @@ def _render_order_based_flow() -> None:
         + ", ".join(f"**{n}**" for n in _final_sheets)
     )
 
-    # ----- 8. 상세내역 옵션 (신규 — 생성안함/전체하나로/셀러별) -----
-    st.markdown("### 🧾 8. 상세내역 시트")
+    # ----- 8. 출력 시트 옵션 (전체 시트 / 상세내역) -----
+    st.markdown("### 🧾 8. 출력 시트 옵션")
+
+    # 2026-07-31 hoyeon.han: '전체' 시트 포함 옵션 (선택 셀러 전체 집계, 맨 앞 배치)
+    include_overall = st.checkbox(
+        "전체 시트 포함 (선택한 셀러 전체를 한 시트로 집계)",
+        value=st.session_state.settle_order_include_overall,
+        key="settle_order_include_overall_cb",
+        help="파일 업로드 방식의 '전체' 시트와 동일한 개념입니다. 맨 앞 시트로 생성됩니다.",
+    )
+    if include_overall != st.session_state.settle_order_include_overall:
+        st.session_state.settle_order_include_overall = include_overall
+        st.session_state.settle_order_plan = None  # 재-미리보기 유도
+        st.rerun()
+
+    st.markdown("**상세내역 시트**")
     st.caption(
         "상세내역(원본 주문 행) 시트를 어떻게 만들지 선택합니다. "
         "'셀러별 생성'은 셀러마다 `상세내역_{셀러}` 시트를 따로 만듭니다."
@@ -610,6 +627,7 @@ def _render_order_based_flow() -> None:
                 item_mapping=st.session_state.settle_order_item_mapping,
                 column_map=column_map,
                 detail_mode=detail_mode,
+                include_overall=include_overall,  # 2026-07-31 hoyeon.han
             )
         except Exception as e:  # noqa: BLE001
             st.error(f"❌ 미리보기 생성 실패: {e}")
@@ -617,19 +635,24 @@ def _render_order_based_flow() -> None:
     plan = st.session_state.settle_order_plan
     if plan is not None:
         seller_sheets = plan["seller_sheets"]
+        overall_df = plan.get("overall_df")
         cur_mode = plan.get("detail_mode")
+        # 상세 시트(이름, df) 목록
         if cur_mode == ss.DETAIL_MODE_SINGLE:
-            detail_tab_names = [ss.DETAIL_SHEET_NAME]
+            detail_items = [(ss.DETAIL_SHEET_NAME, plan["detail_df"])]
         elif cur_mode == ss.DETAIL_MODE_PER_SELLER:
-            detail_tab_names = list((plan.get("detail_sheets") or {}).keys())
+            detail_items = list((plan.get("detail_sheets") or {}).items())
         else:
-            detail_tab_names = []
-        tab_labels = list(seller_sheets.keys()) + detail_tab_names
+            detail_items = []
+        # 요약 시트(품목별현황): (옵션) '전체' + 셀러 시트들 — 2026-07-31 hoyeon.han
+        summary_items = (
+            ([(ss.SHEET_OVERALL, overall_df)] if overall_df is not None else [])
+            + list(seller_sheets.items())
+        )
+        tab_labels = [n for n, _ in summary_items] + [n for n, _ in detail_items]
         tabs = st.tabs(tab_labels)
-        n_seller = len(seller_sheets)
-        for tab, name in zip(tabs[:n_seller], seller_sheets.keys()):
+        for tab, (name, sdf) in zip(tabs, summary_items):
             with tab:
-                sdf = seller_sheets[name]
                 pm1, pm2, pm3 = st.columns(3)
                 pm1.metric("데이터 행", f"{len(sdf):,}건")
                 pm2.metric(
@@ -641,19 +664,10 @@ def _render_order_based_flow() -> None:
                     f"{int(sdf['합계'].sum()):,}" if not sdf.empty else "0",
                 )
                 st.dataframe(sdf, use_container_width=True, hide_index=True)
-        if cur_mode == ss.DETAIL_MODE_SINGLE:
-            with tabs[-1]:
-                ddf = plan["detail_df"]
-                st.write(f"**{ss.DETAIL_SHEET_NAME}** — {len(ddf):,}건")
+        for tab, (name, ddf) in zip(tabs[len(summary_items):], detail_items):
+            with tab:
+                st.write(f"**{name}** — {len(ddf):,}건")
                 st.dataframe(ddf, use_container_width=True, hide_index=True, height=440)
-        elif cur_mode == ss.DETAIL_MODE_PER_SELLER:
-            for tab, name in zip(tabs[n_seller:], detail_tab_names):
-                with tab:
-                    ddf = plan["detail_sheets"][name]
-                    st.write(f"**{name}** — {len(ddf):,}건")
-                    st.dataframe(
-                        ddf, use_container_width=True, hide_index=True, height=440
-                    )
 
     # ----- 10. 생성 및 다운로드 -----
     if plan is not None:
@@ -684,6 +698,7 @@ def _render_order_based_flow() -> None:
                     item_mapping=st.session_state.settle_order_item_mapping,
                     column_map=column_map,
                     detail_mode=detail_mode,
+                    include_overall=include_overall,  # 2026-07-31 hoyeon.han
                 )
                 out_filename = ss.build_output_filename(
                     selected_vendor,
@@ -717,6 +732,7 @@ def _render_order_based_flow() -> None:
                         "유형": doc_type,
                         "vendor": selected_vendor,
                         "seller": ", ".join(selected_sellers),
+                        "전체시트": "포함" if include_overall else "제외",
                         "상세내역": detail_label,
                         "시트수": len(plan_final["seller_sheets"]),
                         "일자": period_text,
