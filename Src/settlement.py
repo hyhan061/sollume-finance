@@ -215,6 +215,33 @@ def _to_int_safe(series: pd.Series) -> pd.Series:
 # ===== 시트 분할 =====
 
 
+# 2026-08-10 hoyeon.han: '배치할 시트' 편집기 입력값 정규화 헬퍼 신규 추가.
+# Streamlit data_editor 는 텍스트 셀을 지우면 "" 이 아니라 None 을 돌려주는데,
+# 이를 그대로 str() 하면 'None' 이라는 이름의 시트가 만들어졌다.
+# None/NaN/공백을 모두 fallback 으로 접어, 3개 정산서 화면(파일업로드/발주내역/
+# 셀러)의 '비우면 일반' 동작을 한 곳에서 통일한다.
+def normalize_sheet_choice(value: Any, fallback: str = SHEET_GENERAL) -> str:
+    """'배치할 시트' 입력값 → 확정 시트명.
+
+    Args:
+        value: 편집기에서 받은 값. None/NaN/공백 문자열 가능.
+        fallback: 빈 값일 때 사용할 시트명 (기본 '일반').
+
+    Returns:
+        공백 제거된 시트명. 입력이 비어있으면 fallback.
+    """
+    if value is None:
+        return fallback
+    try:
+        if pd.isna(value):
+            return fallback
+    except (TypeError, ValueError):
+        # 리스트 등 스칼라가 아닌 값은 pd.isna 가 배열을 돌려주므로 무시
+        pass
+    text = str(value).strip()
+    return text or fallback
+
+
 def split_into_sheets(
     df: pd.DataFrame,
     remark_to_sheet: dict[str, str] | None = None,
@@ -229,7 +256,8 @@ def split_into_sheets(
         df: drop_unused_columns 적용 후 DataFrame.
         remark_to_sheet: {원본 비고: 배치할 시트명}.
             - 키에 없는 비고는 자기 자신을 시트명으로 사용.
-            - 값이 빈 문자열 또는 '일반'이면 '일반' 시트로 분류.
+            - 값이 None/NaN/빈 문자열 또는 '일반'이면 '일반' 시트로 분류.
+              (2026-08-10 hoyeon.han: None/NaN 케이스 명시)
             - 비고가 빈 값인 행은 항상 '일반' 시트.
 
     Returns:
@@ -248,10 +276,16 @@ def split_into_sheets(
         """원본 비고 → 배치 시트명."""
         if remark == "":
             return SHEET_GENERAL
-        target = str(remark_to_sheet.get(remark, remark)).strip()
-        if target == "" or target == SHEET_GENERAL:
-            return SHEET_GENERAL
-        return target
+        # 2026-08-10 hoyeon.han: str(None) == 'None' 이 되어 'None' 이라는 이름의
+        # 시트가 생성되던 문제 수정. None/NaN/공백은 normalize_sheet_choice 로
+        # '일반'에 흡수한다. (아래 주석 처리한 3줄을 헬퍼가 그대로 대체)
+        # target = str(remark_to_sheet.get(remark, remark)).strip()
+        # if target == "" or target == SHEET_GENERAL:
+        #     return SHEET_GENERAL
+        # return target
+        return normalize_sheet_choice(
+            remark_to_sheet.get(remark, remark), SHEET_GENERAL
+        )
 
     sheet_target = remark_norm.map(_resolve_target)
 
