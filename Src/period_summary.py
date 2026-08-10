@@ -138,9 +138,11 @@ def _process_sales_daily(
     특정 날짜의 매출 데이터를 처리하는 함수
 
     처리 단계:
-    1. 해당 날짜, 계산서='대상', 수량≠0인 데이터 필터링
+    1. 해당 날짜, 계산서='대상', 금액이 있는 데이터 필터링
+       (2026-08-10 hoyeon.han: '수량≠0' 조건 제거 — 수량 0 이고 금액만 있는
+        수수료 행도 포함한다)
     2. NaN(빈 값) 처리 및 숫자 변환
-    3. 단가 계산 (상품매출 / 수량)
+    3. 단가 계산 (상품매출 / 수량, 수량이 0이면 단가 0)
     4. 업체별 합계 계산
     5. 정렬
 
@@ -160,10 +162,24 @@ def _process_sales_daily(
     # | 는 OR 연산자 (하나라도 만족하면 True)
     # & 는 AND 연산자 (모두 만족해야 True)
     # .copy(): 원본 데이터를 복사 (원본 수정 방지, SettingWithCopyWarning 방지)
+    # 2026-08-10 hoyeon.han: '수량 != 0' 조건 제거.
+    # 수수료 항목(에이전시 결제수수료 등)은 수량 0 으로 금액만 입력하는 운영 관례라,
+    # 이 조건 때문에 금액이 있는 행이 금액 OR 조건을 평가하기도 전에 탈락해 요약
+    # 합계가 일별 전표(processing.py)와 어긋났다. 전표 로직은 수량 필터 없이
+    # 나눗셈만 방어한다(processing.py:269 / 627) — 같은 방식으로 통일한다.
+    # df_sales_today = df[
+    #     (df['출고일'] == target_date) &
+    #     (df['계산서'] == '대상') &
+    #     (df['수량'] != 0) &  # 수량이 0이 아니고
+    #     (
+    #         (df['상품매출'] != 0) |
+    #         (df['판매배송비'] != 0) |
+    #         (df['도선료'] != 0)
+    #     )
+    # ].copy()
     df_sales_today = df[
         (df['출고일'] == target_date) &  # 출고일이 대상 날짜와 같고
         (df['계산서'] == '대상') &  # 계산서가 '대상'이고
-        (df['수량'] != 0) &  # 수량이 0이 아니고
         (  # 아래 조건 중 하나라도 만족 (금액이 있는 것)
             (df['상품매출'] != 0) |
             (df['판매배송비'] != 0) |
@@ -188,11 +204,21 @@ def _process_sales_daily(
     # .apply(): 각 값에 함수를 적용
     df_sales_today['상품매출'] = df_sales_today['상품매출'].apply(np.floor)
     df_sales_today['상품매출'] = to_num(df_sales_today['상품매출'])
-    df_sales_today['수량'] = to_num(df_sales_today['수량'])
+    # 2026-08-10 hoyeon.han: 수량 0/빈 값 행을 포함하게 되어 NaN 을 0 으로 정규화
+    # df_sales_today['수량'] = to_num(df_sales_today['수량'])
+    df_sales_today['수량'] = to_num(df_sales_today['수량']).fillna(0)
 
     # 4. 단가 계산
     # 단가 = 상품매출 / 수량
-    df_sales_today['단가'] = df_sales_today['상품매출'] / df_sales_today['수량']
+    # 2026-08-10 hoyeon.han: 수량 0 행이 포함되므로 0 나누기(inf/NaN) 방어 필요.
+    # 분모의 0 을 1 로 치환한 뒤 결과만 0 으로 되돌려 RuntimeWarning 과 inf 를
+    # 원천 차단한다. (seller_settlement.py 의 단가 계산과 동일 패턴)
+    # df_sales_today['단가'] = df_sales_today['상품매출'] / df_sales_today['수량']
+    _qty = df_sales_today['수량'].to_numpy(dtype=float)
+    _amt = df_sales_today['상품매출'].to_numpy(dtype=float)
+    df_sales_today['단가'] = np.where(
+        _qty != 0, _amt / np.where(_qty != 0, _qty, 1.0), 0.0
+    )
 
     # 5. 정렬
     # sort_values([컬럼들]): 여러 컬럼 기준으로 정렬 (오름차순)
@@ -243,9 +269,10 @@ def _process_buy_daily(
     특정 날짜의 매입 데이터를 처리하는 함수
 
     처리 단계:
-    1. 해당 날짜, 당사재고 제외, 수량≠0인 데이터 필터링
+    1. 해당 날짜, 당사재고 제외, 금액이 있는 데이터 필터링
+       (2026-08-10 hoyeon.han: '수량≠0' 조건 제거 — 매출과 동일)
     2. NaN 처리 및 숫자 변환
-    3. 단가 계산
+    3. 단가 계산 (상품매입 / 수량, 수량이 0이면 단가 0)
     4. 매입처별 특수 규칙 적용
     5. 업체별 합계 계산
     6. 정렬
@@ -263,12 +290,25 @@ def _process_buy_daily(
     2025-12-10 hoyeon.han: select_sum_v8.py 라인 134-200 로직 이식
     """
     # 1. 데이터 필터링
+    # 2026-08-10 hoyeon.han: 매출과 동일하게 '수량 != 0' 조건 제거.
+    # (사유는 _process_sales_daily 필터 주석 참조)
+    # df_buy_today = df[
+    #     (df['출고일'] == target_date) &
+    #     (df['특이사항'] != '솔루미재고') &
+    #     (df['매입처'] != '당사재고') &
+    #     (df['매입처'] != '솔루미랩') &
+    #     (df['수량'] != 0) &  # 수량이 0이 아니고
+    #     (
+    #         (df['상품매입'] != 0) |
+    #         (df['매입배송비'] != 0) |
+    #         (df['도선료.1'] != 0)
+    #     )
+    # ].copy()
     df_buy_today = df[
         (df['출고일'] == target_date) &  # 출고일이 대상 날짜와 같고
         (df['특이사항'] != '솔루미재고') &  # 솔루미재고 제외
         (df['매입처'] != '당사재고') &  # 당사재고 제외
         (df['매입처'] != '솔루미랩') &  # 솔루미랩 제외
-        (df['수량'] != 0) &  # 수량이 0이 아니고
         (  # 아래 조건 중 하나라도 만족 (금액이 있는 것)
             (df['상품매입'] != 0) |
             (df['매입배송비'] != 0) |
@@ -296,10 +336,18 @@ def _process_buy_daily(
 
     # 4. 숫자 변환
     df_buy_today['상품매입'] = to_num(df_buy_today['상품매입'])
-    df_buy_today['수량'] = to_num(df_buy_today['수량'])
+    # 2026-08-10 hoyeon.han: 수량 0/빈 값 행을 포함하게 되어 NaN 을 0 으로 정규화
+    # df_buy_today['수량'] = to_num(df_buy_today['수량'])
+    df_buy_today['수량'] = to_num(df_buy_today['수량']).fillna(0)
 
     # 5. 단가 계산
-    df_buy_today['단가'] = df_buy_today['상품매입'] / df_buy_today['수량']
+    # 2026-08-10 hoyeon.han: 매출과 동일한 0 나누기 방어 (사유는 매출 쪽 주석 참조)
+    # df_buy_today['단가'] = df_buy_today['상품매입'] / df_buy_today['수량']
+    _qty = df_buy_today['수량'].to_numpy(dtype=float)
+    _amt = df_buy_today['상품매입'].to_numpy(dtype=float)
+    df_buy_today['단가'] = np.where(
+        _qty != 0, _amt / np.where(_qty != 0, _qty, 1.0), 0.0
+    )
 
     # 6. 매입처별 특수 규칙 적용
     df_buy_today = _apply_vendor_rules(df_buy_today)

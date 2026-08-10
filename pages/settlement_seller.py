@@ -55,6 +55,11 @@ os.makedirs("processed", exist_ok=True)
 MODE_RANGE = "기간 선택"
 MODE_DATES = "개별 날짜 선택"
 
+# 2026-08-10 hoyeon.han: 비고(특이사항)가 없는 행을 묶을 셀러명이자, '배치할 시트'를
+# 비웠을 때 합류할 시트명. 파일업로드/발주내역 방식의 '일반' 시트와 같은 상수를
+# 재사용해 화면 간 드리프트를 막는다. (pages/settlement.py 의 _NO_SELLER_LABEL 과 동일)
+_NO_SELLER_LABEL = ss.SHEET_GENERAL  # "일반"
+
 _DEFAULTS = {
     # 2026-07-23 hoyeon.han: 정산서 유형(매출/매입) — 매입 지원 추가
     "sseller_doc_type": ss.TYPE_SALE,
@@ -411,24 +416,44 @@ if selected_vendor != prev_vendor:
 st.markdown("### 🧑‍💼 4. 셀러(비고) 선택")
 st.caption(
     "셀러 값은 발주내역의 **특이사항** 컬럼입니다. 비슷하지만 다른 비고를 함께 넣으려면 "
-    "여러 개 선택하세요. (다음 단계에서 시트로 묶거나 나눌 수 있습니다.)"
+    "여러 개 선택하세요. (다음 단계에서 시트로 묶거나 나눌 수 있습니다.) "
+    # 2026-08-10 hoyeon.han: 빈 비고 행 포함 안내 (발주내역 방식과 동일 문구)
+    f"비고가 없는 행은 **'{_NO_SELLER_LABEL}'** 셀러로 묶여 포함됩니다."
 )
 
 df_pv = ss.filter_orders(
     df_orders, vendor=selected_vendor, **date_kwargs, column_map=column_map
 )
-sellers = ss.extract_sellers(df_pv, column_map=column_map)
-if not sellers:
-    st.warning("⚠️ 선택한 일자/거래처에 셀러(특이사항) 값이 있는 데이터가 없습니다.")
-    st.stop()
 
 # 2026-07-23 hoyeon.han: 매입 지원 - 하드코딩된 SALE 맵 대신 선택된 유형 맵 사용
 # seller_col = ss.COLUMN_MAP_SALE["seller"]
 seller_col = column_map["seller"]
-seller_counts = df_pv[seller_col].value_counts()
-n_no_seller = int((df_pv[seller_col].astype(str).str.strip() == "").sum())
+
+# 2026-08-10 hoyeon.han: 비고(특이사항)가 없는 행이 extract_sellers 의 '빈 값 제외'에
+# 걸려 정산서에서 통째로 누락되던 문제 수정. extract_sellers 호출 전에 '일반' 셀러로
+# 재라벨해 포함시킨다. (pages/settlement.py 발주내역 방식과 동일 처리)
+_blank_mask = df_pv[seller_col].astype(str).str.strip() == ""
+n_no_seller = int(_blank_mask.sum())
 if n_no_seller > 0:
-    st.info(f"ℹ️ 비고(특이사항)가 없는 행 {n_no_seller:,}건은 셀러 정산서에 포함되지 않습니다.")
+    df_pv = df_pv.copy()
+    df_pv.loc[_blank_mask, seller_col] = _NO_SELLER_LABEL
+
+sellers = ss.extract_sellers(df_pv, column_map=column_map)
+if not sellers:
+    # st.warning("⚠️ 선택한 일자/거래처에 셀러(특이사항) 값이 있는 데이터가 없습니다.")
+    # 2026-08-10 hoyeon.han: 빈 비고 행도 '일반' 셀러로 포함하므로, 이제 셀러가
+    # 없다는 것은 해당 일자/거래처에 데이터 자체가 없다는 뜻이다.
+    st.warning("⚠️ 선택한 일자/거래처에 데이터가 없습니다.")
+    st.stop()
+
+seller_counts = df_pv[seller_col].value_counts()
+# if n_no_seller > 0:
+#     st.info(f"ℹ️ 비고(특이사항)가 없는 행 {n_no_seller:,}건은 셀러 정산서에 포함되지 않습니다.")
+if n_no_seller > 0:
+    st.info(
+        f"ℹ️ 비고(특이사항)가 없는 {n_no_seller:,}건은 "
+        f"'{_NO_SELLER_LABEL}' 셀러로 포함됩니다."
+    )
 
 # 전체 선택 버튼 (multiselect 위젯 값에 주입 후 rerun)
 if st.button("전체 선택", key="sseller_select_all"):
@@ -506,6 +531,8 @@ st.markdown("### 🏷️ 6. 시트 배치 설정")
 st.caption(
     "각 셀러(비고)를 **어느 시트에 배치할지** 정합니다. 기본값은 셀러명 그대로(각각 별도 시트)이며, "
     "여러 셀러에 **같은 시트명**을 적으면 한 시트로 통합됩니다. 비고 데이터 값 자체는 보존됩니다. "
+    # 2026-08-10 hoyeon.han: '비우면 일반' 동작 명시
+    f"`배치할 시트`를 비우면 `{_NO_SELLER_LABEL}` 시트로 묶입니다. "
     f"`{ss.DETAIL_SHEET_NAME}`은 예약어라 사용할 수 없습니다."
 )
 
@@ -529,9 +556,15 @@ with st.expander(f"시트 배치 편집 ({len(selected_sellers)}건)", expanded=
         hide_index=True,
         key="sseller_sheet_editor",
     )
-    # 배치 시트명이 비었으면 셀러명을 시트명으로 사용
+    # 배치 시트명이 비었으면 '일반' 시트로 묶는다
+    # 2026-08-10 hoyeon.han: 3개 정산서 화면 동작 통일 — 비우면 셀러명이 아니라
+    # '일반' 시트로 묶는다. (편집기 기본값은 여전히 셀러명 그대로)
+    # st.session_state.sseller_seller_sheet_map = {
+    #     seller: (str(sheet).strip() if sheet is not None and str(sheet).strip() else seller)
+    #     for seller, sheet in zip(edited_sheets["셀러(비고)"], edited_sheets["배치할 시트"])
+    # }
     st.session_state.sseller_seller_sheet_map = {
-        seller: (str(sheet).strip() if sheet is not None and str(sheet).strip() else seller)
+        seller: ss.normalize_sheet_choice(sheet, _NO_SELLER_LABEL)
         for seller, sheet in zip(edited_sheets["셀러(비고)"], edited_sheets["배치할 시트"])
     }
 

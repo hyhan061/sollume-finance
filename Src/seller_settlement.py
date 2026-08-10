@@ -31,6 +31,7 @@ from order_compare import read_order_sheet
 from processing import to_num
 from settlement import (
     OUTPUT_COLS,
+    SHEET_GENERAL,  # noqa: F401  2026-08-10 hoyeon.han: 페이지에서 ss.SHEET_GENERAL 로 참조
     SHEET_MAX_LEN,  # 2026-07-24 hoyeon.han: per_seller 상세시트명 31자 절단용
     SHEET_OVERALL,  # 2026-07-31 hoyeon.han: 발주내역 방식 '전체' 시트명("전체")
     TYPE_SALE,
@@ -38,6 +39,7 @@ from settlement import (
     _sanitize_filename_part,
     _to_argb,
     apply_mapping,
+    normalize_sheet_choice,  # 2026-08-10 hoyeon.han: 시트명 입력값 정규화 헬퍼
     sanitize_sheet_name,
 )
 from settlement import build_period_line as _build_period_line_range
@@ -428,7 +430,9 @@ def resolve_sheet_map(
     """셀러 → 배치할 시트 매핑을 {시트명: [셀러...]} 로 뒤집는다.
 
     기존 정산서생성(pages/settlement.py)의 시트 배치 방식과 동일한 철학:
-      - seller_to_sheet 에 없거나 값이 빈 문자열이면 셀러명 자신을 시트명으로.
+      - seller_to_sheet 에 없거나 값이 None/NaN/빈 문자열이면 셀러명 자신을
+        시트명으로. (2026-08-10 hoyeon.han: 화면에서 '비우면 일반'을 확정해
+        넘기므로, 이 함수의 기본값 정책은 하위호환을 위해 그대로 유지한다)
       - 같은 시트명으로 여러 셀러를 묶으면 한 시트로 통합된다.
       - 시트명은 sanitize_sheet_name 규칙(31자, 금지문자) 적용.
     시트 순서는 sellers 등장 순서 기준 첫 등장 순.
@@ -440,7 +444,11 @@ def resolve_sheet_map(
     sheet_map: dict[str, list[str]] = {}
     for seller in sellers:
         s = str(seller).strip()
-        raw = str(seller_to_sheet.get(seller, "")).strip() or s
+        # 2026-08-10 hoyeon.han: None/NaN 이 들어와도 'None' 이라는 이름의 시트가
+        # 생기지 않도록 방어. 이 함수의 정책(미지정/빈 값 → 셀러명)은 기존 그대로
+        # 유지하며, '비우면 일반' 정책은 호출부(페이지)에서 확정해 넘긴다.
+        # raw = str(seller_to_sheet.get(seller, "")).strip() or s
+        raw = normalize_sheet_choice(seller_to_sheet.get(seller, ""), s)
         name = sanitize_sheet_name(raw)
         if name == DETAIL_SHEET_NAME:
             raise ValueError(

@@ -533,6 +533,8 @@ def _render_order_based_flow() -> None:
     st.markdown("### 🏷️ 7. 시트 배치 설정")
     st.caption(
         "각 셀러(비고)를 **어느 시트에 배치할지** 정합니다. 같은 시트명으로 묶으면 통합됩니다. "
+        # 2026-08-10 hoyeon.han: '비우면 일반' 동작 명시
+        f"`배치할 시트`를 비우면 `{_NO_SELLER_LABEL}` 시트로 묶입니다. "
         f"`{ss.DETAIL_SHEET_NAME}`은 예약어라 사용할 수 없습니다."
     )
     if st.session_state.settle_order_seller_sheet_map is None:
@@ -556,12 +558,21 @@ def _render_order_based_flow() -> None:
             hide_index=True,
             key="settle_order_sheet_editor",
         )
+        # 2026-08-10 hoyeon.han: 비우면 '셀러명' → 비우면 '일반' 으로 변경.
+        # 이 화면은 이미 비고 없는 행을 '일반' 셀러로 묶고 있으므로(위 5단계),
+        # 시트 배치를 비웠을 때도 같은 '일반' 시트로 합류하는 것이 일관적이다.
+        # st.session_state.settle_order_seller_sheet_map = {
+        #     seller: (
+        #         str(sheet).strip()
+        #         if sheet is not None and str(sheet).strip()
+        #         else seller
+        #     )
+        #     for seller, sheet in zip(
+        #         edited_sheets["셀러(비고)"], edited_sheets["배치할 시트"]
+        #     )
+        # }
         st.session_state.settle_order_seller_sheet_map = {
-            seller: (
-                str(sheet).strip()
-                if sheet is not None and str(sheet).strip()
-                else seller
-            )
+            seller: ss.normalize_sheet_choice(sheet, _NO_SELLER_LABEL)
             for seller, sheet in zip(
                 edited_sheets["셀러(비고)"], edited_sheets["배치할 시트"]
             )
@@ -984,7 +995,16 @@ if parsed is not None and st.session_state.settlement_vendor is not None:
         #         ],
         #     }
         # )
-        item_df = pd.DataFrame({"원본": items, "변경": items})
+        # 2026-08-10 hoyeon.han: 시트 배치 편집기(6단계)와 동일 — identity baseline 이
+        # 무조건 적용되어 페이지 복귀 시 저장된 품목명 매핑이 초기화되던 문제 수정.
+        # 위젯 상태가 살아있을 때만 identity, 소실됐으면 저장된 매핑으로 복원한다.
+        # item_df = pd.DataFrame({"원본": items, "변경": items})
+        if "settlement_item_editor" in st.session_state:
+            changed_col = items
+        else:
+            _im = st.session_state.settlement_item_mapping or {}
+            changed_col = [_im.get(it, it) for it in items]
+        item_df = pd.DataFrame({"원본": items, "변경": changed_col})
         edited_items = st.data_editor(
             item_df,
             disabled=["원본"],
@@ -994,9 +1014,16 @@ if parsed is not None and st.session_state.settlement_vendor is not None:
             key="settlement_item_editor",
         )
         # 매핑 갱신
-        st.session_state.settlement_item_mapping = dict(
-            zip(edited_items["원본"], edited_items["변경"])
-        )
+        # 2026-08-10 hoyeon.han: '변경' 셀을 비우면 data_editor 가 None 을 돌려주고,
+        # 그 값이 그대로 저장되어 apply_mapping 이 품목명을 None 으로 치환하던 문제
+        # 수정. 비었으면 원본 품목명을 유지한다. (7단계 품목 편집기와 동일 패턴)
+        # st.session_state.settlement_item_mapping = dict(
+        #     zip(edited_items["원본"], edited_items["변경"])
+        # )
+        st.session_state.settlement_item_mapping = {
+            orig: (str(new).strip() if new is not None and str(new).strip() else orig)
+            for orig, new in zip(edited_items["원본"], edited_items["변경"])
+        }
 
     df_item_mapped = st_mod.apply_mapping(
         df_clean, "품목", st.session_state.settlement_item_mapping
@@ -1041,7 +1068,18 @@ if parsed is not None and st.session_state.settlement_vendor is not None:
             #         ],
             #     }
             # )
-            remark_df = pd.DataFrame({"비고": remarks, "배치할 시트": remarks})
+            # 2026-08-10 hoyeon.han: identity baseline 이 무조건 적용되어, 페이지를
+            # 이탈했다 돌아오면(위젯 상태 소실) 사용자가 지정한 시트 배치가 identity
+            # 로 덮어써지던 문제 수정. 위젯 상태가 살아있을 때만 identity baseline 을
+            # 쓰고, 소실됐으면 저장된 매핑으로 복원한다.
+            # (settle_order_sheet_editor / sseller_sheet_editor 와 동일 패턴)
+            # remark_df = pd.DataFrame({"비고": remarks, "배치할 시트": remarks})
+            if "settlement_remark_editor" in st.session_state:
+                sheet_col_vals = remarks
+            else:
+                _rm = st.session_state.settlement_remark_sheet_map or {}
+                sheet_col_vals = [_rm.get(r, r) for r in remarks]
+            remark_df = pd.DataFrame({"비고": remarks, "배치할 시트": sheet_col_vals})
         edited_remarks = st.data_editor(
             remark_df,
             disabled=["비고"],
@@ -1051,9 +1089,19 @@ if parsed is not None and st.session_state.settlement_vendor is not None:
             key="settlement_remark_editor",
         )
         if len(edited_remarks) > 0:
-            st.session_state.settlement_remark_sheet_map = dict(
-                zip(edited_remarks["비고"], edited_remarks["배치할 시트"])
-            )
+            # 2026-08-10 hoyeon.han: data_editor 가 '지운 셀'을 None 으로 돌려주는데
+            # 가드 없이 그대로 저장해 'None' 이라는 이름의 시트가 생성되던 버그 수정.
+            # 비운 셀은 '일반'(SHEET_GENERAL)으로 확정해 저장한다 — 위 caption 문구와
+            # 실제 동작을 일치시킨다.
+            # st.session_state.settlement_remark_sheet_map = dict(
+            #     zip(edited_remarks["비고"], edited_remarks["배치할 시트"])
+            # )
+            st.session_state.settlement_remark_sheet_map = {
+                remark: st_mod.normalize_sheet_choice(sheet, st_mod.SHEET_GENERAL)
+                for remark, sheet in zip(
+                    edited_remarks["비고"], edited_remarks["배치할 시트"]
+                )
+            }
 
     # 2026-05-27 hoyeon.han: 비고 컬럼은 절대 치환하지 않음. 시트 라우팅만 적용됨.
     df_final = df_item_mapped
@@ -1130,6 +1178,15 @@ if (
         key="settlement_exclude_general",
         help="일반 시트가 비어있거나 전체 시트와 동일하면 기본 제외됩니다.",
     )
+    # 2026-08-10 hoyeon.han: '배치할 시트'를 비우면 일반 시트로 합류하게 되면서,
+    # 앞선 렌더에서 True 로 자동 설정된 이 옵션 때문에 사용자가 방금 일반으로 보낸
+    # 데이터가 조용히 누락될 수 있다 → 일반 시트에 데이터가 있는데 제외면 경고한다.
+    if exclude_general and general_df is not None and len(general_df) > 0:
+        st.warning(
+            f"⚠️ '{st_mod.SHEET_GENERAL}' 시트에 {len(general_df):,}행이 있는데 "
+            "'일반 시트 제외'가 켜져 있습니다. 해당 행은 생성 파일에서 빠집니다. "
+            "포함하려면 체크를 해제하세요."
+        )
     highlight_total = st.checkbox(
         "전체 시트 금액 합계 강조 (볼드 + 글씨/채우기 색상)",
         key="settlement_highlight_total",
