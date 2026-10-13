@@ -965,3 +965,314 @@ def test_real_sample_uses_seller_pipeline_without_changing_total(ecount_df):
     assert int((plan["detail_df"]["특이사항"] == "일반").sum()) == 27
     assert plan["detail_df"][["판매배송비", "도선료"]].eq(0).all().all()
     pd.testing.assert_frame_equal(df, before)
+
+
+# 2026-10-13 hoyeon.han: 실제 개인정보 파일 없이 셀러 선택 화면의 회귀를 검증한다.
+@pytest.fixture
+def ecount_seller_ui_parsed():
+    """반품/빈 구분/빈 셀러/다른 거래처가 섞인 독립 합성 파싱 결과."""
+    df = _make_ecount_df(
+        {"수량": 2, "합계": 20000},
+        {"구분": "구매", "수량": 3, "합계": 30000},
+        {"작성일자": "2026-10-02", "구분": "변심반품", "수량": -1, "합계": -10000},
+        {"작성일자": "2026-10-03", "품목": "수수료", "구분": "", "수량": 0,
+         "합계": -1500},
+        {"작성일자": "2026-10-02", "비고": "셀러B", "품목": "상품B",
+         "구분": "로켓그로스", "수량": 4, "합계": 28000},
+        {"작성일자": "2026-10-03", "비고": "셀러B", "품목": "배송비", "합계": 3000},
+        {"작성일자": "2026-10-03", "비고": "셀러C", "품목": "상품C",
+         "구분": "신규유형", "수량": 2, "합계": 18000},
+        {"작성일자": "2026-10-03", "비고": "", "품목": "일반상품", "구분": "",
+         "합계": 7000},
+        {"작성일자": "2026-10-02", "회사명": "별도업체", "비고": "셀러B",
+         "품목": "상품B", "수량": 9, "합계": 900000},
+        {"작성일자": "2026-10-02", "회사명": "별도업체", "비고": "별도셀러",
+         "품목": "별도상품", "합계": 8000},
+    )
+    return {
+        "title": es.TITLE_DEFAULT,
+        "doc_type": st_mod.TYPE_SALE,
+        "company": "합성테스트회사",
+        "period_text": "2026/10/01 ~ 2026/10/03",
+        "start_date": date(2026, 10, 1),
+        "end_date": date(2026, 10, 3),
+        "df": df,
+        "sheet_name": es.SHEET_NAME_DEFAULT,
+        "sheet_names": [es.SHEET_NAME_DEFAULT],
+        "raw_rows": len(df),
+        "dropped_rows": 0,
+        "invalid_date_rows": 0,
+        "footer_total": int(df["합계"].sum()),
+        "footer_qty": int(df["수량"].sum()),
+        "period_from_data": False,
+        "unit_price_mode": es.UNIT_RAW,
+        "swap_warning": None,
+    }
+
+
+# 2026-10-13 hoyeon.han: 페이지가 만드는 processed와 출력 파일을 테스트별로 격리한다.
+@pytest.fixture
+def ecount_seller_ui_app(ecount_seller_ui_parsed, tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.chdir(tmp_path)
+    at = AppTest.from_file(
+        str(_TESTS_DIR.parent / "pages" / "settlement_ecount.py"), default_timeout=30
+    )
+    for key, value in {
+        "settle_ecount_parsed": ecount_seller_ui_parsed,
+        "settle_ecount_uploaded_sig": ("synthetic_ecount.xlsx", 1),
+        "settle_ecount_start_date": ecount_seller_ui_parsed["start_date"],
+        "settle_ecount_end_date": ecount_seller_ui_parsed["end_date"],
+    }.items():
+        at.session_state[key] = value
+    at.run()
+    _assert_ecount_seller_ui_clean(at)
+    return at
+
+
+# 2026-10-13 hoyeon.han: 각 조작 뒤 예외와 화면 오류를 함께 검증한다.
+def _assert_ecount_seller_ui_clean(at):
+    assert not at.exception, [exc.value for exc in at.exception]
+    assert not at.error, [error.value for error in at.error]
+
+
+def _assert_ecount_seller_ui_output_cleared(at):
+    """2026-10-13 hoyeon.han: 세션과 화면 모두에서 이전 출력의 무효화를 확인."""
+    _assert_ecount_seller_ui_clean(at)
+    for key in (
+        "settle_ecount_plan", "settle_ecount_output_path", "settle_ecount_output_filename"
+    ):
+        assert at.session_state[key] is None, key
+    assert not at.tabs
+    assert "settle_ecount_generate_btn" not in [button.key for button in at.button]
+    assert not at.get("download_button")
+
+
+def _assert_ecount_seller_ui_blocked(at):
+    """2026-10-13 hoyeon.han: 미선택은 품목/시트 편집 및 생성 단계까지 모두 중단."""
+    _assert_ecount_seller_ui_output_cleared(at)
+    assert at.session_state["settle_ecount_sellers"] == []
+    assert at.multiselect(key="settle_ecount_seller_multiselect").value == []
+    for key in (
+        "settle_ecount_item_mapping", "settle_ecount_remark_sheet_map",
+        "settle_ecount_plan_signature",
+    ):
+        assert at.session_state[key] is None, key
+    for key in ("settle_ecount_item_editor", "settle_ecount_sheet_editor"):
+        assert key not in at.session_state
+    assert "settle_ecount_preview_btn" not in [button.key for button in at.button]
+    assert any("셀러" in warning.value for warning in at.warning)
+
+
+def _preview_ecount_seller_ui(at):
+    """2026-10-13 hoyeon.han: 실제 미리보기 버튼을 통해 생성된 계획만 검사한다."""
+    at.button(key="settle_ecount_preview_btn").click().run()
+    _assert_ecount_seller_ui_clean(at)
+    plan = at.session_state["settle_ecount_plan"]
+    assert plan is not None
+    return plan
+
+
+def _prime_ecount_seller_ui_output(at):
+    """2026-10-13 hoyeon.han: 편집된 매핑과 다운로드가 있는 이전 실행을 재현한다."""
+    at.multiselect(key="settle_ecount_seller_multiselect").set_value(["셀러A"]).run()
+    for key, column, value in (
+        ("settle_ecount_item_editor", "변경", "이전_품목"),
+        ("settle_ecount_sheet_editor", "배치할 시트", "이전_시트"),
+    ):
+        at.session_state[key] = {
+            "edited_rows": {0: {column: value}}, "added_rows": [], "deleted_rows": [],
+        }
+    at.run()
+    _assert_ecount_seller_ui_clean(at)
+    assert at.session_state["settle_ecount_item_mapping"]["상품A"] == "이전_품목"
+    assert at.session_state["settle_ecount_remark_sheet_map"] == {"셀러A": "이전_시트"}
+    plan = _preview_ecount_seller_ui(at)
+    assert set(plan["seller_sheets"]) == {"이전_시트"}
+    assert "이전_품목" in set(plan["detail_df"]["제품"])
+    at.button(key="settle_ecount_generate_btn").click().run()
+    _assert_ecount_seller_ui_clean(at)
+    out_path = Path(at.session_state["settle_ecount_output_path"]).resolve()
+    assert out_path.is_file()
+    assert out_path.parent == Path.cwd() / "processed"
+    assert len(at.get("download_button")) == 1
+    return at.session_state["settle_ecount_plan_signature"], out_path
+
+
+# 2026-10-13 hoyeon.han: 거래처 뒤 셀러 복수 선택, 최초 미선택 및 전체 선택 계약.
+def test_seller_ui_initially_unselected_and_select_all(ecount_seller_ui_app):
+    at = ecount_seller_ui_app
+    _assert_ecount_seller_ui_blocked(at)
+    assert at.session_state["settle_ecount_vendor"] == "테스트업체"
+    assert [widget.key for widget in at.multiselect] == ["settle_ecount_seller_multiselect"]
+    assert not any("주문유형" in widget.label for widget in at.selectbox)
+    assert not any("주문유형" in node.value and "선택" in node.value for node in at.markdown)
+    widget_order = [node.key for node in at if node.type in ("selectbox", "multiselect")]
+    assert widget_order.index("settle_ecount_vendor_select") < widget_order.index(
+        "settle_ecount_seller_multiselect"
+    )
+
+    at.button(key="settle_ecount_select_all").click().run()
+    _assert_ecount_seller_ui_clean(at)
+    expected = {"셀러A", "셀러B", "셀러C", "일반"}
+    assert set(at.session_state["settle_ecount_sellers"]) == expected
+    assert set(at.multiselect(key="settle_ecount_seller_multiselect").value) == expected
+    assert "settle_ecount_preview_btn" in [button.key for button in at.button]
+    assert set(at.session_state["settle_ecount_remark_sheet_map"]) == expected
+
+
+def test_seller_ui_subset_totals_include_returns_and_blank_types(ecount_seller_ui_app):
+    """2026-10-13 hoyeon.han: 집계 5행/상세 6행에 수량 9·69,500원을 반영."""
+    at = ecount_seller_ui_app
+    at.multiselect(key="settle_ecount_seller_multiselect").set_value(["셀러B", "셀러A"]).run()
+    assert set(at.session_state["settle_ecount_sellers"]) == {"셀러A", "셀러B"}
+    assert set(at.session_state["settle_ecount_item_mapping"]) == {
+        "상품A", "상품B", "수수료", "배송비"
+    }
+    plan = _preview_ecount_seller_ui(at)
+    assert set(plan["seller_sheets"]) == {"셀러A", "셀러B"}
+    assert len(plan["overall_df"]) == 5
+    assert plan["overall_df"]["합계"].sum() == 69500
+    assert plan["overall_df"]["수량"].sum() == 9
+    assert plan["seller_sheets"]["셀러A"]["합계"].sum() == 38500
+    assert plan["seller_sheets"]["셀러B"]["합계"].sum() == 31000
+    detail = plan["detail_df"]
+    assert len(detail) == 6
+    assert detail["상품매출"].sum() == 69500 and detail["수량"].sum() == 9
+    assert set(detail["업체명"]) == {"테스트업체"}
+    assert set(detail["특이사항"]) == {"셀러A", "셀러B"}
+    assert set(detail["구분"]) == {"발주", "구매", "변심반품", "", "로켓그로스"}
+    assert detail.loc[
+        detail["구분"] == "변심반품", ["수량", "상품매출"]
+    ].values.tolist() == [[-1, -10000]]
+    assert detail.loc[
+        detail["구분"] == "", ["수량", "상품매출"]
+    ].values.tolist() == [[0, -1500]]
+    assert {tab.label for tab in at.tabs} == {"전체", "셀러A", "셀러B", "상세내역"}
+    assert any(metric.label == "금액 합계" and metric.value == "69,500원" for metric in at.metric)
+
+
+# 2026-10-13 hoyeon.han: 교체/추가/전체 해제 모두 오래된 편집기와 다운로드를 폐기.
+@pytest.mark.parametrize(
+    "selected", [["셀러B"], ["셀러A", "셀러B"], []], ids=["replace", "extend", "clear"]
+)
+def test_seller_ui_selection_change_invalidates_output_and_mapping(
+    ecount_seller_ui_app, selected
+):
+    at = ecount_seller_ui_app
+    old_signature, old_path = _prime_ecount_seller_ui_output(at)
+    at.multiselect(key="settle_ecount_seller_multiselect").set_value(selected).run()
+    _assert_ecount_seller_ui_output_cleared(at)
+    assert set(at.session_state["settle_ecount_sellers"]) == set(selected)
+    assert old_path.is_file()
+    if not selected:
+        _assert_ecount_seller_ui_blocked(at)
+        return
+    assert at.session_state["settle_ecount_plan_signature"] != old_signature
+    expected_items = {"상품B", "배송비"}
+    if "셀러A" in selected:
+        expected_items |= {"상품A", "수수료"}
+    assert at.session_state["settle_ecount_item_mapping"] == {item: item for item in expected_items}
+    assert at.session_state["settle_ecount_remark_sheet_map"] == {seller: seller for seller in selected}
+    for key in ("settle_ecount_item_editor", "settle_ecount_sheet_editor"):
+        assert at.session_state[key]["edited_rows"] == {}
+    plan = _preview_ecount_seller_ui(at)
+    assert set(plan["seller_sheets"]) == set(selected)
+    assert "이전_품목" not in set(plan["detail_df"]["제품"])
+    assert plan["detail_df"]["상품매출"].sum() == (69500 if "셀러A" in selected else 31000)
+
+
+# 2026-10-13 hoyeon.han: 시작일/종료일/거래처를 각각 바꿔 선택과 모든 하위 상태 확인.
+@pytest.mark.parametrize("change", ["start", "end", "vendor"])
+def test_seller_ui_period_or_vendor_change_resets_selection(ecount_seller_ui_app, change):
+    at = ecount_seller_ui_app
+    _prime_ecount_seller_ui_output(at)
+    if change == "vendor":
+        at.selectbox(key="settle_ecount_vendor_select").set_value("별도업체").run()
+        assert at.session_state["settle_ecount_vendor"] == "별도업체"
+    else:
+        at.date_input(key=f"settle_ecount_{change}_input").set_value(date(2026, 10, 2)).run()
+        assert at.session_state[f"settle_ecount_{change}_date"] == date(2026, 10, 2)
+    _assert_ecount_seller_ui_blocked(at)
+    at.button(key="settle_ecount_select_all").click().run()
+    plan = _preview_ecount_seller_ui(at)
+    expected_amount, expected_rows = {
+        "start": (44500, 6), "end": (68000, 4), "vendor": (908000, 2)
+    }[change]
+    assert plan["overall_df"]["합계"].sum() == expected_amount
+    assert plan["detail_df"]["상품매출"].sum() == expected_amount
+    assert len(plan["detail_df"]) == expected_rows
+    assert "이전_시트" not in plan["seller_sheets"]
+    assert "이전_품목" not in set(plan["detail_df"]["제품"])
+    if change == "vendor":
+        assert set(at.session_state["settle_ecount_sellers"]) == {"별도셀러", "셀러B"}
+        assert set(plan["detail_df"]["업체명"]) == {"별도업체"}
+
+
+def test_seller_ui_all_sellers_matches_original_vendor_plan(
+    ecount_seller_ui_app, ecount_seller_ui_parsed
+):
+    """2026-10-13 hoyeon.han: 전체 선택은 기존 전수 처리와 행/수량/금액 모두 동일."""
+    at = ecount_seller_ui_app
+    before = ecount_seller_ui_parsed["df"].copy(deep=True)
+    at.button(key="settle_ecount_select_all").click().run()
+    plan = _preview_ecount_seller_ui(at)
+    expected = es.build_ecount_sheet_plan(before[before["회사명"] == "테스트업체"].copy())
+    assert len(plan["detail_df"]) == 8 and len(plan["overall_df"]) == 7
+    assert plan["overall_df"]["합계"].sum() == 94500
+    assert plan["overall_df"]["수량"].sum() == 12
+    assert plan["detail_df"]["상품매출"].sum() == 94500
+    assert sum(df["합계"].sum() for df in plan["seller_sheets"].values()) == 94500
+    pd.testing.assert_frame_equal(plan["overall_df"], expected["overall_df"])
+    pd.testing.assert_frame_equal(plan["detail_df"], expected["detail_df"])
+    assert set(plan["seller_sheets"]) == set(expected["seller_sheets"])
+    for name in expected["seller_sheets"]:
+        pd.testing.assert_frame_equal(
+            plan["seller_sheets"][name], expected["seller_sheets"][name]
+        )
+    assert "신규유형" in set(plan["detail_df"]["구분"])
+    pd.testing.assert_frame_equal(ecount_seller_ui_parsed["df"], before)
+
+
+# 2026-10-13 hoyeon.han: 옛 브라우저 세션에 '발주'만 선택했던 상태가 남은 회귀.
+def test_seller_ui_legacy_order_type_state_does_not_filter_rows(ecount_seller_ui_app):
+    """과거 주문유형 상태와 무관하게 셀러 선택 결과의 모든 유형을 포함한다."""
+    at = ecount_seller_ui_app
+    at.session_state["settle_ecount_order_types"] = ["발주"]
+    at.button(key="settle_ecount_select_all").click().run()
+    _assert_ecount_seller_ui_clean(at)
+    assert [widget.key for widget in at.multiselect] == ["settle_ecount_seller_multiselect"]
+    plan = _preview_ecount_seller_ui(at)
+    detail = plan["detail_df"]
+    assert detail["구분"].value_counts().to_dict() == {
+        "발주": 2, "구매": 1, "변심반품": 1, "": 2, "로켓그로스": 1, "신규유형": 1,
+    }
+    assert len(detail) == 8 and detail["수량"].sum() == 12
+    assert detail["상품매출"].sum() == 94500
+    assert plan["overall_df"]["합계"].sum() == 94500
+    assert sum(df["합계"].sum() for df in plan["seller_sheets"].values()) == 94500
+
+
+# 2026-10-13 hoyeon.han: 셀러가 공백/결측이어도 '일반' 선택과 상세내역에 보존한다.
+@pytest.mark.parametrize(
+    "blank", ["", " \t ", "\xa0", None, float("nan"), pd.NA],
+    ids=["empty", "whitespace", "nbsp", "none", "nan", "pd-na"],
+)
+def test_seller_ui_blank_remarks_select_general(ecount_seller_ui_app, blank):
+    at = ecount_seller_ui_app
+    df = at.session_state["settle_ecount_parsed"]["df"].copy(deep=True)
+    df.loc[(df["회사명"] == "테스트업체") & (df["품목"] == "일반상품"), "비고"] = blank
+    at.session_state["settle_ecount_parsed"] = {**at.session_state["settle_ecount_parsed"], "df": df}
+    at.run()
+    _assert_ecount_seller_ui_blocked(at)
+    at.multiselect(key="settle_ecount_seller_multiselect").set_value(["일반"]).run()
+    plan = _preview_ecount_seller_ui(at)
+    assert at.session_state["settle_ecount_sellers"] == ["일반"]
+    assert at.session_state["settle_ecount_remark_sheet_map"] == {"일반": "일반"}
+    assert set(plan["seller_sheets"]) == {"일반"}
+    assert plan["overall_df"]["합계"].sum() == 7000
+    assert plan["seller_sheets"]["일반"]["합계"].sum() == 7000
+    assert plan["detail_df"][
+        ["특이사항", "구분", "수량", "상품매출"]
+    ].values.tolist() == [["일반", "", 1, 7000]]

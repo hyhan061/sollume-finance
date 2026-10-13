@@ -5,6 +5,7 @@
 # 원본 파일 형식만 이카운트 .xlsx 로 바꾼다. 파싱 이후 단계는 Src/settlement.py 의
 # 기존 함수를 한 줄도 고치지 않고 그대로 재사용한다.
 # 2026-10-13 hoyeon.han: 출력 연결만 발주내역 기반 집계·상세 작성기로 전환.
+# 2026-10-13 hoyeon.han: 기존 발주내역 화면처럼 셀러를 선택하고 주문유형은 전체 포함.
 
 import importlib.util
 import io
@@ -58,8 +59,10 @@ _DEFAULTS: dict[str, Any] = {
     "settle_ecount_uploaded_sig": None,  # (파일명, 크기)
     "settle_ecount_start_date": None,
     "settle_ecount_end_date": None,
-    "settle_ecount_order_types": None,  # None = 전체
+    # "settle_ecount_order_types": None,  # 기존 주문유형 필터 상태 보존
     "settle_ecount_vendor": None,
+    # 2026-10-13 hoyeon.han: 기존 화면과 동일하게 최초 셀러 선택은 비워 둔다.
+    "settle_ecount_sellers": [],
     "settle_ecount_item_mapping": None,
     "settle_ecount_remark_sheet_map": None,
     # "settle_ecount_sheets": None,  # 기존 원본 행 분할 미리보기
@@ -78,7 +81,9 @@ for _k, _v in _DEFAULTS.items():
         st.session_state[_k] = _v
 
 # 상위 단계가 바뀌면 제거해야 하는 위젯 상태
-_TYPE_WIDGET_KEYS = ("settle_ecount_types_multiselect",)
+# _TYPE_WIDGET_KEYS = ("settle_ecount_types_multiselect",)
+# 2026-10-13 hoyeon.han: 상위 조건이 바뀌면 셀러 위젯도 초기화한다.
+_SELLER_WIDGET_KEYS = ("settle_ecount_seller_multiselect",)
 _EDITOR_WIDGET_KEYS = ("settle_ecount_item_editor", "settle_ecount_sheet_editor")
 _OPTION_WIDGET_KEYS = (
     # "settle_ecount_exclude_general",
@@ -103,7 +108,9 @@ _DETAIL_LABELS = {
 # 구분(주문유형)이 비어 있는 행을 고를 수 있게 하는 라벨.
 # extract_order_types() 가 빈 값을 제외하므로, 이 라벨이 없으면 구분 없는 행이
 # 필터에서 통째로 누락된다.
-_NO_TYPE_LABEL = "(미지정)"
+# _NO_TYPE_LABEL = "(미지정)"
+# 2026-10-13 hoyeon.han: 특이사항이 없는 주문도 '일반' 셀러로 선택할 수 있다.
+_NO_SELLER_LABEL = ss.SHEET_GENERAL
 
 
 def _reset_option_widgets() -> None:
@@ -112,8 +119,11 @@ def _reset_option_widgets() -> None:
         st.session_state.pop(wk, None)
 
 
-def _reset_below_vendor() -> None:
-    """거래처 변경 시 매핑 이하 리셋."""
+# def _reset_below_vendor() -> None:
+#     """거래처 변경 시 매핑 이하 리셋."""
+# 2026-10-13 hoyeon.han: 셀러 변경 때 기존 매핑·미리보기·다운로드를 모두 폐기한다.
+def _reset_below_sellers() -> None:
+    """셀러 선택 변경 시 품목/시트/옵션/출력 상태 리셋."""
     for k in (
         "settle_ecount_item_mapping",
         "settle_ecount_remark_sheet_map",
@@ -130,24 +140,37 @@ def _reset_below_vendor() -> None:
     _reset_option_widgets()
 
 
-def _reset_below_types() -> None:
-    """구분(주문유형) 필터 변경 시 거래처 이하 리셋.
+# def _reset_below_types() -> None:
+#     """구분(주문유형) 필터 변경 시 거래처 이하 리셋.
+#
+#     기존 화면에는 없던 계층이다. 빠뜨리면 필터를 바꿔도 이전 조건으로 만든
+#     품목 매핑/시트 배치/미리보기가 살아남아 조용히 틀린 파일이 생성된다.
+#     """
+#     st.session_state["settle_ecount_vendor"] = _DEFAULTS["settle_ecount_vendor"]
+#     _reset_below_vendor()
 
-    기존 화면에는 없던 계층이다. 빠뜨리면 필터를 바꿔도 이전 조건으로 만든
-    품목 매핑/시트 배치/미리보기가 살아남아 조용히 틀린 파일이 생성된다.
-    """
-    st.session_state["settle_ecount_vendor"] = _DEFAULTS["settle_ecount_vendor"]
-    _reset_below_vendor()
+
+# 2026-10-13 hoyeon.han: 거래처 변경 시 셀러 선택부터 초기화한다.
+def _reset_below_vendor() -> None:
+    """거래처 변경 시 셀러 선택과 하위 상태 리셋."""
+    st.session_state["settle_ecount_sellers"] = []
+    for wk in _SELLER_WIDGET_KEYS:
+        st.session_state.pop(wk, None)
+    _reset_below_sellers()
 
 
 def _reset_below_period() -> None:
-    """기간 변경 시 구분 필터 이하 리셋."""
-    st.session_state["settle_ecount_order_types"] = _DEFAULTS[
-        "settle_ecount_order_types"
-    ]
-    for wk in _TYPE_WIDGET_KEYS:
-        st.session_state.pop(wk, None)
-    _reset_below_types()
+    # """기간 변경 시 구분 필터 이하 리셋."""
+    # st.session_state["settle_ecount_order_types"] = _DEFAULTS[
+    #     "settle_ecount_order_types"
+    # ]
+    # for wk in _TYPE_WIDGET_KEYS:
+    #     st.session_state.pop(wk, None)
+    # _reset_below_types()
+    # 2026-10-13 hoyeon.han: 주문유형 필터 대신 거래처·셀러 이하를 초기화한다.
+    """기간 변경 시 거래처·셀러 선택과 하위 상태 리셋."""
+    st.session_state["settle_ecount_vendor"] = _DEFAULTS["settle_ecount_vendor"]
+    _reset_below_vendor()
 
 
 def _reset_below_parse() -> None:
@@ -330,81 +353,92 @@ if parsed is not None:
         st.rerun()
 
 
-# ===== 4. 구분(주문유형) 선택 =====
+# 2026-10-13 hoyeon.han: 주문유형 선택 단계는 주석으로 보존하고 전체 유형을 포함한다.
+# # ===== 4. 구분(주문유형) 선택 =====
+#
+# if parsed is not None:
+#     st.markdown("### 🧾 4. 구분(주문유형) 선택")
+#     st.caption(
+#         "정산서에 포함할 주문유형을 고릅니다. 기본은 전체 선택입니다. "
+#         "반품은 수량·금액이 음수로 반영되므로, 실제 정산 금액을 맞추려면 함께 두세요. "
+#         # "선택한 유형은 출력 파일의 열로는 나오지 않습니다."
+#         # 2026-10-13 hoyeon.han: 주문유형은 요약에서 제외하고 상세내역 구분에 표시.
+#         "선택한 유형은 정산 요약에는 나오지 않고 상세내역의 구분에 표시됩니다."
+#     )
+#
+#     df_period = st_mod.filter_by_period(
+#         parsed["df"],
+#         st.session_state.settle_ecount_start_date,
+#         st.session_state.settle_ecount_end_date,
+#     )
+#
+#     type_series = df_period[es.COL_ORDER_TYPE].astype(str).str.strip()
+#     type_options = es.extract_order_types(df_period)
+#     n_blank = int((type_series == "").sum())
+#     if n_blank:
+#         type_options = type_options + [_NO_TYPE_LABEL]
+#
+#     if not type_options:
+#         st.warning("⚠️ 선택한 기간에 데이터가 없습니다.")
+#         st.stop()
+#
+#     type_counts = {t: int((type_series == t).sum()) for t in type_options}
+#     if n_blank:
+#         type_counts[_NO_TYPE_LABEL] = n_blank
+#
+#     # 첫 렌더 기본값 = 전체 선택
+#     if "settle_ecount_types_multiselect" not in st.session_state:
+#         st.session_state["settle_ecount_types_multiselect"] = list(type_options)
+#
+#     selected_types = st.multiselect(
+#         f"주문유형 선택 (총 {len(type_options)}종)",
+#         options=type_options,
+#         format_func=lambda t: f"{t} ({type_counts.get(t, 0):,}건)",
+#         key="settle_ecount_types_multiselect",
+#     )
+#     # 선택 순서가 달라도 불필요한 rerun 이 나지 않도록 원본 순서로 정규화
+#     selected_types = [t for t in type_options if t in set(selected_types)]
+#
+#     if not selected_types:
+#         st.warning("⚠️ 주문유형을 1개 이상 선택해야 합니다.")
+#         st.stop()
+#
+#     if selected_types != st.session_state.settle_ecount_order_types:
+#         st.session_state.settle_ecount_order_types = selected_types
+#         _reset_below_types()
+#         st.rerun()
+#
+#     # '(미지정)' 라벨은 실제 빈 문자열로 되돌려 필터에 넘긴다
+#     wanted_types = ["" if t == _NO_TYPE_LABEL else t for t in selected_types]
+#     df_typed = es.filter_by_order_types(df_period, wanted_types)
+#     st.caption(
+#         f"선택 결과: {len(df_typed):,}행 / "
+#         f"{int(df_typed['합계'].sum()):,}원 "
+#         f"(전체 {len(df_period):,}행 중)"
+#     )
+
+
+# ===== 5. 거래처 선택 =====
+# 2026-10-13 hoyeon.han: 주문유형 선택을 없애 거래처 선택을 4단계로 배치한다.
 
 if parsed is not None:
-    st.markdown("### 🧾 4. 구분(주문유형) 선택")
-    st.caption(
-        "정산서에 포함할 주문유형을 고릅니다. 기본은 전체 선택입니다. "
-        "반품은 수량·금액이 음수로 반영되므로, 실제 정산 금액을 맞추려면 함께 두세요. "
-        # "선택한 유형은 출력 파일의 열로는 나오지 않습니다."
-        # 2026-10-13 hoyeon.han: 주문유형은 요약에서 제외하고 상세내역 구분에 표시.
-        "선택한 유형은 정산 요약에는 나오지 않고 상세내역의 구분에 표시됩니다."
-    )
-
+    # st.markdown("### 🏢 5. 거래처 선택")
+    st.markdown("### 🏢 4. 거래처 선택")
+    # 2026-10-13 hoyeon.han: 발주·반품·빈 구분 등 모든 유형을 그대로 포함한다.
     df_period = st_mod.filter_by_period(
         parsed["df"],
         st.session_state.settle_ecount_start_date,
         st.session_state.settle_ecount_end_date,
     )
 
-    type_series = df_period[es.COL_ORDER_TYPE].astype(str).str.strip()
-    type_options = es.extract_order_types(df_period)
-    n_blank = int((type_series == "").sum())
-    if n_blank:
-        type_options = type_options + [_NO_TYPE_LABEL]
-
-    if not type_options:
-        st.warning("⚠️ 선택한 기간에 데이터가 없습니다.")
-        st.stop()
-
-    type_counts = {t: int((type_series == t).sum()) for t in type_options}
-    if n_blank:
-        type_counts[_NO_TYPE_LABEL] = n_blank
-
-    # 첫 렌더 기본값 = 전체 선택
-    if "settle_ecount_types_multiselect" not in st.session_state:
-        st.session_state["settle_ecount_types_multiselect"] = list(type_options)
-
-    selected_types = st.multiselect(
-        f"주문유형 선택 (총 {len(type_options)}종)",
-        options=type_options,
-        format_func=lambda t: f"{t} ({type_counts.get(t, 0):,}건)",
-        key="settle_ecount_types_multiselect",
-    )
-    # 선택 순서가 달라도 불필요한 rerun 이 나지 않도록 원본 순서로 정규화
-    selected_types = [t for t in type_options if t in set(selected_types)]
-
-    if not selected_types:
-        st.warning("⚠️ 주문유형을 1개 이상 선택해야 합니다.")
-        st.stop()
-
-    if selected_types != st.session_state.settle_ecount_order_types:
-        st.session_state.settle_ecount_order_types = selected_types
-        _reset_below_types()
-        st.rerun()
-
-    # '(미지정)' 라벨은 실제 빈 문자열로 되돌려 필터에 넘긴다
-    wanted_types = ["" if t == _NO_TYPE_LABEL else t for t in selected_types]
-    df_typed = es.filter_by_order_types(df_period, wanted_types)
-    st.caption(
-        f"선택 결과: {len(df_typed):,}행 / "
-        f"{int(df_typed['합계'].sum()):,}원 "
-        f"(전체 {len(df_period):,}행 중)"
-    )
-
-
-# ===== 5. 거래처 선택 =====
-
-if parsed is not None:
-    st.markdown("### 🏢 5. 거래처 선택")
-
-    vendors_in_period = st_mod.extract_vendors(df_typed)
+    # vendors_in_period = st_mod.extract_vendors(df_typed)
+    vendors_in_period = st_mod.extract_vendors(df_period)
     if not vendors_in_period:
         st.warning("⚠️ 선택한 조건에 거래처 데이터가 없습니다.")
         st.stop()
 
-    vendor_summary = es.summarize_vendors(df_typed).set_index("거래처")
+    # vendor_summary = es.summarize_vendors(df_typed).set_index("거래처")
+    vendor_summary = es.summarize_vendors(df_period).set_index("거래처")
     prev_vendor = st.session_state.settle_ecount_vendor
     default_idx = (
         vendors_in_period.index(prev_vendor)
@@ -438,16 +472,71 @@ if parsed is not None:
             )
 
 
+# 2026-10-13 hoyeon.han: 기존 발주내역 화면과 동일한 셀러 복수 선택·전체 선택.
+# ===== 5. 셀러(특이사항) 선택 =====
+
+if parsed is not None and st.session_state.settle_ecount_vendor is not None:
+    st.markdown("### 🧑‍💼 5. 셀러(특이사항) 선택")
+    st.caption(
+        "셀러 값은 원본의 특이사항 컬럼입니다. 빈 특이사항은 '일반' 셀러로 묶습니다. "
+        "선택한 셀러의 주문만 집계·상세내역에 포함하며, 주문유형은 모두 포함합니다."
+    )
+    df_vendor = st_mod.filter_by_vendor(
+        df_period, st.session_state.settle_ecount_vendor
+    )
+    seller_values = df_vendor[es.COL_REMARK].fillna("").astype(str).str.strip()
+    n_blank = int((seller_values == "").sum())
+    df_vendor = df_vendor.copy()
+    df_vendor[es.COL_REMARK] = seller_values.mask(seller_values == "", _NO_SELLER_LABEL)
+    if n_blank:
+        st.info(f"ℹ️ 빈 특이사항 {n_blank:,}건은 '일반' 셀러로 포함됩니다.")
+    sellers = sorted(df_vendor[es.COL_REMARK].unique().tolist())
+    if not sellers:
+        st.warning("⚠️ 선택한 기간·거래처에 데이터가 없습니다.")
+        st.stop()
+    seller_counts = df_vendor[es.COL_REMARK].value_counts()
+    if st.button("전체 선택", key="settle_ecount_select_all"):
+        st.session_state["settle_ecount_seller_multiselect"] = list(sellers)
+        st.rerun()
+    default_sellers = [s for s in st.session_state.settle_ecount_sellers if s in sellers]
+    selected_sellers = st.multiselect(
+        f"셀러 선택 (총 {len(sellers)}개, 복수 선택 가능)",
+        options=sellers,
+        default=default_sellers,
+        format_func=lambda s: f"{s} ({int(seller_counts.get(s, 0)):,}건)",
+        key="settle_ecount_seller_multiselect",
+    )
+    selected_sellers = [s for s in sellers if s in set(selected_sellers)]
+    # 빈 선택도 먼저 하위 상태를 폐기해 이전 정산서가 남지 않도록 한다.
+    if selected_sellers != st.session_state.settle_ecount_sellers:
+        st.session_state.settle_ecount_sellers = selected_sellers
+        _reset_below_sellers()
+        st.rerun()
+    if not selected_sellers:
+        st.warning("⚠️ 셀러(특이사항)를 1개 이상 선택하세요.")
+        st.stop()
+    df_seller_rows = df_vendor[
+        df_vendor[es.COL_REMARK].isin(selected_sellers)
+    ].copy()
+    st.caption(
+        f"선택 결과: {len(df_seller_rows):,}행 / "
+        f"수량 {int(df_seller_rows['수량'].sum()):,} / "
+        f"금액 {int(df_seller_rows['합계'].sum()):,}원"
+    )
+
+
 # ===== 6. 품목명 정리 =====
 
 if parsed is not None and st.session_state.settle_ecount_vendor is not None:
-    df_vendor = st_mod.filter_by_vendor(
-        df_typed, st.session_state.settle_ecount_vendor
-    )
+    # df_vendor = st_mod.filter_by_vendor(
+    #     df_typed, st.session_state.settle_ecount_vendor
+    # )
     # 구분(주문유형)은 OUTPUT_COLS 에 없으므로 여기서 자동으로 떨어져 나간다
     # df_clean = st_mod.drop_unused_columns(df_vendor)
     # 2026-10-13 hoyeon.han: 상세내역에 필요한 구분·수하인·연락처 열을 유지한다.
-    df_clean = df_vendor.copy()
+    # df_clean = df_vendor.copy()
+    # 2026-10-13 hoyeon.han: 품목·시트 배치·미리보기·작성 모두 선택한 셀러만 사용한다.
+    df_clean = df_seller_rows.copy()
 
     st.markdown("### 📝 6. 품목명 정리")
     st.caption("필요시 품목명을 정제하세요. 같은 값으로 묶으면 통합됩니다.")
@@ -688,7 +777,9 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
 if parsed is not None and st.session_state.settle_ecount_vendor is not None:
     st.markdown("### 🧾 8. 출력 시트 옵션")
     include_overall = st.checkbox(
-        "전체 시트 포함 (선택 조건 전체를 한 시트로 집계)",
+        # "전체 시트 포함 (선택 조건 전체를 한 시트로 집계)",
+        # 2026-10-13 hoyeon.han: '전체'는 선택한 셀러 범위임을 명확히 한다.
+        "전체 시트 포함 (선택한 셀러 전체를 한 시트로 집계)",
         value=st.session_state.settle_ecount_include_overall,
         key="settle_ecount_include_overall_cb",
     )
@@ -719,7 +810,9 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         st.session_state.settle_ecount_uploaded_sig,
         st.session_state.settle_ecount_start_date,
         st.session_state.settle_ecount_end_date,
-        tuple(st.session_state.settle_ecount_order_types or []),
+        # tuple(st.session_state.settle_ecount_order_types or []),
+        # 2026-10-13 hoyeon.han: 셀러 선택 변경을 미리보기·다운로드 조건에 반영한다.
+        tuple(st.session_state.settle_ecount_sellers),
         st.session_state.settle_ecount_vendor,
         tuple(sorted((st.session_state.settle_ecount_item_mapping or {}).items())),
         tuple(sorted((st.session_state.settle_ecount_remark_sheet_map or {}).items())),
@@ -829,7 +922,10 @@ if (
             st.session_state.settle_ecount_history.append({
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "vendor": vendor,
-                "주문유형": ", ".join(st.session_state.settle_ecount_order_types or []),
+                # "주문유형": ", ".join(st.session_state.settle_ecount_order_types or []),
+                # 2026-10-13 hoyeon.han: 선택 셀러와 주문유형 전체 포함을 이력에 기록한다.
+                "셀러": ", ".join(st.session_state.settle_ecount_sellers),
+                "주문유형": "전체 포함",
                 "전체시트": "포함" if include_overall else "제외",
                 "상세내역": detail_label,
                 "시트수": sheet_count,
