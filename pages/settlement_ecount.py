@@ -4,6 +4,7 @@
 # 절차는 기존 '정산서 생성'(pages/settlement.py) 업로드 흐름과 동일하게 맞추고,
 # 원본 파일 형식만 이카운트 .xlsx 로 바꾼다. 파싱 이후 단계는 Src/settlement.py 의
 # 기존 함수를 한 줄도 고치지 않고 그대로 재사용한다.
+# 2026-10-13 hoyeon.han: 출력 연결만 발주내역 기반 집계·상세 작성기로 전환.
 
 import importlib.util
 import io
@@ -42,6 +43,8 @@ from ui_theme import inject_global_css, render_page_header  # noqa: E402,F401
 # 정산서 비즈니스 로직 (기존 파이프라인 재사용)
 import ecount_settlement as es  # noqa: E402
 import settlement as st_mod  # noqa: E402
+# 2026-10-13 hoyeon.han: 발주내역 기반 정산서 작성기를 재사용한다.
+import seller_settlement as ss  # noqa: E402
 
 os.makedirs("processed", exist_ok=True)
 
@@ -59,7 +62,12 @@ _DEFAULTS: dict[str, Any] = {
     "settle_ecount_vendor": None,
     "settle_ecount_item_mapping": None,
     "settle_ecount_remark_sheet_map": None,
-    "settle_ecount_sheets": None,
+    # "settle_ecount_sheets": None,  # 기존 원본 행 분할 미리보기
+    # 2026-10-13 hoyeon.han: 집계·상세내역 계획과 출력 옵션을 함께 관리.
+    "settle_ecount_plan": None,
+    "settle_ecount_plan_signature": None,
+    "settle_ecount_include_overall": True,
+    "settle_ecount_detail_mode": ss.DETAIL_MODE_SINGLE,
     "settle_ecount_output_path": None,
     "settle_ecount_output_filename": None,
     "settle_ecount_history": [],
@@ -73,12 +81,24 @@ for _k, _v in _DEFAULTS.items():
 _TYPE_WIDGET_KEYS = ("settle_ecount_types_multiselect",)
 _EDITOR_WIDGET_KEYS = ("settle_ecount_item_editor", "settle_ecount_sheet_editor")
 _OPTION_WIDGET_KEYS = (
-    "settle_ecount_exclude_general",
-    "settle_ecount_highlight_total",
-    "settle_ecount_total_font_size",
-    "settle_ecount_total_font_color",
-    "settle_ecount_total_fill_color",
+    # "settle_ecount_exclude_general",
+    # "settle_ecount_highlight_total",
+    # "settle_ecount_total_font_size",
+    # "settle_ecount_total_font_color",
+    # "settle_ecount_total_fill_color",
+    # 2026-10-13 hoyeon.han: 기존 발주내역 화면과 같은 옵션을 초기화한다.
+    "settle_ecount_include_overall_cb",
+    "settle_ecount_detail_mode_radio",
+    "settle_ecount_seller_font_size",
+    "settle_ecount_font_color",
+    "settle_ecount_fill_color",
 )
+# 2026-10-13 hoyeon.han: 상세내역 기본은 선택 조건 전체 하나로 생성.
+_DETAIL_LABELS = {
+    "생성 안 함": ss.DETAIL_MODE_NONE,
+    "전체 하나로 생성": ss.DETAIL_MODE_SINGLE,
+    "셀러별 생성": ss.DETAIL_MODE_PER_SELLER,
+}
 
 # 구분(주문유형)이 비어 있는 행을 고를 수 있게 하는 라벨.
 # extract_order_types() 가 빈 값을 제외하므로, 이 라벨이 없으면 구분 없는 행이
@@ -97,7 +117,12 @@ def _reset_below_vendor() -> None:
     for k in (
         "settle_ecount_item_mapping",
         "settle_ecount_remark_sheet_map",
-        "settle_ecount_sheets",
+        # "settle_ecount_sheets",
+        # 2026-10-13 hoyeon.han: 필터 변경 시 이전 집계와 다운로드를 폐기한다.
+        "settle_ecount_plan",
+        "settle_ecount_plan_signature",
+        "settle_ecount_include_overall",
+        "settle_ecount_detail_mode",
         "settle_ecount_output_path",
         "settle_ecount_output_filename",
     ):
@@ -312,7 +337,9 @@ if parsed is not None:
     st.caption(
         "정산서에 포함할 주문유형을 고릅니다. 기본은 전체 선택입니다. "
         "반품은 수량·금액이 음수로 반영되므로, 실제 정산 금액을 맞추려면 함께 두세요. "
-        "선택한 유형은 출력 파일의 열로는 나오지 않습니다."
+        # "선택한 유형은 출력 파일의 열로는 나오지 않습니다."
+        # 2026-10-13 hoyeon.han: 주문유형은 요약에서 제외하고 상세내역 구분에 표시.
+        "선택한 유형은 정산 요약에는 나오지 않고 상세내역의 구분에 표시됩니다."
     )
 
     df_period = st_mod.filter_by_period(
@@ -418,7 +445,9 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         df_typed, st.session_state.settle_ecount_vendor
     )
     # 구분(주문유형)은 OUTPUT_COLS 에 없으므로 여기서 자동으로 떨어져 나간다
-    df_clean = st_mod.drop_unused_columns(df_vendor)
+    # df_clean = st_mod.drop_unused_columns(df_vendor)
+    # 2026-10-13 hoyeon.han: 상세내역에 필요한 구분·수하인·연락처 열을 유지한다.
+    df_clean = df_vendor.copy()
 
     st.markdown("### 📝 6. 품목명 정리")
     st.caption("필요시 품목명을 정제하세요. 같은 값으로 묶으면 통합됩니다.")
@@ -450,9 +479,11 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
             for orig, new in zip(edited_items["원본"], edited_items["변경"])
         }
 
-    df_item_mapped = st_mod.apply_mapping(
-        df_clean, "품목", st.session_state.settle_ecount_item_mapping
-    )
+    # df_item_mapped = st_mod.apply_mapping(
+    #     df_clean, "품목", st.session_state.settle_ecount_item_mapping
+    # )
+    # 2026-10-13 hoyeon.han: 계획 생성에서 요약과 상세에 매핑을 한 번만 적용.
+    df_item_mapped = df_clean
 
 
     # ===== 7. 시트 배치 설정 =====
@@ -501,134 +532,311 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
     df_final = df_item_mapped
 
 
-# ===== 8. 시트 분할 미리보기 =====
+# 2026-10-13 hoyeon.han: 이전 원본 행 분할/출력 흐름은 아래 주석으로 보존한다.
+# # ===== 8. 시트 분할 미리보기 =====
+#
+# if parsed is not None and st.session_state.settle_ecount_vendor is not None:
+#     st.markdown("### 👁️ 8. 시트 분할 미리보기")
+#
+#     if st.button("🔍 미리보기 생성", key="settle_ecount_preview_btn"):
+#         try:
+#             sheets = st_mod.split_into_sheets(
+#                 df_final,
+#                 remark_to_sheet=st.session_state.settle_ecount_remark_sheet_map,
+#             )
+#             st.session_state.settle_ecount_sheets = sheets
+#         except Exception as e:  # noqa: BLE001
+#             st.error(f"❌ 시트 분할 실패: {e}")
+#             st.session_state.settle_ecount_sheets = None
+#
+#     sheets = st.session_state.settle_ecount_sheets
+#     if sheets is not None:
+#         sheet_tabs = st.tabs(list(sheets.keys()))
+#         for tab, (name, sub) in zip(sheet_tabs, sheets.items()):
+#             with tab:
+#                 c1, c2, c3 = st.columns(3)
+#                 c1.metric("데이터 행", f"{len(sub):,}행")
+#                 c2.metric("수량 합계", f"{int(pd.to_numeric(sub['수량'], errors='coerce').fillna(0).sum()):,}")
+#                 c3.metric("금액 합계", f"{int(pd.to_numeric(sub['합계'], errors='coerce').fillna(0).sum()):,}원")
+#                 st.dataframe(sub, use_container_width=True, hide_index=True)
+#
+#
+# # ===== 9. 생성 및 다운로드 =====
+#
+# if (
+#     parsed is not None
+#     and st.session_state.settle_ecount_vendor is not None
+#     and st.session_state.settle_ecount_sheets is not None
+# ):
+#     st.markdown("### 💾 9. 정산서 생성 및 다운로드")
+#
+#     vendor = st.session_state.settle_ecount_vendor
+#     doc_type = parsed["doc_type"]  # 판매현황내역 → 항상 '매출'
+#     start_date = st.session_state.settle_ecount_start_date
+#     end_date = st.session_state.settle_ecount_end_date
+#     sheets = st.session_state.settle_ecount_sheets
+#
+#     out_filename = st_mod.build_output_filename(doc_type, vendor, start_date, end_date)
+#     out_path = os.path.join("processed", out_filename)
+#     period_line = st_mod.build_period_line(start_date, end_date, vendor)
+#
+#     st.markdown("#### ⚙️ 생성 옵션")
+#     st.caption("옵션은 최종 생성 파일에만 적용됩니다 (위 미리보기에는 반영되지 않음).")
+#
+#     # 일반 시트 중복 자동 감지: 비어있거나 전체 시트와 행 수가 같으면 사실상 중복
+#     general_df = sheets.get(st_mod.SHEET_GENERAL)
+#     overall_df = sheets.get(st_mod.SHEET_OVERALL)
+#     general_redundant = general_df is not None and (
+#         len(general_df) == 0
+#         or (overall_df is not None and len(general_df) == len(overall_df))
+#     )
+#     if "settle_ecount_exclude_general" not in st.session_state:
+#         st.session_state["settle_ecount_exclude_general"] = general_redundant
+#     if "settle_ecount_highlight_total" not in st.session_state:
+#         st.session_state["settle_ecount_highlight_total"] = True
+#
+#     exclude_general = st.checkbox(
+#         "일반 시트 제외",
+#         key="settle_ecount_exclude_general",
+#         help="일반 시트가 비어있거나 전체 시트와 동일하면 기본 제외됩니다.",
+#     )
+#     if exclude_general and general_df is not None and len(general_df) > 0:
+#         st.warning(
+#             f"⚠️ '{st_mod.SHEET_GENERAL}' 시트에 {len(general_df):,}행이 있는데 "
+#             "'일반 시트 제외'가 켜져 있습니다. 해당 행은 생성 파일에서 빠집니다. "
+#             "포함하려면 체크를 해제하세요."
+#         )
+#     highlight_total = st.checkbox(
+#         "전체 시트 금액 합계 강조 (볼드 + 글씨/채우기 색상)",
+#         key="settle_ecount_highlight_total",
+#     )
+#
+#     total_font_size = 11.0
+#     total_font_color = "#FF0000"
+#     total_fill_color = "#FFFF00"
+#     if highlight_total:
+#         oc1, oc2, oc3 = st.columns(3)
+#         total_font_size = oc1.number_input(
+#             "폰트 크기",
+#             min_value=8,
+#             max_value=36,
+#             value=11,
+#             step=1,
+#             key="settle_ecount_total_font_size",
+#         )
+#         total_font_color = oc2.color_picker(
+#             "글씨 색상", value="#FF0000", key="settle_ecount_total_font_color"
+#         )
+#         total_fill_color = oc3.color_picker(
+#             "채우기 색상", value="#FFFF00", key="settle_ecount_total_fill_color"
+#         )
+#
+#     if st.button("📥 정산서 생성", key="settle_ecount_generate_btn", type="primary"):
+#         try:
+#             sheets_to_write = dict(sheets)
+#             if exclude_general and st_mod.SHEET_GENERAL in sheets_to_write:
+#                 del sheets_to_write[st_mod.SHEET_GENERAL]
+#             st_mod.write_settlement_xlsx(
+#                 out_path=out_path,
+#                 title=parsed["title"],
+#                 period_line=period_line,
+#                 sheets=sheets_to_write,
+#                 highlight_total=highlight_total,
+#                 total_font_size=float(total_font_size),
+#                 total_font_color=total_font_color,
+#                 total_fill_color=total_fill_color,
+#             )
+#             st.session_state.settle_ecount_output_path = out_path
+#             st.session_state.settle_ecount_output_filename = out_filename
+#             st.session_state.settle_ecount_history.append(
+#                 {
+#                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+#                     "vendor": vendor,
+#                     "주문유형": ", ".join(
+#                         st.session_state.settle_ecount_order_types or []
+#                     ),
+#                     "시트수": len(sheets_to_write),
+#                     "start_date": str(start_date),
+#                     "end_date": str(end_date),
+#                     "filename": out_filename,
+#                 }
+#             )
+#             st.success(f"✅ 생성 완료: `{out_filename}`")
+#         except Exception as e:  # noqa: BLE001
+#             st.error(f"❌ 정산서 생성 실패: {e}")
+#             with st.expander("🔍 에러 상세 정보"):
+#                 st.exception(e)
+#
+#     if st.session_state.settle_ecount_output_path and os.path.exists(
+#         st.session_state.settle_ecount_output_path
+#     ):
+#         with open(st.session_state.settle_ecount_output_path, "rb") as f:
+#             st.download_button(
+#                 label=f"⬇️ {st.session_state.settle_ecount_output_filename} 다운로드",
+#                 data=f.read(),
+#                 file_name=st.session_state.settle_ecount_output_filename,
+#                 mime=(
+#                     "application/vnd.openxmlformats-officedocument."
+#                     "spreadsheetml.sheet"
+#                 ),
+#                 key="settle_ecount_download_btn",
+#                 use_container_width=True,
+#             )
 
+# ===== 8. 출력 시트 옵션 =====
+# 2026-10-13 hoyeon.han: 기존 발주내역 화면과 동일하게 전체/상세 출력을 선택한다.
 if parsed is not None and st.session_state.settle_ecount_vendor is not None:
-    st.markdown("### 👁️ 8. 시트 분할 미리보기")
+    st.markdown("### 🧾 8. 출력 시트 옵션")
+    include_overall = st.checkbox(
+        "전체 시트 포함 (선택 조건 전체를 한 시트로 집계)",
+        value=st.session_state.settle_ecount_include_overall,
+        key="settle_ecount_include_overall_cb",
+    )
+    st.session_state.settle_ecount_include_overall = include_overall
+    detail_labels = list(_DETAIL_LABELS)
+    previous_label = next(
+        (label for label, mode in _DETAIL_LABELS.items()
+         if mode == st.session_state.settle_ecount_detail_mode),
+        "전체 하나로 생성",
+    )
+    detail_label = st.radio(
+        "상세내역 생성 방식",
+        options=detail_labels,
+        index=detail_labels.index(previous_label),
+        horizontal=True,
+        key="settle_ecount_detail_mode_radio",
+    )
+    detail_mode = _DETAIL_LABELS[detail_label]
+    st.session_state.settle_ecount_detail_mode = detail_mode
+    st.caption(
+        "정산 요약은 일자·품목·단가·반품 여부·셀러별로 수량과 금액을 합산합니다. "
+        "단가는 기존 정산서와 같이 각 원본 행의 합계 ÷ 수량으로 계산합니다. "
+        "상세내역은 합산하지 않은 원본 주문 행입니다."
+    )
 
+    # 2026-10-13 hoyeon.han: 매핑/옵션 변경 시 오래된 미리보기·다운로드를 숨긴다.
+    plan_signature = (
+        st.session_state.settle_ecount_uploaded_sig,
+        st.session_state.settle_ecount_start_date,
+        st.session_state.settle_ecount_end_date,
+        tuple(st.session_state.settle_ecount_order_types or []),
+        st.session_state.settle_ecount_vendor,
+        tuple(sorted((st.session_state.settle_ecount_item_mapping or {}).items())),
+        tuple(sorted((st.session_state.settle_ecount_remark_sheet_map or {}).items())),
+        include_overall,
+        detail_mode,
+    )
+    if plan_signature != st.session_state.settle_ecount_plan_signature:
+        st.session_state.settle_ecount_plan = None
+        st.session_state.settle_ecount_output_path = None
+        st.session_state.settle_ecount_output_filename = None
+        st.session_state.settle_ecount_plan_signature = plan_signature
+
+    # ===== 9. 집계 및 상세내역 미리보기 =====
+    st.markdown("### 👁️ 9. 집계 및 상세내역 미리보기")
     if st.button("🔍 미리보기 생성", key="settle_ecount_preview_btn"):
         try:
-            sheets = st_mod.split_into_sheets(
+            st.session_state.settle_ecount_plan = es.build_ecount_sheet_plan(
                 df_final,
                 remark_to_sheet=st.session_state.settle_ecount_remark_sheet_map,
+                item_mapping=st.session_state.settle_ecount_item_mapping,
+                detail_mode=detail_mode,
+                include_overall=include_overall,
             )
-            st.session_state.settle_ecount_sheets = sheets
         except Exception as e:  # noqa: BLE001
-            st.error(f"❌ 시트 분할 실패: {e}")
-            st.session_state.settle_ecount_sheets = None
+            st.error(f"❌ 정산서 미리보기 생성 실패: {e}")
+            st.session_state.settle_ecount_plan = None
 
-    sheets = st.session_state.settle_ecount_sheets
-    if sheets is not None:
-        sheet_tabs = st.tabs(list(sheets.keys()))
-        for tab, (name, sub) in zip(sheet_tabs, sheets.items()):
+    plan = st.session_state.settle_ecount_plan
+    if plan is not None:
+        preview_sheets = {}
+        if plan.get("overall_df") is not None:
+            preview_sheets[ss.SHEET_OVERALL] = plan["overall_df"]
+        preview_sheets.update(plan["seller_sheets"])
+        if detail_mode == ss.DETAIL_MODE_SINGLE:
+            preview_sheets[ss.DETAIL_SHEET_NAME] = plan["detail_df"]
+        elif detail_mode == ss.DETAIL_MODE_PER_SELLER:
+            preview_sheets.update(plan["detail_sheets"] or {})
+        sheet_tabs = st.tabs(list(preview_sheets))
+        for tab, (name, sub) in zip(sheet_tabs, preview_sheets.items()):
             with tab:
+                is_summary = name in plan["seller_sheets"] or name == ss.SHEET_OVERALL
+                amount_col = "합계" if is_summary else ss.COLUMN_MAP_SALE["amount"]
                 c1, c2, c3 = st.columns(3)
-                c1.metric("데이터 행", f"{len(sub):,}행")
-                c2.metric("수량 합계", f"{int(pd.to_numeric(sub['수량'], errors='coerce').fillna(0).sum()):,}")
-                c3.metric("금액 합계", f"{int(pd.to_numeric(sub['합계'], errors='coerce').fillna(0).sum()):,}원")
+                c1.metric("집계 행" if is_summary else "원본 주문 행", f"{len(sub):,}행")
+                c2.metric("수량 합계", f"{int(sub['수량'].sum()):,}")
+                c3.metric("금액 합계", f"{int(sub[amount_col].sum()):,}원")
                 st.dataframe(sub, use_container_width=True, hide_index=True)
 
-
-# ===== 9. 생성 및 다운로드 =====
-
+# ===== 10. 생성 및 다운로드 =====
+# 2026-10-13 hoyeon.han: 기존 정산서 작성기로 요약과 상세내역을 같은 파일에 작성.
 if (
     parsed is not None
     and st.session_state.settle_ecount_vendor is not None
-    and st.session_state.settle_ecount_sheets is not None
+    and st.session_state.settle_ecount_plan is not None
 ):
-    st.markdown("### 💾 9. 정산서 생성 및 다운로드")
-
+    st.markdown("### 💾 10. 정산서 생성 및 다운로드")
     vendor = st.session_state.settle_ecount_vendor
-    doc_type = parsed["doc_type"]  # 판매현황내역 → 항상 '매출'
+    doc_type = parsed["doc_type"]
     start_date = st.session_state.settle_ecount_start_date
     end_date = st.session_state.settle_ecount_end_date
-    sheets = st.session_state.settle_ecount_sheets
-
     out_filename = st_mod.build_output_filename(doc_type, vendor, start_date, end_date)
     out_path = os.path.join("processed", out_filename)
-    period_line = st_mod.build_period_line(start_date, end_date, vendor)
+    period_line = ss.build_period_line(vendor, start_date=start_date, end_date=end_date)
 
     st.markdown("#### ⚙️ 생성 옵션")
-    st.caption("옵션은 최종 생성 파일에만 적용됩니다 (위 미리보기에는 반영되지 않음).")
-
-    # 일반 시트 중복 자동 감지: 비어있거나 전체 시트와 행 수가 같으면 사실상 중복
-    general_df = sheets.get(st_mod.SHEET_GENERAL)
-    overall_df = sheets.get(st_mod.SHEET_OVERALL)
-    general_redundant = general_df is not None and (
-        len(general_df) == 0
-        or (overall_df is not None and len(general_df) == len(overall_df))
+    oc1, oc2, oc3 = st.columns(3)
+    seller_font_size = oc1.number_input(
+        "셀러 시트 폰트 크기", min_value=8, max_value=36, value=13, step=1,
+        key="settle_ecount_seller_font_size",
     )
-    if "settle_ecount_exclude_general" not in st.session_state:
-        st.session_state["settle_ecount_exclude_general"] = general_redundant
-    if "settle_ecount_highlight_total" not in st.session_state:
-        st.session_state["settle_ecount_highlight_total"] = True
-
-    exclude_general = st.checkbox(
-        "일반 시트 제외",
-        key="settle_ecount_exclude_general",
-        help="일반 시트가 비어있거나 전체 시트와 동일하면 기본 제외됩니다.",
+    total_font_color = oc2.color_picker(
+        "합계행 글씨 색상", value="#FF0000", key="settle_ecount_font_color",
     )
-    if exclude_general and general_df is not None and len(general_df) > 0:
-        st.warning(
-            f"⚠️ '{st_mod.SHEET_GENERAL}' 시트에 {len(general_df):,}행이 있는데 "
-            "'일반 시트 제외'가 켜져 있습니다. 해당 행은 생성 파일에서 빠집니다. "
-            "포함하려면 체크를 해제하세요."
-        )
-    highlight_total = st.checkbox(
-        "전체 시트 금액 합계 강조 (볼드 + 글씨/채우기 색상)",
-        key="settle_ecount_highlight_total",
+    total_fill_color = oc3.color_picker(
+        "합계행 채우기 색상", value="#FFFF00", key="settle_ecount_fill_color",
     )
-
-    total_font_size = 11.0
-    total_font_color = "#FF0000"
-    total_fill_color = "#FFFF00"
-    if highlight_total:
-        oc1, oc2, oc3 = st.columns(3)
-        total_font_size = oc1.number_input(
-            "폰트 크기",
-            min_value=8,
-            max_value=36,
-            value=11,
-            step=1,
-            key="settle_ecount_total_font_size",
-        )
-        total_font_color = oc2.color_picker(
-            "글씨 색상", value="#FF0000", key="settle_ecount_total_font_color"
-        )
-        total_fill_color = oc3.color_picker(
-            "채우기 색상", value="#FFFF00", key="settle_ecount_total_fill_color"
-        )
 
     if st.button("📥 정산서 생성", key="settle_ecount_generate_btn", type="primary"):
         try:
-            sheets_to_write = dict(sheets)
-            if exclude_general and st_mod.SHEET_GENERAL in sheets_to_write:
-                del sheets_to_write[st_mod.SHEET_GENERAL]
-            st_mod.write_settlement_xlsx(
+            # 생성 직전 최신 매핑·출력 옵션으로 다시 계산(미리보기 캐시를 쓰지 않음).
+            plan_final = es.build_ecount_sheet_plan(
+                df_final,
+                remark_to_sheet=st.session_state.settle_ecount_remark_sheet_map,
+                item_mapping=st.session_state.settle_ecount_item_mapping,
+                detail_mode=detail_mode,
+                include_overall=include_overall,
+            )
+            ss.write_seller_settlement_xlsx(
                 out_path=out_path,
-                title=parsed["title"],
+                title=ss.TITLE_SALE,
                 period_line=period_line,
-                sheets=sheets_to_write,
-                highlight_total=highlight_total,
-                total_font_size=float(total_font_size),
+                plan=plan_final,
+                seller_font_size=float(seller_font_size),
                 total_font_color=total_font_color,
                 total_fill_color=total_fill_color,
+                column_map=ss.COLUMN_MAP_SALE,
             )
+            st.session_state.settle_ecount_plan = plan_final
             st.session_state.settle_ecount_output_path = out_path
             st.session_state.settle_ecount_output_filename = out_filename
-            st.session_state.settle_ecount_history.append(
-                {
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "vendor": vendor,
-                    "주문유형": ", ".join(
-                        st.session_state.settle_ecount_order_types or []
-                    ),
-                    "시트수": len(sheets_to_write),
-                    "start_date": str(start_date),
-                    "end_date": str(end_date),
-                    "filename": out_filename,
-                }
+            sheet_count = (
+                len(plan_final["seller_sheets"])
+                + int(plan_final["overall_df"] is not None)
+                + (1 if detail_mode == ss.DETAIL_MODE_SINGLE else
+                   len(plan_final["detail_sheets"] or {}))
             )
+            st.session_state.settle_ecount_history.append({
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "vendor": vendor,
+                "주문유형": ", ".join(st.session_state.settle_ecount_order_types or []),
+                "전체시트": "포함" if include_overall else "제외",
+                "상세내역": detail_label,
+                "시트수": sheet_count,
+                "start_date": str(start_date),
+                "end_date": str(end_date),
+                "filename": out_filename,
+            })
             st.success(f"✅ 생성 완료: `{out_filename}`")
         except Exception as e:  # noqa: BLE001
             st.error(f"❌ 정산서 생성 실패: {e}")
@@ -643,10 +851,7 @@ if (
                 label=f"⬇️ {st.session_state.settle_ecount_output_filename} 다운로드",
                 data=f.read(),
                 file_name=st.session_state.settle_ecount_output_filename,
-                mime=(
-                    "application/vnd.openxmlformats-officedocument."
-                    "spreadsheetml.sheet"
-                ),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="settle_ecount_download_btn",
                 use_container_width=True,
             )

@@ -1,5 +1,9 @@
 """이카운트(ECOUNT) 판매현황내역 → 정산서 변환 로직 / 2026-09-01 hoyeon.han
 
+# 2026-10-13 hoyeon.han: 출력은 build_ecount_sheet_plan을 통해 기존 발주내역의
+# seller_settlement 집계·상세내역·작성기를 사용한다. 아래 파이프라인 설명은
+# 2026-09-01 최초 구현 기록이며 현재 화면의 출력 연결은 변경되었다.
+
 # 2026-09-01 hoyeon.han: 이카운트 정산서 생성 신규 모듈
 
 이카운트 ERP에서 내려받은 '판매현황내역' .xlsx 를 파싱해,
@@ -46,6 +50,8 @@ import pandas as pd
 
 # 기존 정산서 상수 재사용 (seller_settlement.py 와 동일한 flat-import 선례)
 from settlement import TYPE_SALE
+# 2026-10-13 hoyeon.han: 발주내역 정산서의 집계·상세내역·시트 계획 재사용.
+import seller_settlement as ss
 
 # ===== 상수 =====
 
@@ -87,6 +93,8 @@ PARSED_COLS = [
     "연락처1",
     "수하인주소",
 ]
+# 2026-10-13 hoyeon.han: 상세내역과 비용 중복 검증에 필요한 원본 열 보존.
+PARSED_COLS += ["연락처2", "배송비", "도선료"]
 
 COL_ORDER_TYPE = "구분"  # 주문유형 (발주/반품 등)
 COL_REMARK = "비고"  # 셀러명
@@ -353,13 +361,17 @@ def parse_ecount_xlsx(
         )
     # UNIT_RAW: 이카운트 원본 단가 그대로 사용 (2026-09-01 사용자 결정)
 
+    # 기존 설명 보존:
     # 컬럼 rename + 순서 확정.
     # 배송비/도선료 컬럼은 전 행 0이고 합계에 이미 포함되어 있으므로 제외한다
     # (품목명이 '배송비'/'도선료'인 별도 행으로 이미 반영됨).
+    # 2026-10-13 hoyeon.han: 원본 비용 열을 보존해 지원 양식인지 출력 전 검증한다.
     df = df.rename(columns={k: v for k, v in RENAME_MAP.items() if k in df.columns})
     for c in PARSED_COLS:
         if c not in df.columns:
-            df[c] = ""
+            # df[c] = ""
+            # 2026-10-13 hoyeon.han: 선택 비용 열이 없는 파일은 숫자 0으로 보충.
+            df[c] = 0.0 if c in ("배송비", "도선료") else ""
     df = df[PARSED_COLS].reset_index(drop=True)
 
     # 조회기간 — A1 인식 실패 시 데이터 일자 범위로 폴백
@@ -389,6 +401,87 @@ def parse_ecount_xlsx(
         "unit_price_mode": unit_price_mode,
         "swap_warning": detect_swap_suspicion(df),
     }
+
+
+# 2026-10-13 hoyeon.han: 원본 단가는 보존하고 출력만 기존 정산서 규칙으로 변환.
+def to_order_settlement_df(df: pd.DataFrame) -> pd.DataFrame:
+    """이카운트 원본 행을 기존 매출 정산서의 13열 입력으로 변환한다.
+
+    합계는 이미 정산금액이므로 전액 상품매출에 대응한다. 배송비·도선료는
+    원본의 별도 품목 행을 유지하고, 비용 컬럼으로 다시 생성하지 않는다.
+    원본 비용 컬럼에 금액이 있으면 포함 관계를 추정하지 않고 생성 중단한다.
+    원본 DataFrame과 원본 단가는 수정하지 않는다.
+    """
+    required = ["작성일자", "회사명", "품목", "구분", "수량", "합계", "비고"]
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        raise ValueError("정산서 변환에 필요한 열이 없습니다: " + ", ".join(missing))
+    for fee_col in ("배송비", "도선료"):
+        if fee_col in df.columns and _to_number(df[fee_col]).ne(0).any():
+            raise ValueError(
+                f"원본 '{fee_col}' 열에 0이 아닌 금액이 있습니다. "
+                "현재 지원 양식은 배송비·도선료를 별도 품목 행으로 표시합니다. "
+                "중복 정산을 막기 위해 생성을 중단했습니다. 원본 양식을 확인하세요."
+            )
+
+    dates = pd.to_datetime(df["작성일자"], errors="coerce").dt.normalize()
+    if dates.isna().any():
+        raise ValueError("정산서 변환 중 유효하지 않은 날짜가 발견되었습니다. 원본을 확인하세요.")
+
+    # 2026-10-13 hoyeon.han: 공유 작성기의 정수 반올림으로 원본 총계가 바뀌지 않게
+    # 수량·금액의 지원 범위를 확인한다. 원본 단가 및 계산 단가의 소수는 허용한다.
+    numeric = {}
+    for source in ("수량", "합계"):
+        values = _to_number(df[source])
+        if not np.isfinite(values).all() or values.ne(values.round()).any():
+            raise ValueError(
+                f"원본 '{source}' 열에 정수 단위가 아닌 값이 있습니다. "
+                "기존 정산서 양식은 수량·금액을 정수로 출력하므로 "
+                "합계가 달라지지 않도록 생성을 중단했습니다. 원본을 확인하세요."
+            )
+        numeric[source] = values
+
+    source_map = {
+        "vendor": "회사명", "category": "구분", "consignee": "수하인명",
+        "address": "수하인주소", "product": "품목", "phone1": "연락처1",
+        "phone2": "연락처2", "seller": "비고",
+    }
+    out = pd.DataFrame(index=df.index)
+    out[ss.COLUMN_MAP_SALE["date"]] = dates
+    for logical, source in source_map.items():
+        values = df[source] if source in df.columns else pd.Series("", index=df.index)
+        out[ss.COLUMN_MAP_SALE[logical]] = _clean_series(values)
+    seller_col = ss.COLUMN_MAP_SALE["seller"]
+    out[seller_col] = out[seller_col].replace("", ss.SHEET_GENERAL)
+    # out[ss.COLUMN_MAP_SALE["qty"]] = _to_number(df["수량"])
+    # out[ss.COLUMN_MAP_SALE["amount"]] = _to_number(df["합계"])
+    # 2026-10-13 hoyeon.han: 정수 단위 검증을 통과한 값만 공유 작성기에 전달.
+    out[ss.COLUMN_MAP_SALE["qty"]] = numeric["수량"]
+    out[ss.COLUMN_MAP_SALE["amount"]] = numeric["합계"]
+    out[ss.COLUMN_MAP_SALE["delivery"]] = 0.0
+    out[ss.COLUMN_MAP_SALE["ferry"]] = 0.0
+    return out[[ss.COLUMN_MAP_SALE[k] for k in ss.DETAIL_LOGICAL_COLS]].reset_index(drop=True)
+
+
+# 2026-10-13 hoyeon.han: 요약·상세·전체 시트를 기존 발주내역과 같은 계획으로 작성.
+def build_ecount_sheet_plan(
+    df: pd.DataFrame,
+    remark_to_sheet: dict[str, str] | None = None,
+    item_mapping: dict[str, str] | None = None,
+    detail_mode: str = ss.DETAIL_MODE_SINGLE,
+    include_overall: bool = True,
+) -> dict[str, Any]:
+    """필터된 이카운트 행을 집계한다. 단가=행 금액/수량(기존 4자리 규칙)."""
+    orders = to_order_settlement_df(df)
+    sellers = ss.extract_sellers(orders)
+    return ss.build_sheet_plan(
+        orders,
+        sellers,
+        seller_to_sheet=remark_to_sheet,
+        item_mapping=item_mapping,
+        detail_mode=detail_mode,
+        include_overall=include_overall,
+    )
 
 
 def extract_order_types(df: pd.DataFrame) -> list[str]:
