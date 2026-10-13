@@ -94,6 +94,10 @@ else:
     _p_settle_seller = st.Page(
         "pages/settlement_seller.py", title="정산서 생성(셀러)", icon="🧾", url_path="settlement-seller"
     )
+    # 2026-09-01 hoyeon.han: 이카운트 판매현황내역 기반 정산서 생성 페이지 추가
+    _p_settle_ecount = st.Page(
+        "pages/settlement_ecount.py", title="정산서 생성(이카운트)", icon="🧮", url_path="settlement-ecount"
+    )
     _p_summary = st.Page("pages/order_summary.py", title="요약", icon="📊", url_path="order-summary")
     _p_compare = st.Page("pages/order_compare.py", title="비교", icon="🔍", url_path="order-compare")
     _p_customer = st.Page("pages/customers.py", title="거래처 관리", icon="🏢", url_path="customers")
@@ -109,6 +113,7 @@ else:
             _p_vendor,
             _p_settle,
             _p_settle_seller,
+            _p_settle_ecount,
             _p_summary,
             _p_compare,
             _p_customer,
@@ -127,6 +132,7 @@ else:
         st.markdown("**정산서**")
         st.page_link(_p_settle)
         st.page_link(_p_settle_seller)
+        st.page_link(_p_settle_ecount)
         st.markdown("**발주내역**")
         st.page_link(_p_summary)
         st.page_link(_p_compare)
