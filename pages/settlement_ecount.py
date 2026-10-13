@@ -200,6 +200,60 @@ def _parse_ecount_cached(
     return es.parse_ecount_xlsx(io.BytesIO(_file_bytes))
 
 
+# 2026-10-13 hoyeon.han: 사용자가 제공한 화면 원본을 cwd와 무관하게 불러온다.
+_MANUAL_IMAGE_PATH = (
+    Path(__file__).resolve().parent.parent / "assets" / "ecount_sales_download_guide.png"
+)
+
+
+# 2026-10-13 hoyeon.han: 읽기 전용 매뉴얼 팝업. 파일·셀러·정산 세션은 변경하지 않는다.
+@st.dialog(
+    "이카운트 판매현황내역 다운로드 방법",
+    width="large",
+    dismissible=True,
+    on_dismiss="ignore",
+)
+def _show_download_manual() -> None:
+    st.info(
+        # 2026-10-13 hoyeon.han: 핵심 두 설정을 팝업 상단에서 굵게 강조한다.
+        "보고서 유형: **정산서**\n\n"
+        "다운로드: **검색(F8) 오른쪽 ▼ → Excel(데이터)**"
+    )
+    st.markdown(
+        "### 다운로드 순서\n\n"
+        "1. 이카운트에서 **재고Ⅰ → 영업관리 → 판매 → 판매현황**으로 이동합니다.\n"
+        "2. **메뉴: 현황 / 구분: 라인별**로 두고, 기준일자에 정산 기간을 지정합니다. "
+        "필요한 거래처를 지정하고 **거래구분은 전체**로 두어 반품도 포함합니다.\n"
+        "3. 화면 하단의 보고서 유형을 **정산서**로 선택합니다. "
+        "이 양식으로 내려받아야 정산서 생성에 필요한 열이 포함됩니다.\n"
+        "4. 파란 **검색(F8) 버튼** 오른쪽의 ▼를 누르고, 펼쳐진 메뉴에서 "
+        "**Excel(데이터)** 항목을 선택해 다운로드합니다. **Excel(화면)이 아닙니다.**\n"
+        "5. 다운로드한 **.xlsx** 파일을 이 화면에 업로드합니다. "
+        "시트명·머리글·데이터 행을 임의로 변경하지 마세요."
+    )
+    if _MANUAL_IMAGE_PATH.is_file():
+        st.image(
+            str(_MANUAL_IMAGE_PATH),
+            caption="하단 '정산서' 보고서 유형과 검색(F8) 오른쪽 ▼ 위치를 확인하세요.",
+            width="stretch",
+        )
+    else:
+        st.warning("매뉴얼 이미지를 불러올 수 없습니다. 위 다운로드 순서를 참고하세요.")
+    st.markdown(
+        "### 업로드 전 확인\n\n"
+        "- 원본 파일의 **구분 열은 발주·반품 등 주문유형**, "
+        "**특이사항 열은 셀러명**이어야 합니다. "
+        "조회 화면의 '구분: 라인별'과 원본의 주문유형 열은 서로 다른 항목입니다.\n"
+        "- 필수 열: **일자, 거래처명, 품목명, 구분, 수량, 단가, 합계, 특이사항**.\n"
+        "- 상세내역에 필요한 **수하인명, 연락처1, 수하인주소**도 기존 정산서 양식에 "
+        "포함되어 있는지 확인하세요.\n"
+        "- 업로드 후 **원본 총합계 검산**을 확인하고, 정산할 **셀러를 복수 선택**하세요."
+    )
+    st.caption("팝업을 닫아도 업로드 파일과 셀러 선택값은 그대로 유지됩니다.")
+    if st.button("닫기", key="settle_ecount_manual_close"):
+        st.rerun()
+
+
 # ===== 페이지 헤더 =====
 
 render_page_header(
@@ -207,6 +261,11 @@ render_page_header(
     "이카운트 판매현황내역(.xlsx)을 셀러별 시트로 정리·발행합니다.",
     icon="🧮",
 )
+
+
+# 2026-10-13 hoyeon.han: 업로드 전 및 셀러 미선택 상태에서도 매뉴얼을 열 수 있다.
+if st.button("📖 다운로드 매뉴얼", key="settle_ecount_manual_open"):
+    _show_download_manual()
 
 
 # ===== 1. 파일 업로드 =====

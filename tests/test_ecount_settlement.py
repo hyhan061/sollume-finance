@@ -11,6 +11,8 @@
 
 import re
 import sys
+# 2026-10-13 hoyeon.han: 팝업 전후 세션과 DataFrame의 독립 스냅샷을 비교한다.
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 
@@ -1107,7 +1109,9 @@ def test_seller_ui_initially_unselected_and_select_all(ecount_seller_ui_app):
     assert at.session_state["settle_ecount_vendor"] == "테스트업체"
     assert [widget.key for widget in at.multiselect] == ["settle_ecount_seller_multiselect"]
     assert not any("주문유형" in widget.label for widget in at.selectbox)
-    assert not any("주문유형" in node.value and "선택" in node.value for node in at.markdown)
+    # assert not any("주문유형" in node.value and "선택" in node.value for node in at.markdown)
+    # 2026-10-13 hoyeon.han: 도움말의 주문유형 설명/셀러 선택 안내는 허용한다.
+    _assert_ecount_no_order_type_selector(at)
     widget_order = [node.key for node in at if node.type in ("selectbox", "multiselect")]
     assert widget_order.index("settle_ecount_vendor_select") < widget_order.index(
         "settle_ecount_seller_multiselect"
@@ -1276,3 +1280,297 @@ def test_seller_ui_blank_remarks_select_general(ecount_seller_ui_app, blank):
     assert plan["detail_df"][
         ["특이사항", "구분", "수량", "상품매출"]
     ].values.tolist() == [["일반", "", 1, 7000]]
+
+
+# 2026-10-13 hoyeon.han: 팝업 도움말을 제외한 실제 선택 제목/위젯만 검증한다.
+def _assert_ecount_no_order_type_selector(at):
+    for node in at.markdown:
+        assert not re.search(r"^#{1,6}[^\n]*주문유형[^\n]*선택", node.value, re.MULTILINE)
+    for widgets in (at.selectbox, at.multiselect, at.radio, at.checkbox):
+        assert not any("주문유형" in widget.label for widget in widgets)
+
+
+# 2026-10-13 hoyeon.han: 업로드 전에도 전체 페이지를 실제 실행하고 cwd를 격리한다.
+@pytest.fixture
+def ecount_manual_empty_app(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    # Streamlit 1.51.0 AppTest의 file_uploader는 UnknownElement이다.
+    # 실제 파일 지정/업로드 API가 없어 이후 상태는 기존 합성 fixture로 주입한다.
+    # 실제 업로드 및 X/ESC 닫기는 별도의 실브라우저 검증 대상이다.
+    monkeypatch.chdir(tmp_path)
+    at = AppTest.from_file(
+        str(_TESTS_DIR.parent / "pages" / "settlement_ecount.py"), default_timeout=30
+    ).run()
+    _assert_ecount_seller_ui_clean(at)
+    return at
+
+
+# 2026-10-13 hoyeon.han: 실제 이미지 렌더링을 유지하면서 원본 자산 경로를 기록한다.
+@pytest.fixture
+def ecount_manual_image_calls(monkeypatch):
+    import streamlit
+
+    calls = []
+    original_image = streamlit.image
+
+    def record_image(image, *args, **kwargs):
+        calls.append(image)
+        return original_image(image, *args, **kwargs)
+
+    monkeypatch.setattr(streamlit, "image", record_image)
+    return calls
+
+
+# 2026-10-13 hoyeon.han: 파싱 결과/계획의 중첩 DataFrame도 값 기준으로 비교한다.
+def _assert_ecount_manual_values_equal(actual, expected):
+    if isinstance(expected, pd.DataFrame):
+        pd.testing.assert_frame_equal(actual, expected)
+    elif isinstance(expected, dict):
+        assert actual.keys() == expected.keys()
+        for key in expected:
+            _assert_ecount_manual_values_equal(actual[key], expected[key])
+    elif isinstance(expected, (list, tuple)):
+        assert type(actual) is type(expected)
+        assert len(actual) == len(expected)
+        for actual_value, expected_value in zip(actual, expected):
+            _assert_ecount_manual_values_equal(actual_value, expected_value)
+    else:
+        assert actual == expected
+
+
+# 2026-10-13 hoyeon.han: 버튼의 일회성 값만 제외하고 정산 상태와 전체 UI를 보존한다.
+def _snapshot_ecount_manual_ui(at):
+    transient_keys = {
+        "settle_ecount_manual_open", "settle_ecount_manual_close",
+        "settle_ecount_select_all", "settle_ecount_preview_btn",
+        "settle_ecount_generate_btn", "settle_ecount_download_btn",
+    }
+    return deepcopy({
+        "session": {
+            key: value for key, value in at.session_state.filtered_state.items()
+            if key.startswith("settle_ecount_") and key not in transient_keys
+        },
+        "widgets": [
+            (node.type, node.key, node.value) for node in at
+            if node.type in {
+                "selectbox", "multiselect", "date_input", "checkbox", "radio",
+                "number_input", "color_picker",
+            }
+        ],
+        "tables": [node.value for node in at.dataframe],
+        "tabs": [tab.label for tab in at.tabs],
+        "metrics": [(node.label, node.value) for node in at.metric],
+        "downloads": [
+            (node.proto.id, node.proto.label, node.proto.url, node.proto.disabled)
+            for node in at.get("download_button")
+        ],
+    })
+
+
+# 2026-10-13 hoyeon.han: 큰 팝업/무시되는 dismissal 설정과 실제 안내/이미지를 검증한다.
+def _assert_ecount_manual_open(at, image_calls):
+    from streamlit.proto.Block_pb2 import Block
+
+    _assert_ecount_seller_ui_clean(at)
+    dialogs = at.get("dialog")
+    assert len(dialogs) == 1
+    dialog = dialogs[0].proto.dialog
+    assert dialog.is_open is True
+    assert dialog.width == Block.Dialog.LARGE
+    assert dialog.dismissible is True
+    # ignore 설정은 dismissal rerun용 dialog id를 등록하지 않는다.
+    assert dialog.id == ""
+    assert at.button(key="settle_ecount_manual_close").label == "닫기"
+    assert any(node.value == (
+        "보고서 유형: **정산서**\n\n"
+        "다운로드: **검색(F8) 오른쪽 ▼ → Excel(데이터)**"
+    ) for node in at.info)
+    text = "\n".join(node.value for node in [*at.markdown, *at.info, *at.caption])
+    text = text.replace("**", "")
+    for phrase in (
+        "정산서", "검색(F8)", "▼", "Excel(데이터)", "구분: 라인별", "거래구분은 전체",
+    ):
+        assert phrase in text
+    assert re.search(r"Excel\(화면\)[^\n]*(?:아닙니다|사용하지)", text)
+    image_path = _TESTS_DIR.parent / "assets" / "ecount_sales_download_guide.png"
+    assert image_path.is_file()
+    assert image_calls and Path(image_calls[-1]).resolve() == image_path.resolve()
+    images = at.get("imgs")
+    assert len(images) == 1 and len(images[0].proto.imgs) == 1
+    assert images[0].proto.imgs[0].url
+    assert "정산서" in images[0].proto.imgs[0].caption
+    assert not any("이미지를 불러올 수 없습니다" in node.value for node in at.warning)
+    _assert_ecount_no_order_type_selector(at)
+
+
+# 2026-10-13 hoyeon.han: 닫기 버튼의 전체 rerun 후 팝업이 다시 열리지 않음을 확인한다.
+def _assert_ecount_manual_closed(at):
+    _assert_ecount_seller_ui_clean(at)
+    assert not at.get("dialog")
+    assert not at.get("imgs")
+    assert "settle_ecount_manual_close" not in [button.key for button in at.button]
+    assert at.button(key="settle_ecount_manual_open").value is False
+    _assert_ecount_no_order_type_selector(at)
+
+
+# 2026-10-13 hoyeon.han: 열린 동안/닫은 직후/기본 전체 rerun에서 같은 상태를 비교한다.
+def _exercise_ecount_manual(at, image_calls):
+    before = _snapshot_ecount_manual_ui(at)
+    at.button(key="settle_ecount_manual_open").click().run()
+    _assert_ecount_manual_open(at, image_calls)
+    _assert_ecount_manual_values_equal(_snapshot_ecount_manual_ui(at), before)
+    at.button(key="settle_ecount_manual_close").click().run()
+    _assert_ecount_manual_closed(at)
+    _assert_ecount_manual_values_equal(_snapshot_ecount_manual_ui(at), before)
+    at.run()
+    _assert_ecount_manual_closed(at)
+    _assert_ecount_manual_values_equal(_snapshot_ecount_manual_ui(at), before)
+
+
+def test_manual_ui_before_upload_open_close_and_default_rerun(
+    ecount_manual_empty_app, ecount_manual_image_calls
+):
+    """2026-10-13 hoyeon.han: 업로드 위 버튼이 초기 전체 화면에서도 열린다."""
+    at = ecount_manual_empty_app
+    assert at.session_state["settle_ecount_parsed"] is None
+    assert at.session_state["settle_ecount_uploaded_sig"] is None
+    nodes = list(at)
+    button_index = next(i for i, node in enumerate(nodes)
+                        if node.type == "button" and node.key == "settle_ecount_manual_open")
+    uploader_index = next(i for i, node in enumerate(nodes) if node.type == "file_uploader")
+    assert button_index < uploader_index
+    assert len(at.get("file_uploader")) == 1
+    assert at.get("file_uploader")[0].proto.id.endswith("-settle_ecount_uploader")
+    before = _snapshot_ecount_manual_ui(at)
+    at.run()
+    _assert_ecount_manual_values_equal(_snapshot_ecount_manual_ui(at), before)
+    for _ in range(2):
+        _exercise_ecount_manual(at, ecount_manual_image_calls)
+    assert not at.get("download_button") and not at.tabs
+    assert at.session_state["settle_ecount_history"] == []
+    assert not list((Path.cwd() / "processed").iterdir())
+
+
+def test_manual_ui_initial_seller_unselected_keeps_parsed_and_signature(
+    ecount_seller_ui_app, ecount_manual_image_calls
+):
+    """2026-10-13 hoyeon.han: 셀러 미선택 st.stop에도 팝업과 전체 rerun이 안전하다."""
+    at = ecount_seller_ui_app
+    _assert_ecount_seller_ui_blocked(at)
+    _exercise_ecount_manual(at, ecount_manual_image_calls)
+    _assert_ecount_seller_ui_blocked(at)
+    assert at.session_state["settle_ecount_uploaded_sig"] == ("synthetic_ecount.xlsx", 1)
+    assert at.session_state["settle_ecount_history"] == []
+    assert not list((Path.cwd() / "processed").iterdir())
+
+
+# 2026-10-13 hoyeon.han: AppTest 전체 rerun에서도 실제 닫기 분기 실행을 확인한다.
+def test_manual_ui_close_button_calls_full_rerun(
+    ecount_seller_ui_app, ecount_manual_image_calls, monkeypatch
+):
+    import streamlit
+
+    at = ecount_seller_ui_app
+    before = _snapshot_ecount_manual_ui(at)
+    calls = []
+    original_rerun = streamlit.rerun
+
+    def record_rerun(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_rerun(*args, **kwargs)
+
+    monkeypatch.setattr(streamlit, "rerun", record_rerun)
+    at.button(key="settle_ecount_manual_open").click().run()
+    _assert_ecount_manual_open(at, ecount_manual_image_calls)
+    # AppTest 1.51.0은 dialog fragment만 재실행하지 않으므로 열기도 함께 지정한다.
+    # 그래야 전체 실행에서 팝업 함수에 진입하여 닫기 버튼의 실제 분기를 지난다.
+    at.button(key="settle_ecount_manual_open").click()
+    at.button(key="settle_ecount_manual_close").click().run()
+    _assert_ecount_seller_ui_clean(at)
+    assert calls == [((), {})]  # 기본 scope="app"의 원래 st.rerun을 실행한다.
+    # AppTest 메시지 큐에 남은 dialog 표시를 다음 전체 실행에서 정리한다.
+    at.run()
+    _assert_ecount_manual_closed(at)
+    _assert_ecount_seller_ui_blocked(at)
+    _assert_ecount_manual_values_equal(_snapshot_ecount_manual_ui(at), before)
+
+
+def test_manual_ui_full_default_output_survives_rerun(
+    ecount_seller_ui_app, ecount_manual_image_calls
+):
+    """2026-10-13 hoyeon.han: 기본 옵션의 전체 UI/미리보기/다운로드까지 반복 실행."""
+    at = ecount_seller_ui_app
+    at.button(key="settle_ecount_select_all").click().run()
+    _preview_ecount_seller_ui(at)
+    assert at.checkbox(key="settle_ecount_include_overall_cb").value is True
+    assert at.radio(key="settle_ecount_detail_mode_radio").value == "전체 하나로 생성"
+    at.button(key="settle_ecount_generate_btn").click().run()
+    _assert_ecount_seller_ui_clean(at)
+    assert [tab.label for tab in at.tabs] == ["전체", "셀러A", "셀러B", "셀러C", "일반", "상세내역"]
+    assert len(at.get("download_button")) == 1
+    assert len(at.session_state["settle_ecount_history"]) == 1
+    before = _snapshot_ecount_manual_ui(at)
+    out_path = Path(at.session_state["settle_ecount_output_path"]).resolve()
+    content = out_path.read_bytes()
+    for _ in range(2):
+        at.run()
+        _assert_ecount_manual_closed(at)
+        _assert_ecount_manual_values_equal(_snapshot_ecount_manual_ui(at), before)
+        _exercise_ecount_manual(at, ecount_manual_image_calls)
+        assert out_path.read_bytes() == content
+
+
+# 2026-10-13 hoyeon.han: 기간·복수 셀러·편집된 매핑을 생성 전후 모두 검증한다.
+@pytest.mark.parametrize("generate", [False, True], ids=["preview", "download"])
+def test_manual_ui_preserves_period_mapping_preview_output_and_history(
+    ecount_seller_ui_app, ecount_manual_image_calls, generate
+):
+    at = ecount_seller_ui_app
+    at.date_input(key="settle_ecount_start_input").set_value(date(2026, 10, 2)).run()
+    at.date_input(key="settle_ecount_end_input").set_value(date(2026, 10, 2)).run()
+    at.multiselect(key="settle_ecount_seller_multiselect").set_value(["셀러A", "셀러B"]).run()
+    for key, edits in (
+        ("settle_ecount_item_editor", {0: {"변경": "팝업검증상품"}}),
+        ("settle_ecount_sheet_editor", {
+            0: {"배치할 시트": "팝업검증통합"}, 1: {"배치할 시트": "팝업검증통합"},
+        }),
+    ):
+        at.session_state[key] = {"edited_rows": edits, "added_rows": [], "deleted_rows": []}
+    at.run()
+    plan = _preview_ecount_seller_ui(at)
+    assert list(plan["seller_sheets"]) == ["팝업검증통합"]
+    assert plan["overall_df"]["합계"].sum() == 18000
+    assert plan["detail_df"]["제품"].tolist() == ["팝업검증상품", "상품B"]
+    assert at.session_state["settle_ecount_sellers"] == ["셀러A", "셀러B"]
+    assert at.session_state["settle_ecount_start_date"] == date(2026, 10, 2)
+    assert at.session_state["settle_ecount_end_date"] == date(2026, 10, 2)
+    out_path = None
+    if generate:
+        at.button(key="settle_ecount_generate_btn").click().run()
+        _assert_ecount_seller_ui_clean(at)
+        out_path = Path(at.session_state["settle_ecount_output_path"]).resolve()
+        assert out_path.parent == Path.cwd() / "processed"
+        content = out_path.read_bytes()
+        assert len(at.get("download_button")) == 1
+        assert at.session_state["settle_ecount_output_filename"] in at.get("download_button")[0].proto.label
+        history = at.session_state["settle_ecount_history"]
+        assert len(history) == 1 and history[0]["셀러"] == "셀러A, 셀러B"
+        assert history[0]["start_date"] == history[0]["end_date"] == "2026-10-02"
+        wb = openpyxl.load_workbook(out_path)
+        try:
+            assert wb.sheetnames == ["전체", "팝업검증통합", "상세내역"]
+            assert wb["상세내역"].cell(2, 6).value == "팝업검증상품"
+            assert [wb["상세내역"].cell(row, 11).value for row in (2, 3)] == [-10000, 28000]
+        finally:
+            wb.close()
+    else:
+        assert at.session_state["settle_ecount_output_path"] is None
+        assert not at.get("download_button")
+        assert at.session_state["settle_ecount_history"] == []
+    _exercise_ecount_manual(at, ecount_manual_image_calls)
+    if out_path is not None:
+        assert out_path.read_bytes() == content
+        assert list((Path.cwd() / "processed").iterdir()) == [out_path]
+    else:
+        assert not list((Path.cwd() / "processed").iterdir())
