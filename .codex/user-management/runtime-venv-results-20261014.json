@@ -1,0 +1,382 @@
+{
+  "generated_at": "2026-10-14T09:16:38.794197+00:00",
+  "started_at": "2026-10-14T09:16:10.443352+00:00",
+  "passed": true,
+  "check_count": 84,
+  "checks": [
+    {
+      "name": "legacy_fixture_migration_preserves_ids_accounts_counts_history",
+      "passed": true
+    },
+    {
+      "name": "production_dependency_image_available",
+      "passed": true
+    },
+    {
+      "name": "actual_nginx_configuration_valid",
+      "passed": true
+    },
+    {
+      "name": "actual_nginx_auth_request_module_available",
+      "passed": true
+    },
+    {
+      "name": "application_auth_api_ports_not_published_proxy_loopback_only",
+      "passed": true
+    },
+    {
+      "name": "actual_runtime_code_mounted_read_only",
+      "passed": true
+    },
+    {
+      "name": "actual_runtime_uses_disposable_db_orders_processed",
+      "passed": true
+    },
+    {
+      "name": "anonymous_browser_root_redirects_login",
+      "passed": true,
+      "status": 302,
+      "location": "https://sollumeesthe.com/auth/login"
+    },
+    {
+      "name": "anonymous_http_blocked__",
+      "passed": true
+    },
+    {
+      "name": "anonymous_http_blocked__daily-voucher",
+      "passed": true
+    },
+    {
+      "name": "anonymous_http_blocked__users",
+      "passed": true
+    },
+    {
+      "name": "anonymous_http_blocked__system",
+      "passed": true
+    },
+    {
+      "name": "anonymous_http_blocked___stcore_upload_file_fake_fake",
+      "passed": true
+    },
+    {
+      "name": "anonymous_http_blocked__static_fake.js",
+      "passed": true
+    },
+    {
+      "name": "anonymous_upload_post_blocked_before_streamlit",
+      "passed": true
+    },
+    {
+      "name": "anonymous_websocket_denied",
+      "passed": true
+    },
+    {
+      "name": "tls12_or_tls13_in_use",
+      "passed": true,
+      "tls_version": "TLSv1.3"
+    },
+    {
+      "name": "legacy_media_route_denied__media",
+      "passed": true
+    },
+    {
+      "name": "legacy_media_route_denied__media_fake.xls",
+      "passed": true
+    },
+    {
+      "name": "internal_endpoint_not_public___auth_check",
+      "passed": true
+    },
+    {
+      "name": "internal_endpoint_not_public__auth_check",
+      "passed": true
+    },
+    {
+      "name": "internal_endpoint_not_public__auth_health",
+      "passed": true
+    },
+    {
+      "name": "internal_endpoint_not_public___stcore_health",
+      "passed": true
+    },
+    {
+      "name": "spoofed_identity_ip_headers_do_not_bypass_auth",
+      "passed": true
+    },
+    {
+      "name": "unexpected_public_host_connection_rejected",
+      "passed": true
+    },
+    {
+      "name": "http_redirect_fixed_https_domain_no_host_reflection",
+      "passed": true
+    },
+    {
+      "name": "login_form_security_headers_and_no_store",
+      "passed": true
+    },
+    {
+      "name": "csrf_missing_denied",
+      "passed": true
+    },
+    {
+      "name": "cross_origin_login_post_denied",
+      "passed": true
+    },
+    {
+      "name": "admin_password_redirects_only_to_mfa_or_enrollment",
+      "passed": true
+    },
+    {
+      "name": "admin_password_challenge_cannot_access_app",
+      "passed": true
+    },
+    {
+      "name": "admin_password_challenge_cannot_open_websocket",
+      "passed": true
+    },
+    {
+      "name": "admin_password_challenge_cannot_download",
+      "passed": true
+    },
+    {
+      "name": "admin_valid_local_enrollment_code_accepted",
+      "passed": true
+    },
+    {
+      "name": "admin_server_generated_qr_and_manual_secret_visible_after_proof",
+      "passed": true
+    },
+    {
+      "name": "admin_mfa_enrollment_and_forced_password_change_completes_login",
+      "passed": true
+    },
+    {
+      "name": "admin_production_session_cookie_secure_http_only_host_only",
+      "passed": true
+    },
+    {
+      "name": "admin_complete_session_receives_streamlit_shell",
+      "passed": true
+    },
+    {
+      "name": "staff_password_redirects_only_to_mfa_or_enrollment",
+      "passed": true
+    },
+    {
+      "name": "staff_password_challenge_cannot_access_app",
+      "passed": true
+    },
+    {
+      "name": "staff_password_challenge_cannot_open_websocket",
+      "passed": true
+    },
+    {
+      "name": "staff_password_challenge_cannot_download",
+      "passed": true
+    },
+    {
+      "name": "staff_valid_local_enrollment_code_accepted",
+      "passed": true
+    },
+    {
+      "name": "staff_server_generated_qr_and_manual_secret_visible_after_proof",
+      "passed": true
+    },
+    {
+      "name": "staff_mfa_enrollment_and_forced_password_change_completes_login",
+      "passed": true
+    },
+    {
+      "name": "staff_production_session_cookie_secure_http_only_host_only",
+      "passed": true
+    },
+    {
+      "name": "staff_complete_session_receives_streamlit_shell",
+      "passed": true
+    },
+    {
+      "name": "other_password_redirects_only_to_mfa_or_enrollment",
+      "passed": true
+    },
+    {
+      "name": "other_password_challenge_cannot_access_app",
+      "passed": true
+    },
+    {
+      "name": "other_password_challenge_cannot_open_websocket",
+      "passed": true
+    },
+    {
+      "name": "other_password_challenge_cannot_download",
+      "passed": true
+    },
+    {
+      "name": "other_valid_local_enrollment_code_accepted",
+      "passed": true
+    },
+    {
+      "name": "other_server_generated_qr_and_manual_secret_visible_after_proof",
+      "passed": true
+    },
+    {
+      "name": "other_mfa_enrollment_and_forced_password_change_completes_login",
+      "passed": true
+    },
+    {
+      "name": "other_production_session_cookie_secure_http_only_host_only",
+      "passed": true
+    },
+    {
+      "name": "other_complete_session_receives_streamlit_shell",
+      "passed": true
+    },
+    {
+      "name": "authenticated_websocket_upgrade_101",
+      "passed": true
+    },
+    {
+      "name": "authenticated_cross_origin_websocket_denied",
+      "passed": true
+    },
+    {
+      "name": "untrusted_internal_peer_spoofed_proxy_cannot_use_check_or_https_login",
+      "passed": true
+    },
+    {
+      "name": "staff_service_allowed_daily_only_and_admin_denied",
+      "passed": true
+    },
+    {
+      "name": "staff_permission_denied_period-voucher",
+      "passed": true
+    },
+    {
+      "name": "staff_permission_denied_users",
+      "passed": true
+    },
+    {
+      "name": "staff_permission_denied_system",
+      "passed": true
+    },
+    {
+      "name": "valid_download_exact_original_bytes_immutable_same_filename",
+      "passed": true
+    },
+    {
+      "name": "valid_download_attachment_no_store",
+      "passed": true
+    },
+    {
+      "name": "anonymous_download_denied",
+      "passed": true
+    },
+    {
+      "name": "other_user_download_denied",
+      "passed": true
+    },
+    {
+      "name": "same_user_other_session_download_denied",
+      "passed": true
+    },
+    {
+      "name": "malformed_download_id_denied",
+      "passed": true
+    },
+    {
+      "name": "legacy_media_denied_even_when_authenticated",
+      "passed": true
+    },
+    {
+      "name": "expired_download_denied",
+      "passed": true
+    },
+    {
+      "name": "permission_change_revokes_previous_staff_http",
+      "passed": true
+    },
+    {
+      "name": "permission_change_revokes_previous_staff_download",
+      "passed": true
+    },
+    {
+      "name": "permission_change_revokes_previous_staff_websocket",
+      "passed": true
+    },
+    {
+      "name": "permission_change_revokes_all_other_staff_sessions",
+      "passed": true
+    },
+    {
+      "name": "account_suspension_revokes_http_and_websocket",
+      "passed": true
+    },
+    {
+      "name": "idle_timeout_denies_http_and_websocket",
+      "passed": true
+    },
+    {
+      "name": "auth_service_unavailable_fails_closed_root",
+      "passed": true
+    },
+    {
+      "name": "auth_service_unavailable_fails_closed_download",
+      "passed": true
+    },
+    {
+      "name": "auth_service_unavailable_fails_closed_websocket",
+      "passed": true
+    },
+    {
+      "name": "auth_service_restored_same_admin_session_operates",
+      "passed": true
+    },
+    {
+      "name": "absolute_eight_hour_timeout_denies_http_and_websocket",
+      "passed": true
+    },
+    {
+      "name": "logout_without_csrf_denied_and_session_retained",
+      "passed": true
+    },
+    {
+      "name": "csrf_confirmed_logout_revokes_cookie_session",
+      "passed": true
+    }
+  ],
+  "image": "sollume-finance-security:venv-test",
+  "image_id": "sha256:ab32568096996aa932dd47c49d24a8b932d0e2177713637e97e66c7cf721304a",
+  "nginx_image_id": "sha256:8b1e78743a03dbb2c95171cc58639fef29abc8816598e27fb910ed2e621e589a",
+  "source_sha256": {
+    "Src/security_service.py": "12905ff4dbde1d3cb35f8b8f41f275151a75a8391ff85fbd5c9c524f31c98402",
+    "Src/auth_gateway.py": "a32e612bd6802446bbb09345eeace62f870b2fdaacb09d3874df99103d7ff834",
+    "Src/auth.py": "f4e2ee15a3a94302174e0ebb7c527de5a9305e5051b315ca4151293d471f588a",
+    "Src/secure_downloads.py": "252ad710c35bdd584f6a4e3387d5d00317ee265a5b9801b3c34531dee990db5d",
+    "Home.py": "8bd6f820a98619e6bfc9639fc3a52e7b29bfce06d7ba3b9d3c78c732e99bf2e9",
+    "nginx.conf": "2032e16a5b648b784c0ba7f64e1fbe6515b3b0b38e70c3714035fd091548f9cd",
+    "Dockerfile": "c7532952f293f0544d7a222d66c6c4a56db5876a6b78c1abce779586dde382a3",
+    "requirements.txt": "b3f81bfdd2ecc31c4cce119a143ebfecf24c04e27ccf4e74d9ca37c7faecd661",
+    "Src/templates/auth.html": "d5fcb00766777d8eff84be29a594d040d38b0e8e9694830624c213309249da51",
+    ".streamlit/config.toml": "9f326433019d50bb6bded5701928312aeeca4229664f4f6ec87c4baf826ce7d7",
+    "pages/customers.py": "6e9496662a3ae88273e1d521a86b18ccce90f795c3054b494ea7f4e888e6902a",
+    "pages/daily_voucher.py": "fc386c12ba90afc8947d652c5408c54ad88278be1a42ab2a91471f87d1e0d6d8",
+    "pages/order_compare.py": "f898eef53195d3adbc997d196939e0ce015f6add5ae96334736fb3b47cd5ceef",
+    "pages/order_summary.py": "39167c7be833b1ca9c9ccf19a7046b4a45aade5888161a7e861cb3f32b0e8180",
+    "pages/period_voucher.py": "54f04cc8afed13040e5a8b324ff2cb02e197184ae2817347700f77ac091471ba",
+    "pages/settlement.py": "d445af197ab588eee2ea6985ac8cf0d0806210025b6343099e24ee1a3fdbebe3",
+    "pages/settlement_ecount.py": "4347951161e3e130c5876d051a9a5750659f34fd2f7c3a98d6ba015f0fae8e53",
+    "pages/settlement_seller.py": "373d5fa219f2a20b6d3a948ddbead2a57863f4db3a4c24c2584c9b023ccb10b6",
+    "pages/system.py": "82a1a4fb30a0b66b516e5aaef70afc6064ac964f108af294bfd61c4d03e31000",
+    "pages/users.py": "c8e357d868b87aeeed090ad36ab026ccbf71c6fc3e595c0d493277cdb08deef9",
+    "pages/vendor_voucher.py": "7708ec210cc1a1af9293403eeb80835f3345cf55ae0547845a58556b32ccacdf"
+  },
+  "source_unchanged_during_run": true,
+  "cleanup_complete": true,
+  "positive_login_rate_limit_retries": 1,
+  "limitations": [
+    "Self-signed certificate is a disposable test fixture; production certificate/domain/server were not changed.",
+    "Browser UI rendering and Streamlit page action scenarios are verified separately by the parent agent.",
+    "Streamlit HTTP page shells are not used as evidence of per-user page authorization."
+  ],
+  "error_type": null
+}

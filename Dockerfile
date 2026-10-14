@@ -13,8 +13,15 @@ RUN apt-get update && apt-get install -y \
 # Python 의존성 파일 복사
 COPY requirements.txt .
 
+# 2026-10-14 hoyeon.han: 회계앱·인증 서버·관리 CLI가 같은 Docker 가상환경을 사용한다.
+ENV VIRTUAL_ENV=/opt/venv
+RUN python -m venv "${VIRTUAL_ENV}"
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
 # Python 패키지 설치
-RUN pip install --no-cache-dir -r requirements.txt
+# 2026-10-14 hoyeon.han: 시스템 pip 설치는 보존하고 가상환경 Python으로 설치한다.
+# RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 # 2025-12-16 hoyeon.han: Multi-Page App 구조로 변경

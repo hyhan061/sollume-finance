@@ -71,6 +71,9 @@ sudo systemctl reload nginx
 
 새 이미지에 인증 코드·템플릿·의존성이 포함되어야 합니다. 기존 `latest` 이미지가 인증 기능을 포함하는지 먼저 확인하고 새 버전을 빌드·게시합니다. 기존 DB를 삭제하거나 초기 사용자 데이터를 이미지에 넣지 않습니다.
 
+<!-- 2026-10-14 hoyeon.han: Docker 가상환경 및 운영 CLI의 Python 경로 설명 -->
+수정된 Dockerfile로 이미지를 빌드하면 `/opt/venv` 가상환경에 의존성을 설치하고 `VIRTUAL_ENV`와 `PATH`를 설정합니다. 회계앱·인증 서버·자동화 API·관리 CLI의 `python`, `pip`, `streamlit`, `gunicorn`은 이 가상환경을 사용합니다. 아래의 기존 `--entrypoint python` 명령도 `/opt/venv/bin/python`을 실행하여 CLI의 가상환경 검사를 통과합니다.
+
 다음 명령은 사용자 DB를 보존하여 필요한 스키마만 준비합니다. 기존 활성 관리자가 있으면 새 관리자·기본 계정을 만들지 않습니다.
 
 ```bash

@@ -321,9 +321,13 @@ sudo nginx -t || fail "HTTPS 인증서 또는 Nginx 설정 검증 실패. 기존
 # 이미지 다운로드와 스키마 지원 검사가 끝나기 전 기존 컨테이너를 중지하지 않는다.
 docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
     || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+# 2026-10-14 hoyeon.han: DB를 열지 않고 Docker 가상환경과 인증·관리 CLI 포함 여부를 검사한다.
+# docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypoint python sollume-auth \
+#     -c 'import sys; sys.path.insert(0,"/app/Src"); import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode' \
+#     || fail "이미지에 승인된 인증 모듈이 없습니다. 이미지를 먼저 빌드·게시하세요."
 docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypoint python sollume-auth \
-    -c 'import sys; sys.path.insert(0,"/app/Src"); import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode' \
-    || fail "이미지에 승인된 인증 모듈이 없습니다. 이미지를 먼저 빌드·게시하세요."
+    -c 'import sys; assert sys.prefix != sys.base_prefix, "Docker Python 가상환경이 없습니다."; sys.path[:0] = ["/app/Src", "/app/scripts"]; import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode, manage_users, init_users_db' \
+    || fail "이미지의 가상환경 또는 인증·관리 CLI 검증에 실패했습니다. 수정된 Dockerfile과 필수 모듈을 포함해 이미지를 다시 빌드·게시하세요."
 
 BACKUP_DIR="database/backups/before_security_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$BACKUP_DIR" processed/secure_downloads
