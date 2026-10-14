@@ -177,6 +177,15 @@ services:
       STREAMLIT_BROWSER_SERVER_PORT: "443"
       TRUSTED_PROXY_NETWORKS: 172.30.0.1/32,127.0.0.1/32
     restart: unless-stopped
+    # 2026-10-14 hoyeon.han: main의 기존 CPU·메모리 상한과 예약 정책을 복원한다.
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 20G
+        reservations:
+          cpus: '2'
+          memory: 4G
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -251,6 +260,12 @@ services:
       PYTHONUNBUFFERED: "1"
       ORDER_API_KEY: ${ORDER_API_KEY:?기존 자동화 API 키 설정이 필요합니다}
     restart: unless-stopped
+    # 2026-10-14 hoyeon.han: main의 기존 API CPU·메모리 상한을 복원한다.
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
     security_opt:
       - no-new-privileges:true
     read_only: true

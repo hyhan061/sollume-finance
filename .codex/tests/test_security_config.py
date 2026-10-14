@@ -111,3 +111,29 @@ def test_local_shutdown_terminates_both_child_processes():
             if child.poll() is None:
                 child.kill()
                 child.wait()
+
+
+# 2026-10-14 hoyeon.han: 실제 Compose 해석 결과로 기존 운영 자원 정책의 누락을 방지한다.
+@pytest.mark.parametrize(('service_name', 'expected'), [
+    ('sollume-app', {
+        # 'limits': {'cpus': '4.0', 'memory': 20 * 1024 ** 3},
+        'limits': {'cpus': 4, 'memory': 20 * 1024 ** 3},
+        # 'reservations': {'cpus': '2.0', 'memory': 4 * 1024 ** 3},
+        'reservations': {'cpus': 2, 'memory': 4 * 1024 ** 3},
+    }),
+    ('sollume-api', {
+        # 'limits': {'cpus': '1.0', 'memory': 2 * 1024 ** 3},
+        'limits': {'cpus': 1, 'memory': 2 * 1024 ** 3},
+    }),
+])
+def test_cloud_compose_preserves_legacy_cpu_memory_policy(service_name, expected):
+    services = compose_services('docker-compose.cloud.yml')
+    # 2026-10-14 hoyeon.han: Compose 버전별 숫자/문자열 표현 차이를 실제 CPU·바이트 값으로 비교한다.
+    # assert services[service_name]['deploy']['resources'] == expected
+    resources = services[service_name]['deploy']['resources']
+    normalized = {
+        mode: {field: float(value) if field == 'cpus' else int(value)
+               for field, value in policy.items()}
+        for mode, policy in resources.items()
+    }
+    assert normalized == expected
