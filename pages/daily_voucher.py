@@ -30,6 +30,11 @@ spec = importlib.util.spec_from_file_location(
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('daily-voucher')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='daily-voucher', admin_only=False)
 
 # 2025-12-22 hoyeon.han: Quick Win #4 - 커스텀 사이드바 로고
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
@@ -361,8 +366,12 @@ def process_data(file_path, source_name, selected_date):
             sales_filename = f"매출_{date_str}.xls"
             purchase_filename = f"매입_{date_str}.xls"
 
-            sales_filepath = os.path.join("processed", sales_filename)
-            purchase_filepath = os.path.join("processed", purchase_filename)
+            # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+            # sales_filepath = os.path.join("processed", sales_filename)
+            sales_filepath = auth.unique_output_path(sales_filename, 'daily-voucher')
+            # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+            # purchase_filepath = os.path.join("processed", purchase_filename)
+            purchase_filepath = auth.unique_output_path(purchase_filename, 'daily-voucher')
 
             save_dataframe_to_xls(df_sales, sales_filepath)
             save_dataframe_to_xls(df_purchase, purchase_filepath)
@@ -468,7 +477,9 @@ def process_data(file_path, source_name, selected_date):
                 "선택_날짜": date_str,
             }
 
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label="📥 오류 리포트 다운로드 (개발자 전달용)",
                 data=json.dumps(error_report, ensure_ascii=False, indent=2),
                 file_name=f"error_report_{e.error_id}.json",
@@ -731,7 +742,9 @@ with control_col:
         st.markdown("### 📥 다운로드")
         with st.container(border=True):
             with open(result["sales_filepath"], "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                # st.download_button(
+                protected_download(
                     label="💰 매출 파일",
                     data=f.read(),
                     file_name=result["sales_filename"],
@@ -741,7 +754,9 @@ with control_col:
                     key="download_sales_main",
                 )
             with open(result["purchase_filepath"], "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                # st.download_button(
+                protected_download(
                     label="🛒 매입 파일",
                     data=f.read(),
                     file_name=result["purchase_filename"],
@@ -758,7 +773,9 @@ with control_col:
     # 시스템 관리 페이지 안내
     st.divider()
     st.info("📂 파일 목록, 로그 확인은 **⚙️ 시스템 관리** 페이지에서")
-    if st.button("⚙️ 시스템 관리로 이동", use_container_width=True, key="goto_settings"):
+    # 2026-10-14 hoyeon.han: 일반 직원에게 관리자 페이지 이동 버튼을 표시하지 않음.
+    # if st.button("⚙️ 시스템 관리로 이동", use_container_width=True, key="goto_settings"):
+    if auth.can_access('system') and st.button("⚙️ 시스템 관리로 이동", use_container_width=True, key="goto_settings"):
         # 2026-07-13 hoyeon.han: 페이지 파일명 영문화 (구 pages/6_⚙️_시스템관리.py)
         st.switch_page("pages/system.py")
 

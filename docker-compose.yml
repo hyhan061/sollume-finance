@@ -1,92 +1,254 @@
-version: '3.8'
+# 2026-10-14 hoyeon.han: 이전 구성 보존(실행되지 않음)
+# version: '3.8'
+#
+# services:
+#   sollume-app:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: sollume-finance-app
+#     ports:
+#       - "8501:8501"
+#     volumes:
+#       # 데이터 영속성을 위한 볼륨 마운트
+#       - ./logs:/app/logs
+#       - ./processed:/app/processed
+#       - ./uploads:/app/uploads
+#       # 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 사용
+#       - ./database:/app/database
+#       # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
+#       - ./order_data:/app/order_data
+#       # 개발 시 코드 수정을 즉시 반영 (선택사항)
+#       # - ./Home.py:/app/Home.py
+#       # - ./pages:/app/pages
+#       # - ./Src/processing.py:/app/Src/processing.py
+#     environment:
+#       - TZ=Asia/Seoul
+#       - PYTHONUNBUFFERED=1
+#     restart: unless-stopped
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
+#     networks:
+#       - sollume-network
+#
+#   # 2026-06-11 hoyeon.han: 발주내역 API 서버 (OpenClaw 등 외부 에이전트 연동용, 신규)
+#   # Streamlit 과 같은 이미지를 쓰되 시작 명령만 gunicorn(Flask) 으로 바꾼다.
+#   sollume-api:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: sollume-finance-api
+#     command: gunicorn --bind 0.0.0.0:8502 --workers 2 --timeout 120 --pythonpath /app/Src api_server:app
+#     expose:
+#       - "8502"  # 호스트에 직접 열지 않고 nginx 경유로만 접근 (docker 내부 전용)
+#     volumes:
+#       - ./logs:/app/logs
+#       # 읽기 전용(:ro) 마운트 - API 는 파일을 내어주기만 하므로 수정/삭제 차단
+#       - ./order_data:/app/order_data:ro
+#     environment:
+#       - TZ=Asia/Seoul
+#       - PYTHONUNBUFFERED=1
+#       # 같은 폴더의 .env 파일에서 주입 (.env.example 참고)
+#       - ORDER_API_KEY=${ORDER_API_KEY}
+#     restart: unless-stopped
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
+#     networks:
+#       - sollume-network
+#
+#   # 2026-06-11 hoyeon.han: nginx 리버스 프록시 (외부 단일 진입점, 신규)
+#   # /api/ → sollume-api:8502, 그 외 → sollume-app:8501 (nginx.conf 참고)
+#   nginx:
+#     image: nginx:alpine
+#     container_name: sollume-nginx
+#     ports:
+#       - "80:80"
+#       # - "443:443"  # HTTPS 인증서 준비 후 활성화 (nginx.conf 의 443 블록 참고)
+#     volumes:
+#       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+#       # - ./ssl:/etc/nginx/ssl:ro  # HTTPS 인증서 준비 후 활성화
+#     depends_on:
+#       - sollume-app
+#       - sollume-api
+#     restart: unless-stopped
+#     networks:
+#       - sollume-network
+#
+# networks:
+#   sollume-network:
+#     driver: bridge
+#
+# # 선택사항: 명명된 볼륨 사용 (데이터를 Docker가 관리)
+# # volumes:
+# #   sollume-logs:
+# #   sollume-processed:
+# #   sollume-uploads:
 
+# 2026-10-14 hoyeon.han: 필수 인증·내부 포트 제한 구성
 services:
   sollume-app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: sollume-finance-app
-    ports:
-      - "8501:8501"
+    expose:
+      - "8501"
     volumes:
-      # 데이터 영속성을 위한 볼륨 마운트
       - ./logs:/app/logs
       - ./processed:/app/processed
       - ./uploads:/app/uploads
-      # 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 사용
       - ./database:/app/database
-      # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
       - ./order_data:/app/order_data
-      # 개발 시 코드 수정을 즉시 반영 (선택사항)
-      # - ./Home.py:/app/Home.py
-      # - ./pages:/app/pages
-      # - ./Src/processing.py:/app/Src/processing.py
     environment:
-      - TZ=Asia/Seoul
-      - PYTHONUNBUFFERED=1
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      AUTH_ENV: production
+      AUTH_PUBLIC_ORIGIN: ${AUTH_PUBLIC_ORIGIN:?HTTPS 공개 도메인 설정이 필요합니다}
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?인증 암호화 키 설정이 필요합니다}
+      AUTH_DB_PATH: /app/database/users.db
+      AUTH_DOWNLOAD_DIR: /app/processed/secure_downloads
+      STREAMLIT_SERVER_ENABLE_CORS: "true"
+      STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION: "true"
+      STREAMLIT_SERVER_RUN_ON_SAVE: "false"
+      STREAMLIT_SERVER_HEADLESS: "true"
+      STREAMLIT_SERVER_FILE_WATCHER_TYPE: none
+      STREAMLIT_CLIENT_SHOW_ERROR_DETAILS: "false"
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      STREAMLIT_BROWSER_SERVER_ADDRESS: sollumeesthe.com
+      STREAMLIT_BROWSER_SERVER_PORT: "443"
+      TRUSTED_PROXY_NETWORKS: 172.30.0.10/32,127.0.0.1/32
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     networks:
       - sollume-network
 
-  # 2026-06-11 hoyeon.han: 발주내역 API 서버 (OpenClaw 등 외부 에이전트 연동용, 신규)
-  # Streamlit 과 같은 이미지를 쓰되 시작 명령만 gunicorn(Flask) 으로 바꾼다.
+  # 인증 서버는 회계앱과 사용자 DB 및 비공개 다운로드 저장소를 공유한다.
+  sollume-auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sollume-finance-auth
+    command: ["gunicorn", "--bind", "0.0.0.0:8503", "--workers", "2", "--timeout", "60", "--pythonpath", "/app/Src", "auth_gateway:create_app()"]
+    expose:
+      - "8503"
+    volumes:
+      - ./database:/app/database
+      - ./processed:/app/processed
+      - ./logs:/app/logs
+    environment:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      AUTH_ENV: production
+      AUTH_PUBLIC_ORIGIN: ${AUTH_PUBLIC_ORIGIN:?HTTPS 공개 도메인 설정이 필요합니다}
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?인증 암호화 키 설정이 필요합니다}
+      AUTH_DB_PATH: /app/database/users.db
+      AUTH_DOWNLOAD_DIR: /app/processed/secure_downloads
+      TRUSTED_PROXY_NETWORKS: 172.30.0.10/32,127.0.0.1/32
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "Host: sollumeesthe.com", "http://localhost:8503/auth/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - sollume-network
+
+  # 기존 자동화 API는 브라우저 로그인과 별개의 X-API-Key 인증을 유지한다.
   sollume-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: sollume-finance-api
-    command: gunicorn --bind 0.0.0.0:8502 --workers 2 --timeout 120 --pythonpath /app/Src api_server:app
+    command: ["gunicorn", "--bind", "0.0.0.0:8502", "--workers", "2", "--timeout", "120", "--pythonpath", "/app/Src", "api_server:app"]
     expose:
-      - "8502"  # 호스트에 직접 열지 않고 nginx 경유로만 접근 (docker 내부 전용)
+      - "8502"
     volumes:
       - ./logs:/app/logs
-      # 읽기 전용(:ro) 마운트 - API 는 파일을 내어주기만 하므로 수정/삭제 차단
       - ./order_data:/app/order_data:ro
     environment:
-      - TZ=Asia/Seoul
-      - PYTHONUNBUFFERED=1
-      # 같은 폴더의 .env 파일에서 주입 (.env.example 참고)
-      - ORDER_API_KEY=${ORDER_API_KEY}
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      ORDER_API_KEY: ${ORDER_API_KEY:?기존 자동화 API 키 설정이 필요합니다}
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       - sollume-network
 
-  # 2026-06-11 hoyeon.han: nginx 리버스 프록시 (외부 단일 진입점, 신규)
-  # /api/ → sollume-api:8502, 그 외 → sollume-app:8501 (nginx.conf 참고)
   nginx:
     image: nginx:alpine
     container_name: sollume-nginx
     ports:
       - "80:80"
-      # - "443:443"  # HTTPS 인증서 준비 후 활성화 (nginx.conf 의 443 블록 참고)
+      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      # - ./ssl:/etc/nginx/ssl:ro  # HTTPS 인증서 준비 후 활성화
+      # 실제 인증서만 준비한다. 없거나 읽을 수 없으면 Nginx 시작이 실패한다.
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - sollume-app
-      - sollume-api
+      sollume-app:
+        condition: service_healthy
+      sollume-auth:
+        condition: service_healthy
+      sollume-api:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - sollume-network
+      sollume-network:
+        ipv4_address: 172.30.0.10
 
 networks:
   sollume-network:
     driver: bridge
-
-# 선택사항: 명명된 볼륨 사용 (데이터를 Docker가 관리)
-# volumes:
-#   sollume-logs:
-#   sollume-processed:
-#   sollume-uploads:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1

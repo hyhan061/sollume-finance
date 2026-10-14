@@ -1,55 +1,181 @@
-# nginx-host-api.conf.example
-# 2026-06-11 hoyeon.han: Oracle Cloud 호스트 nginx 용 발주내역 API 프록시 설정 예시 (신규)
+# 2026-10-14 hoyeon.han: 이전 구성 보존(실행되지 않음)
+# # nginx-host-api.conf.example
+# # 2026-06-11 hoyeon.han: Oracle Cloud 호스트 nginx 용 발주내역 API 프록시 설정 예시 (신규)
+# #
+# # 용도:
+# #   원격서버(Oracle Cloud)에 직접 설치된 nginx 에 /api/ 경로를 추가해서
+# #   docker 컨테이너(sollume-api, 127.0.0.1:8502)로 전달한다.
+# #   ※ 루트의 nginx.conf 는 로컬/NAS 의 docker nginx 컨테이너용이므로 혼동 주의.
+# #
+# # 적용 방법 (원격서버에서):
+# #   1) 기존 nginx 설정에서 사용 중인 server 블록을 찾는다
+# #      - 보통 /etc/nginx/sites-enabled/* 또는 /etc/nginx/conf.d/*.conf
+# #   2) 해당 server { ... } 블록 안에 아래 "location /api/" 블록을 붙여넣는다
+# #   3) 문법 검사 후 재적용:
+# #      sudo nginx -t
+# #      sudo systemctl reload nginx
+# #   4) 확인:
+# #      curl http://localhost/api/health        → {"status":"ok"}
+# #      curl -H "X-API-Key: <키>" http://localhost/api/order-file/meta
+# #
+# # 전제:
+# #   - docker-compose.cloud.yml 의 sollume-api 가 127.0.0.1:8502 로 떠 있어야 한다
+# #   - API 인증 키(.env 의 ORDER_API_KEY)는 Flask 가 검사하므로 nginx 에는 설정 불필요
 #
-# 용도:
-#   원격서버(Oracle Cloud)에 직접 설치된 nginx 에 /api/ 경로를 추가해서
-#   docker 컨테이너(sollume-api, 127.0.0.1:8502)로 전달한다.
-#   ※ 루트의 nginx.conf 는 로컬/NAS 의 docker nginx 컨테이너용이므로 혼동 주의.
+# # ---------------- 아래 블록을 기존 server { } 안에 추가 ----------------
 #
-# 적용 방법 (원격서버에서):
-#   1) 기존 nginx 설정에서 사용 중인 server 블록을 찾는다
-#      - 보통 /etc/nginx/sites-enabled/* 또는 /etc/nginx/conf.d/*.conf
-#   2) 해당 server { ... } 블록 안에 아래 "location /api/" 블록을 붙여넣는다
-#   3) 문법 검사 후 재적용:
-#      sudo nginx -t
-#      sudo systemctl reload nginx
-#   4) 확인:
-#      curl http://localhost/api/health        → {"status":"ok"}
-#      curl -H "X-API-Key: <키>" http://localhost/api/order-file/meta
-#
-# 전제:
-#   - docker-compose.cloud.yml 의 sollume-api 가 127.0.0.1:8502 로 떠 있어야 한다
-#   - API 인증 키(.env 의 ORDER_API_KEY)는 Flask 가 검사하므로 nginx 에는 설정 불필요
-
-# ---------------- 아래 블록을 기존 server { } 안에 추가 ----------------
-
-location /api/ {
-    proxy_pass http://127.0.0.1:8502;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Real-IP         $remote_addr;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 120s;  # 큰 파일 다운로드/시트 파싱 대기
-}
-
-# ---------------- (선택) Streamlit 화면도 같은 nginx 로 통합하려면 ----------------
-# 현재 Streamlit 은 8501 포트로 직접 노출 중이다. 원하면 아래 블록을 추가해
-# 80/443 으로 통합할 수 있다 (WebSocket 설정 필수). 이 경우 http 블록(또는 해당
-# 설정 파일 상단)에 다음 map 이 한 번 정의되어 있어야 한다:
-#
-#   map $http_upgrade $connection_upgrade {
-#       default upgrade;
-#       ''      close;
-#   }
-#
-# location / {
-#     proxy_pass http://127.0.0.1:8501;
-#     proxy_http_version 1.1;
-#     proxy_set_header Upgrade           $http_upgrade;
-#     proxy_set_header Connection        $connection_upgrade;
+# location /api/ {
+#     proxy_pass http://127.0.0.1:8502;
 #     proxy_set_header Host              $host;
 #     proxy_set_header X-Real-IP         $remote_addr;
 #     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 #     proxy_set_header X-Forwarded-Proto $scheme;
-#     proxy_read_timeout 86400s;  # WebSocket 장시간 연결 유지
+#     proxy_read_timeout 120s;  # 큰 파일 다운로드/시트 파싱 대기
 # }
+#
+# # ---------------- (선택) Streamlit 화면도 같은 nginx 로 통합하려면 ----------------
+# # 현재 Streamlit 은 8501 포트로 직접 노출 중이다. 원하면 아래 블록을 추가해
+# # 80/443 으로 통합할 수 있다 (WebSocket 설정 필수). 이 경우 http 블록(또는 해당
+# # 설정 파일 상단)에 다음 map 이 한 번 정의되어 있어야 한다:
+# #
+# #   map $http_upgrade $connection_upgrade {
+# #       default upgrade;
+# #       ''      close;
+# #   }
+# #
+# # location / {
+# #     proxy_pass http://127.0.0.1:8501;
+# #     proxy_http_version 1.1;
+# #     proxy_set_header Upgrade           $http_upgrade;
+# #     proxy_set_header Connection        $connection_upgrade;
+# #     proxy_set_header Host              $host;
+# #     proxy_set_header X-Real-IP         $remote_addr;
+# #     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+# #     proxy_set_header X-Forwarded-Proto $scheme;
+# #     proxy_read_timeout 86400s;  # WebSocket 장시간 연결 유지
+# # }
+
+# 2026-10-14 hoyeon.han: 필수 인증·내부 포트 제한 구성
+# 이 파일 전체를 전용 사이트 설정으로 적용한다. 기존 무인증 location과 함께 추가하지 않는다.
+
+# http { } 안에서 읽는 구성이다. 호스트용은 sites-enabled에 배치한다.
+# 2026-10-14 hoyeon.han: 운영 도메인은 AUTH_PUBLIC_ORIGIN과 반드시 일치해야 한다.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+map "$http_upgrade:$http_accept" $is_browser_page {
+    default 0;
+    ~*^:.*text/html 1;
+}
+limit_req_zone $binary_remote_addr zone=auth_login:10m rate=10r/m;
+
+server {
+    listen 80 default_server;
+    server_name _;
+    return 301 https://sollumeesthe.com$request_uri;
+}
+server {
+    listen 443 ssl default_server;
+    server_name sollumeesthe.com;
+    # 실제 TLS 인증서 파일을 준비해야 한다. 더미 인증서나 HTTP 폴백은 제공하지 않는다.
+    ssl_certificate /etc/letsencrypt/live/sollumeesthe.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/sollumeesthe.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+    client_max_body_size 300M;
+
+    # 공개 호스트 이외의 요청은 라우팅하지 않는다.
+    if ($host != sollumeesthe.com) { return 444; }
+
+    # 인증 검사는 Nginx 내부 요청만 가능하며 캐시하거나 요청 본문을 전달하지 않는다.
+    location = /_auth_check {
+        internal;
+        proxy_pass http://127.0.0.1:8503/auth/check;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Host sollumeesthe.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_cache off;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 10s;
+        access_log off;
+    }
+    location = /auth/check { return 404; }
+    location = /auth/health { return 404; }
+    location = /_stcore/health { return 404; }
+
+    # 비밀번호 및 MFA 입력은 인증 서버에서만 처리한다. 기존 헤더의 IP를 신뢰하지 않는다.
+    location ^~ /auth/ {
+        limit_req zone=auth_login burst=20 nodelay;
+        limit_req_status 429;
+        client_max_body_size 1M;
+        proxy_pass http://127.0.0.1:8503;
+        proxy_set_header Host sollumeesthe.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_cache off;
+        access_log off;
+    }
+
+    # Streamlit의 기존 media URL은 로그인 여부와 관계없이 차단한다.
+    location = /media { return 403; }
+    location ^~ /media/ { return 403; }
+
+    # 파일은 인증 서버가 세션·소유자·화면 권한·만료를 다시 검사한다.
+    location ^~ /downloads/ {
+        auth_request /_auth_check;
+        proxy_pass http://127.0.0.1:8503;
+        proxy_set_header Host sollumeesthe.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_cache off;
+        proxy_read_timeout 120s;
+        access_log off;
+    }
+
+    # 기존 발주내역 API는 Flask의 X-API-Key 인증만으로 접근한다.
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:8502;
+        proxy_set_header Host sollumeesthe.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 120s;
+        proxy_cache off;
+    }
+
+    # root·직접 페이지 URL·WebSocket·upload·static 등 모든 Streamlit 요청을 보호한다.
+    location / {
+        auth_request /_auth_check;
+        error_page 401 = @auth_denied;
+        proxy_pass http://127.0.0.1:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host sollumeesthe.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_set_header X-Auth-User "";
+        proxy_set_header X-Auth-Role "";
+        proxy_cache off;
+        proxy_read_timeout 60s;
+    }
+    location @auth_denied {
+        if ($is_browser_page = 1) { return 302 /auth/login; }
+        # WS·업로드·프로그램 호출은 로그인 페이지로 성공 응답을 위장하지 않는다.
+        return 401;
+    }
+}

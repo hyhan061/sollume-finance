@@ -38,7 +38,9 @@ RUN mkdir -p logs uploads processed database
 
 # 포트 노출
 # 2026-06-11 hoyeon.han: 8502 = 발주내역 API (Src/api_server.py, compose 에서 command 교체로 실행)
-EXPOSE 8501 8502
+# 2026-10-14 hoyeon.han: 인증 서버 내부 포트 추가(외부 공개는 Compose/Nginx로 제한)
+# EXPOSE 8501 8502
+EXPOSE 8501 8502 8503
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

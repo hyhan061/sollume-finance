@@ -28,117 +28,181 @@ from ui_components import (  # noqa: E402
 )
 from ui_theme import inject_global_css  # noqa: E402
 
-# 인증 모듈 직접 import (Src/__init__.py 우회)
-_spec = importlib.util.spec_from_file_location(
-    "auth", Path(__file__).parent / "Src" / "auth.py"
-)
-if _spec is None or _spec.loader is None:
-    raise ImportError("인증 모듈(auth.py)을 로드할 수 없습니다. 파일 경로를 확인해주세요.")
-auth = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(auth)
+# 2026-10-14 hoyeon.han: 모든 페이지가 동일한 DB 세션과 직원별 권한을 사용.
+import auth
+from security_service import PAGE_PERMISSIONS
 
-# 디렉토리 생성
-for _d in ("logs", "uploads", "processed", "database", "database/backups"):
-    os.makedirs(_d, exist_ok=True)
-
-# 2026-07-13 hoyeon.han: 브라우저 탭 아이콘(파비콘)을 브랜드 심볼로. 파일 없으면 이모지 폴백.
-#   (브라우저 탭은 보통 밝은 배경이라 dark-ink 심볼 사용)
-_favicon = Path(__file__).parent / "assets" / "sollume-symbol-dark-ink.png"
-_page_icon = str(_favicon) if _favicon.exists() else "📊"
-
-# 페이지 설정 (st.navigation 앱에서는 진입점에서만 호출)
-st.set_page_config(
-    page_title="SollumeLab 회계 시스템",
-    page_icon=_page_icon,
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
+for _directory in ('logs', 'uploads', 'processed'):
+    os.makedirs(_directory, exist_ok=True)
+_favicon = Path(__file__).parent / 'assets' / 'sollume-symbol-dark-ink.png'
+# 2026-10-14 hoyeon.han: 공개 /media 차단 후에도 브랜드 파비콘을 보존.
+import base64
+_favicon_data = ('data:image/png;base64,' + base64.b64encode(_favicon.read_bytes()).decode('ascii')) if _favicon.exists() else '📊'
+st.set_page_config(page_title='SollumeLab 회계 시스템',
+                   # page_icon=str(_favicon) if _favicon.exists() else '📊',
+                   page_icon=_favicon_data,
+                   layout='wide', initial_sidebar_state='expanded')
 auth.init_session_state()
-# 전역 테마 CSS 주입 (로그인 화면 포함 적용)
 inject_global_css()
 
 
-# ---------------------------------------------------------------------------
-# 로그인 페이지 (미인증 시)
-# ---------------------------------------------------------------------------
 def _login_page():
-    # 2026-07-13 hoyeon.han: 로그인 화면도 홈처럼 심플하게 (중앙 로고 + 최소 폼)
     render_login_screen(auth)
 
 
-# ---------------------------------------------------------------------------
-# 홈(랜딩) 페이지 (인증 후 기본 페이지) — 2026-07-13: 로고만 가운데로 심플화
-# ---------------------------------------------------------------------------
 def _home_page():
+    auth.require_permission('home')
     render_home_logo()
 
 
-# ---------------------------------------------------------------------------
-# 페이지 정의 + 네비게이션 (라우터)
-# ---------------------------------------------------------------------------
 if not auth.is_session_valid():
-    # 미인증: 네비 숨김, 로그인만
-    _pg = st.navigation([st.Page(_login_page, title="로그인")], position="hidden")
+    _pg = st.navigation([st.Page(_login_page, title='로그인')], position='hidden')
 else:
-    # 인증: 자동 네비를 숨기고(position="hidden") 사이드바를 직접 구성한다.
-    # 2026-07-13 hoyeon.han: 페이지 파일명 영문화(구 "pages/1_📝_전표생성.py" 등 → 영문 파일명).
-    #   한글 파일명이 터미널/git/에디터에서 깨지고 URL도 한글로 인코딩되던 문제 해결.
-    #   url_path를 영문으로 명시해 URL을 /daily-voucher 등으로 고정. 화면 라벨/아이콘은 한글 유지.
-    #   구→신 파일명 매핑은 git 이력 및 .claude/rename-pages-to-english-plan.md 참고.
-    _home = st.Page(_home_page, title="홈", icon="📊", default=True)
-    _p_daily = st.Page("pages/daily_voucher.py", title="일별 전표", icon="📝", url_path="daily-voucher")
-    _p_period = st.Page("pages/period_voucher.py", title="기간 전표", icon="📆", url_path="period-voucher")
-    _p_vendor = st.Page("pages/vendor_voucher.py", title="특정업체 전표", icon="🎯", url_path="vendor-voucher")
-    _p_settle = st.Page("pages/settlement.py", title="정산서 생성", icon="📋", url_path="settlement")
-    _p_settle_seller = st.Page(
-        "pages/settlement_seller.py", title="정산서 생성(셀러)", icon="🧾", url_path="settlement-seller"
-    )
-    # 2026-09-01 hoyeon.han: 이카운트 판매현황내역 기반 정산서 생성 페이지 추가
-    _p_settle_ecount = st.Page(
-        "pages/settlement_ecount.py", title="정산서 생성(이카운트)", icon="🧮", url_path="settlement-ecount"
-    )
-    _p_summary = st.Page("pages/order_summary.py", title="요약", icon="📊", url_path="order-summary")
-    _p_compare = st.Page("pages/order_compare.py", title="비교", icon="🔍", url_path="order-compare")
-    _p_customer = st.Page("pages/customers.py", title="거래처 관리", icon="🏢", url_path="customers")
-    _p_system = st.Page("pages/system.py", title="시스템 관리", icon="⚙️", url_path="system")
-
-    # 홈은 기본(default) 페이지로 라우팅만 하고, 아래 커스텀 네비에는 노출하지 않는다
-    # (홈 이동은 최상단 로고 클릭으로). 나머지는 그룹별 page_link 로 노출.
-    _pg = st.navigation(
-        [
-            _home,
-            _p_daily,
-            _p_period,
-            _p_vendor,
-            _p_settle,
-            _p_settle_seller,
-            _p_settle_ecount,
-            _p_summary,
-            _p_compare,
-            _p_customer,
-            _p_system,
-        ],
-        position="hidden",
-    )
-
-    # 사이드바: 최상단 로고(클릭→홈, 내부 이동으로 세션 유지) → 그룹 네비(page_link) → 사용자 블록(하단)
+    _home = st.Page(_home_page, title='홈', icon='📊', default=True)
+    _definitions = [
+        ('전표 생성', 'daily-voucher', 'daily_voucher', '일별 전표', '📝'),
+        ('전표 생성', 'period-voucher', 'period_voucher', '기간 전표', '📆'),
+        ('전표 생성', 'vendor-voucher', 'vendor_voucher', '특정업체 전표', '🎯'),
+        ('정산서', 'settlement', 'settlement', '정산서 생성', '📋'),
+        ('정산서', 'settlement-seller', 'settlement_seller', '정산서 생성(셀러)', '🧾'),
+        ('정산서', 'settlement-ecount', 'settlement_ecount', '정산서 생성(이카운트)', '🧮'),
+        ('발주내역', 'order-summary', 'order_summary', '요약', '📊'),
+        ('발주내역', 'order-compare', 'order_compare', '비교', '🔍'),
+        ('관리', 'customers', 'customers', '거래처 관리', '🏢'),
+        ('관리', 'system', 'system', '시스템 관리', '⚙️'),
+        ('관리', 'users', 'users', '사용자관리', '👥'),
+    ]
+    _pages = []
+    for _group, _permission, _filename, _title, _icon in _definitions:
+        if auth.can_access(_permission):
+            _pages.append((_group, st.Page(f'pages/{_filename}.py', title=_title,
+                                          icon=_icon, url_path=_permission)))
+    _pg = st.navigation([_home] + [_page for _, _page in _pages], position='hidden')
     render_sidebar_logo(_home)
     with st.sidebar:
-        st.markdown("**전표 생성**")
-        st.page_link(_p_daily)
-        st.page_link(_p_period)
-        st.page_link(_p_vendor)
-        st.markdown("**정산서**")
-        st.page_link(_p_settle)
-        st.page_link(_p_settle_seller)
-        st.page_link(_p_settle_ecount)
-        st.markdown("**발주내역**")
-        st.page_link(_p_summary)
-        st.page_link(_p_compare)
-        st.markdown("**관리**")
-        st.page_link(_p_customer)
-        st.page_link(_p_system)
+        _previous_group = None
+        for _group, _page in _pages:
+            if _group != _previous_group:
+                st.markdown(f'**{_group}**')
+                _previous_group = _group
+            st.page_link(_page)
     render_sidebar_user_simple()
+    auth.render_session_monitor()
 
 _pg.run()
+
+# 2026-10-14 hoyeon.han: 이전 메모리 인증과 일괄 메뉴 노출 구현 보존.
+# # 인증 모듈 직접 import (Src/__init__.py 우회)
+# _spec = importlib.util.spec_from_file_location(
+#     "auth", Path(__file__).parent / "Src" / "auth.py"
+# )
+# if _spec is None or _spec.loader is None:
+#     raise ImportError("인증 모듈(auth.py)을 로드할 수 없습니다. 파일 경로를 확인해주세요.")
+# auth = importlib.util.module_from_spec(_spec)
+# _spec.loader.exec_module(auth)
+#
+# # 디렉토리 생성
+# for _d in ("logs", "uploads", "processed", "database", "database/backups"):
+#     os.makedirs(_d, exist_ok=True)
+#
+# # 2026-07-13 hoyeon.han: 브라우저 탭 아이콘(파비콘)을 브랜드 심볼로. 파일 없으면 이모지 폴백.
+# #   (브라우저 탭은 보통 밝은 배경이라 dark-ink 심볼 사용)
+# _favicon = Path(__file__).parent / "assets" / "sollume-symbol-dark-ink.png"
+# _page_icon = str(_favicon) if _favicon.exists() else "📊"
+#
+# # 페이지 설정 (st.navigation 앱에서는 진입점에서만 호출)
+# st.set_page_config(
+#     page_title="SollumeLab 회계 시스템",
+#     page_icon=_page_icon,
+#     layout="wide",
+#     initial_sidebar_state="expanded",
+# )
+#
+# auth.init_session_state()
+# # 전역 테마 CSS 주입 (로그인 화면 포함 적용)
+# inject_global_css()
+#
+#
+# # ---------------------------------------------------------------------------
+# # 로그인 페이지 (미인증 시)
+# # ---------------------------------------------------------------------------
+# def _login_page():
+#     # 2026-07-13 hoyeon.han: 로그인 화면도 홈처럼 심플하게 (중앙 로고 + 최소 폼)
+#     render_login_screen(auth)
+#
+#
+# # ---------------------------------------------------------------------------
+# # 홈(랜딩) 페이지 (인증 후 기본 페이지) — 2026-07-13: 로고만 가운데로 심플화
+# # ---------------------------------------------------------------------------
+# def _home_page():
+#     render_home_logo()
+#
+#
+# # ---------------------------------------------------------------------------
+# # 페이지 정의 + 네비게이션 (라우터)
+# # ---------------------------------------------------------------------------
+# if not auth.is_session_valid():
+#     # 미인증: 네비 숨김, 로그인만
+#     _pg = st.navigation([st.Page(_login_page, title="로그인")], position="hidden")
+# else:
+#     # 인증: 자동 네비를 숨기고(position="hidden") 사이드바를 직접 구성한다.
+#     # 2026-07-13 hoyeon.han: 페이지 파일명 영문화(구 "pages/1_📝_전표생성.py" 등 → 영문 파일명).
+#     #   한글 파일명이 터미널/git/에디터에서 깨지고 URL도 한글로 인코딩되던 문제 해결.
+#     #   url_path를 영문으로 명시해 URL을 /daily-voucher 등으로 고정. 화면 라벨/아이콘은 한글 유지.
+#     #   구→신 파일명 매핑은 git 이력 및 .claude/rename-pages-to-english-plan.md 참고.
+#     _home = st.Page(_home_page, title="홈", icon="📊", default=True)
+#     _p_daily = st.Page("pages/daily_voucher.py", title="일별 전표", icon="📝", url_path="daily-voucher")
+#     _p_period = st.Page("pages/period_voucher.py", title="기간 전표", icon="📆", url_path="period-voucher")
+#     _p_vendor = st.Page("pages/vendor_voucher.py", title="특정업체 전표", icon="🎯", url_path="vendor-voucher")
+#     _p_settle = st.Page("pages/settlement.py", title="정산서 생성", icon="📋", url_path="settlement")
+#     _p_settle_seller = st.Page(
+#         "pages/settlement_seller.py", title="정산서 생성(셀러)", icon="🧾", url_path="settlement-seller"
+#     )
+#     # 2026-09-01 hoyeon.han: 이카운트 판매현황내역 기반 정산서 생성 페이지 추가
+#     _p_settle_ecount = st.Page(
+#         "pages/settlement_ecount.py", title="정산서 생성(이카운트)", icon="🧮", url_path="settlement-ecount"
+#     )
+#     _p_summary = st.Page("pages/order_summary.py", title="요약", icon="📊", url_path="order-summary")
+#     _p_compare = st.Page("pages/order_compare.py", title="비교", icon="🔍", url_path="order-compare")
+#     _p_customer = st.Page("pages/customers.py", title="거래처 관리", icon="🏢", url_path="customers")
+#     _p_system = st.Page("pages/system.py", title="시스템 관리", icon="⚙️", url_path="system")
+#
+#     # 홈은 기본(default) 페이지로 라우팅만 하고, 아래 커스텀 네비에는 노출하지 않는다
+#     # (홈 이동은 최상단 로고 클릭으로). 나머지는 그룹별 page_link 로 노출.
+#     _pg = st.navigation(
+#         [
+#             _home,
+#             _p_daily,
+#             _p_period,
+#             _p_vendor,
+#             _p_settle,
+#             _p_settle_seller,
+#             _p_settle_ecount,
+#             _p_summary,
+#             _p_compare,
+#             _p_customer,
+#             _p_system,
+#         ],
+#         position="hidden",
+#     )
+#
+#     # 사이드바: 최상단 로고(클릭→홈, 내부 이동으로 세션 유지) → 그룹 네비(page_link) → 사용자 블록(하단)
+#     render_sidebar_logo(_home)
+#     with st.sidebar:
+#         st.markdown("**전표 생성**")
+#         st.page_link(_p_daily)
+#         st.page_link(_p_period)
+#         st.page_link(_p_vendor)
+#         st.markdown("**정산서**")
+#         st.page_link(_p_settle)
+#         st.page_link(_p_settle_seller)
+#         st.page_link(_p_settle_ecount)
+#         st.markdown("**발주내역**")
+#         st.page_link(_p_summary)
+#         st.page_link(_p_compare)
+#         st.markdown("**관리**")
+#         st.page_link(_p_customer)
+#         st.page_link(_p_system)
+#     render_sidebar_user_simple()
+#
+# _pg.run()

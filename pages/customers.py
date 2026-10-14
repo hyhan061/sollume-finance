@@ -30,6 +30,11 @@ spec = importlib.util.spec_from_file_location(
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('customers')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='customers', admin_only=False)
 # 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바를 공통(render_custom_sidebar)으로 통일
 # auth.show_user_info_sidebar()
 from ui_components import render_custom_sidebar
@@ -371,6 +376,8 @@ def show_add_customer_form(db: CustomerMasterDB):
         # DB에 등록
         try:
             with st.spinner("거래처 등록 중..."):
+                # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                auth.require_permission('customers')
                 success, message = db.add_customer(
                     business_number=business_number,
                     order_name=order_name.strip(),
@@ -510,6 +517,8 @@ def show_edit_customer_form(db: CustomerMasterDB, customer_id: int):
         #         logger.info(f"거래처 수정 성공: {business_number}")
         try:
             with st.spinner("거래처 정보 수정 중..."):
+                # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                auth.require_permission('customers')
                 success, message = db.update_customer(
                     customer_id=customer_id,
                     order_name=order_name.strip(),
@@ -645,6 +654,8 @@ def show_delete_confirmation(customer_id: int):
     if confirm_btn:
         try:
             with st.spinner("거래처 삭제 중..."):
+                # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                auth.require_permission('customers')
                 success, message = db.delete_customer(customer_id)
 
             if success:
@@ -716,6 +727,8 @@ def show_data_management(db: CustomerMasterDB):
                             f.write(uploaded_file.getvalue())
 
                         with st.spinner("Excel 데이터 가져오는 중..."):
+                            # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                            auth.require_permission('customers')
                             success, message = db.import_from_excel(temp_path)
 
                         # 임시 파일 삭제
@@ -745,9 +758,13 @@ def show_data_management(db: CustomerMasterDB):
                 try:
                     # 파일명 생성
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    export_path = f"processed/거래처마스터_{timestamp}.xlsx"
+                    # 2026-10-14 hoyeon.han: 거래처 내보내기도 생성 건별 파일 분리.
+                    # export_path = f"processed/거래처마스터_{timestamp}.xlsx"
+                    export_path = auth.unique_output_path(f"거래처마스터_{timestamp}.xlsx", 'customers')
 
                     with st.spinner("Excel 파일 생성 중..."):
+                        # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                        auth.require_permission('customers')
                         success, message = db.export_to_excel(export_path)
 
                     if success:
@@ -756,7 +773,9 @@ def show_data_management(db: CustomerMasterDB):
 
                         # 다운로드 버튼
                         with open(export_path, "rb") as f:
-                            st.download_button(
+                            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                            # st.download_button(
+                            protected_download(
                                 label="💾 Excel 파일 다운로드",
                                 data=f.read(),
                                 file_name=f"거래처마스터_{timestamp}.xlsx",

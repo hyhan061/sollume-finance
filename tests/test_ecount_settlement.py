@@ -1012,15 +1012,61 @@ def ecount_seller_ui_parsed():
     }
 
 
+# 2026-10-14 hoyeon.han: 인증 함수는 바꾸지 않고 실제 MFA를 완료한 합성 직원의 요청 쿠키만 주입한다.
+@pytest.fixture
+def ecount_ui_authenticated_session(tmp_path, monkeypatch):
+    import hashlib
+    from http.cookies import SimpleCookie
+    from types import SimpleNamespace
+
+    import pyotp
+    import streamlit.runtime.context as request_context
+    from cryptography.fernet import Fernet
+    from security_service import SecurityService
+    import auth
+
+    settings = {
+        "AUTH_ENV": "production",
+        "AUTH_PUBLIC_ORIGIN": "https://sollumeesthe.com",
+        "AUTH_ENCRYPTION_KEY": Fernet.generate_key().decode("ascii"),
+        "AUTH_DB_PATH": str(tmp_path / "database" / "users.db"),
+        "AUTH_DOWNLOAD_DIR": str(tmp_path / "processed" / "secure_downloads"),
+        "TRUSTED_PROXY_NETWORKS": "127.0.0.1/32",
+    }
+    for name, value in settings.items():
+        monkeypatch.setenv(name, value)
+    for name in ("AUTH_DEV_APP_ORIGIN", "AUTH_SIGNING_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    auth._service.cache_clear()
+    service = SecurityService(settings["AUTH_DB_PATH"], settings["AUTH_ENCRYPTION_KEY"], settings["AUTH_DOWNLOAD_DIR"])
+    user = service.bootstrap_user("ecount.fixture", "Ecount temporary test phrase 407!",
+                                  is_admin=False, permissions=["settlement-ecount"])
+    invitation = service.issue_enrollment_local(user["id"])
+    challenge = service.begin_login(user["username"], "Ecount temporary test phrase 407!")
+    secret = service.prepare_enrollment(challenge["token"], invitation)
+    token = service.complete_login(challenge["token"], pyotp.TOTP(secret).now(),
+                                   new_password="Ecount confirmed test phrase 816!")
+    assert service.get_session(token)["permissions"] == ["settlement-ecount"]
+    cookies = SimpleCookie()
+    cookies["__Host-sollume_session"] = token
+    monkeypatch.setattr(request_context, "_get_request", lambda: SimpleNamespace(cookies=cookies))
+    # 초기 합성 파싱 자료는 로그인 이후의 업무 상태이다. MFA나 권한 검사는 그대로 실행된다.
+    yield hashlib.sha256(token.encode("utf-8")).hexdigest()
+    auth._service.cache_clear()
+
+
 # 2026-10-13 hoyeon.han: 페이지가 만드는 processed와 출력 파일을 테스트별로 격리한다.
 @pytest.fixture
-def ecount_seller_ui_app(ecount_seller_ui_parsed, tmp_path, monkeypatch):
+# def ecount_seller_ui_app(ecount_seller_ui_parsed, tmp_path, monkeypatch):
+# 2026-10-14 hoyeon.han: 실제 로그인 경계를 준비한 뒤 기존 합성 업무 상태를 주입한다.
+def ecount_seller_ui_app(ecount_seller_ui_parsed, tmp_path, monkeypatch, ecount_ui_authenticated_session):
     from streamlit.testing.v1 import AppTest
 
     monkeypatch.chdir(tmp_path)
     at = AppTest.from_file(
         str(_TESTS_DIR.parent / "pages" / "settlement_ecount.py"), default_timeout=30
     )
+    at.session_state["_security_marker"] = ecount_ui_authenticated_session
     for key, value in {
         "settle_ecount_parsed": ecount_seller_ui_parsed,
         "settle_ecount_uploaded_sig": ("synthetic_ecount.xlsx", 1),
@@ -1039,6 +1085,22 @@ def _assert_ecount_seller_ui_clean(at):
     assert not at.error, [error.value for error in at.error]
 
 
+# 2026-10-14 hoyeon.han: 화면의 다운로드 URL과 실제 세션 소유 파일의 내용을 함께 검증한다.
+def _assert_protected_ecount_download(at):
+    from urllib.parse import urlsplit
+    import auth
+
+    assert not at.get("download_button")
+    links = at.get("link_button")
+    assert len(links) == 1
+    address = urlsplit(links[0].proto.url)
+    assert address.scheme == "https" and address.netloc == "sollumeesthe.com"
+    assert re.fullmatch(r"/downloads/[0-9a-f]{48}", address.path)
+    grant = auth.get_service().get_download(auth.get_session_token(), address.path.rsplit("/", 1)[1])
+    assert grant["filename"] == at.session_state["settle_ecount_output_filename"]
+    assert Path(grant["path"]).read_bytes() == Path(at.session_state["settle_ecount_output_path"]).read_bytes()
+
+
 def _assert_ecount_seller_ui_output_cleared(at):
     """2026-10-13 hoyeon.han: 세션과 화면 모두에서 이전 출력의 무효화를 확인."""
     _assert_ecount_seller_ui_clean(at)
@@ -1049,6 +1111,8 @@ def _assert_ecount_seller_ui_output_cleared(at):
     assert not at.tabs
     assert "settle_ecount_generate_btn" not in [button.key for button in at.button]
     assert not at.get("download_button")
+    # 2026-10-14 hoyeon.han: 미선택 상태에는 인증된 다운로드 링크도 없다.
+    assert not at.get("link_button")
 
 
 def _assert_ecount_seller_ui_blocked(at):
@@ -1097,8 +1161,11 @@ def _prime_ecount_seller_ui_output(at):
     _assert_ecount_seller_ui_clean(at)
     out_path = Path(at.session_state["settle_ecount_output_path"]).resolve()
     assert out_path.is_file()
-    assert out_path.parent == Path.cwd() / "processed"
-    assert len(at.get("download_button")) == 1
+    # assert out_path.parent == Path.cwd() / "processed"
+    # assert len(at.get("download_button")) == 1
+    # 2026-10-14 hoyeon.han: 생성 건별 경로와 인증된 파일 내용 검증.
+    assert out_path.is_relative_to(Path.cwd() / "processed" / "_session_outputs")
+    _assert_protected_ecount_download(at)
     return at.session_state["settle_ecount_plan_signature"], out_path
 
 
@@ -1292,16 +1359,21 @@ def _assert_ecount_no_order_type_selector(at):
 
 # 2026-10-13 hoyeon.han: 업로드 전에도 전체 페이지를 실제 실행하고 cwd를 격리한다.
 @pytest.fixture
-def ecount_manual_empty_app(tmp_path, monkeypatch):
+# def ecount_manual_empty_app(tmp_path, monkeypatch):
+# 2026-10-14 hoyeon.han: 업로드 전 UI도 2단계 인증을 완료한 직원으로 실행한다.
+def ecount_manual_empty_app(tmp_path, monkeypatch, ecount_ui_authenticated_session):
     from streamlit.testing.v1 import AppTest
 
     # Streamlit 1.51.0 AppTest의 file_uploader는 UnknownElement이다.
     # 실제 파일 지정/업로드 API가 없어 이후 상태는 기존 합성 fixture로 주입한다.
     # 실제 업로드 및 X/ESC 닫기는 별도의 실브라우저 검증 대상이다.
     monkeypatch.chdir(tmp_path)
-    at = AppTest.from_file(
-        str(_TESTS_DIR.parent / "pages" / "settlement_ecount.py"), default_timeout=30
-    ).run()
+    # at = AppTest.from_file(
+    #     str(_TESTS_DIR.parent / "pages" / "settlement_ecount.py"), default_timeout=30
+    # ).run()
+    at = AppTest.from_file(str(_TESTS_DIR.parent / "pages" / "settlement_ecount.py"), default_timeout=30)
+    at.session_state["_security_marker"] = ecount_ui_authenticated_session
+    at.run()
     _assert_ecount_seller_ui_clean(at)
     return at
 
@@ -1309,16 +1381,20 @@ def ecount_manual_empty_app(tmp_path, monkeypatch):
 # 2026-10-13 hoyeon.han: 실제 이미지 렌더링을 유지하면서 원본 자산 경로를 기록한다.
 @pytest.fixture
 def ecount_manual_image_calls(monkeypatch):
-    import streamlit
+    # import streamlit
+    # 2026-10-14 hoyeon.han: 공개 /media 대신 사용하는 실제 고정 자산 렌더러의 호출을 기록한다.
+    import ui_components
 
     calls = []
-    original_image = streamlit.image
+    # original_image = streamlit.image
+    original_image = ui_components.render_static_asset_image
 
     def record_image(image, *args, **kwargs):
         calls.append(image)
         return original_image(image, *args, **kwargs)
 
-    monkeypatch.setattr(streamlit, "image", record_image)
+    # monkeypatch.setattr(streamlit, "image", record_image)
+    monkeypatch.setattr(ui_components, "render_static_asset_image", record_image)
     return calls
 
 
@@ -1361,10 +1437,13 @@ def _snapshot_ecount_manual_ui(at):
         "tables": [node.value for node in at.dataframe],
         "tabs": [tab.label for tab in at.tabs],
         "metrics": [(node.label, node.value) for node in at.metric],
-        "downloads": [
-            (node.proto.id, node.proto.label, node.proto.url, node.proto.disabled)
-            for node in at.get("download_button")
-        ],
+        # "downloads": [
+        #     (node.proto.id, node.proto.label, node.proto.url, node.proto.disabled)
+        #     for node in at.get("download_button")
+        # ],
+        # 2026-10-14 hoyeon.han: 안전한 링크 URL이 팝업 전후 동일한지 확인한다.
+        "downloads": [(node.proto.label, node.proto.url, node.proto.disabled)
+                      for node in at.get("link_button")],
     })
 
 
@@ -1396,10 +1475,18 @@ def _assert_ecount_manual_open(at, image_calls):
     image_path = _TESTS_DIR.parent / "assets" / "ecount_sales_download_guide.png"
     assert image_path.is_file()
     assert image_calls and Path(image_calls[-1]).resolve() == image_path.resolve()
-    images = at.get("imgs")
-    assert len(images) == 1 and len(images[0].proto.imgs) == 1
-    assert images[0].proto.imgs[0].url
-    assert "정산서" in images[0].proto.imgs[0].caption
+    # images = at.get("imgs")
+    # assert len(images) == 1 and len(images[0].proto.imgs) == 1
+    # assert images[0].proto.imgs[0].url
+    # assert "정산서" in images[0].proto.imgs[0].caption
+    # 2026-10-14 hoyeon.han: 표시한 data URI가 매뉴얼 원본 PNG와 바이트 단위로 같은지 검증한다.
+    import base64
+    images = [node.value for node in at.markdown if '<img src="data:image/png;base64,' in node.value]
+    assert len(images) == 1
+    encoded = re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)', images[0])
+    assert encoded and base64.b64decode(encoded.group(1), validate=True) == image_path.read_bytes()
+    assert "정산서" in images[0]
+    assert not at.get("imgs") and "/media/" not in images[0]
     assert not any("이미지를 불러올 수 없습니다" in node.value for node in at.warning)
     _assert_ecount_no_order_type_selector(at)
 
@@ -1508,7 +1595,9 @@ def test_manual_ui_full_default_output_survives_rerun(
     at.button(key="settle_ecount_generate_btn").click().run()
     _assert_ecount_seller_ui_clean(at)
     assert [tab.label for tab in at.tabs] == ["전체", "셀러A", "셀러B", "셀러C", "일반", "상세내역"]
-    assert len(at.get("download_button")) == 1
+    # assert len(at.get("download_button")) == 1
+    # 2026-10-14 hoyeon.han: 실제 인증 다운로드 권한과 파일 내용을 대조한다.
+    _assert_protected_ecount_download(at)
     assert len(at.session_state["settle_ecount_history"]) == 1
     before = _snapshot_ecount_manual_ui(at)
     out_path = Path(at.session_state["settle_ecount_output_path"]).resolve()
@@ -1550,10 +1639,15 @@ def test_manual_ui_preserves_period_mapping_preview_output_and_history(
         at.button(key="settle_ecount_generate_btn").click().run()
         _assert_ecount_seller_ui_clean(at)
         out_path = Path(at.session_state["settle_ecount_output_path"]).resolve()
-        assert out_path.parent == Path.cwd() / "processed"
+        # assert out_path.parent == Path.cwd() / "processed"
+        # 2026-10-14 hoyeon.han: 공용 파일명 대신 생성 건별 보관 경로.
+        assert out_path.is_relative_to(Path.cwd() / "processed" / "_session_outputs")
         content = out_path.read_bytes()
-        assert len(at.get("download_button")) == 1
-        assert at.session_state["settle_ecount_output_filename"] in at.get("download_button")[0].proto.label
+        # assert len(at.get("download_button")) == 1
+        # assert at.session_state["settle_ecount_output_filename"] in at.get("download_button")[0].proto.label
+        # 2026-10-14 hoyeon.han: 파일 이름과 인증된 링크의 실제 내용을 모두 확인.
+        _assert_protected_ecount_download(at)
+        assert at.session_state["settle_ecount_output_filename"] in at.get("link_button")[0].proto.label
         history = at.session_state["settle_ecount_history"]
         assert len(history) == 1 and history[0]["셀러"] == "셀러A, 셀러B"
         assert history[0]["start_date"] == history[0]["end_date"] == "2026-10-02"
@@ -1571,6 +1665,8 @@ def test_manual_ui_preserves_period_mapping_preview_output_and_history(
     _exercise_ecount_manual(at, ecount_manual_image_calls)
     if out_path is not None:
         assert out_path.read_bytes() == content
-        assert list((Path.cwd() / "processed").iterdir()) == [out_path]
+        # assert list((Path.cwd() / "processed").iterdir()) == [out_path]
+        # 2026-10-14 hoyeon.han: 다운로드 권한 스냅샷과 구분해 원본 출력 파일 하나를 확인.
+        assert list((Path.cwd() / "processed" / "_session_outputs").rglob("*.xlsx")) == [out_path]
     else:
         assert not list((Path.cwd() / "processed").iterdir())

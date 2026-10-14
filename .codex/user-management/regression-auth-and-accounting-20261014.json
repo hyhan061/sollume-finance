@@ -1,0 +1,28 @@
+{
+  "checked_at": "2026-10-14T11:18:02.131341+09:00",
+  "duration_seconds": 29.432,
+  "exit_code": 0,
+  "command": ".venv311/bin/python -m pytest .codex/tests/ tests/test_ecount_settlement.py tests/test_seller_settlement.py tests/test_period_summary.py -q -p no:cacheprovider --tb=short",
+  "branch": "codex/strict-user-management",
+  "head": "c5b8c88ec534a7c5fc16cbecd6266ff234856dd3",
+  "scope": "보안 핵심·Flask HTTP·실제 Streamlit AppTest와 이카운트·셀러 정산서·기간 요약 회귀. 실제 Nginx/TLS/브라우저 검증은 별도 보고서.",
+  "data": "인증 테스트는 합성 임시 DB와 MFA 세션 사용, 기존 계정 DB와 업무 DB는 변경하지 않음",
+  "final_change": "사용자관리 잠금 해제 안내에서 계정별 제한과 접속 IP 제한의 차이를 명시한 최종 소스 기준",
+  "verified_source": {
+    "pages/users.py": "c8e357d868b87aeeed090ad36ab026ccbf71c6fc3e595c0d493277cdb08deef9"
+  },
+  "source_unchanged_during_run": true,
+  "collected_by_file": {
+    ".codex/tests/test_auth_gateway.py": 31,
+    ".codex/tests/test_auth_ui.py": 14,
+    ".codex/tests/test_protected_assets.py": 2,
+    ".codex/tests/test_security_config.py": 9,
+    ".codex/tests/test_security_service.py": 19,
+    "tests/test_ecount_settlement.py": 120,
+    "tests/test_seller_settlement.py": 36,
+    "tests/test_period_summary.py": 7
+  },
+  "passed": 238,
+  "result_tail": "........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n......................                                                   [100%]\n238 passed in 29.20s",
+  "log_file": "/Users/hoyeonhan/dev/python/v3.11/sollume-finance/.Codex/user-management/regression-auth-and-accounting-20261014.txt"
+}

@@ -28,6 +28,11 @@ spec = importlib.util.spec_from_file_location(
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('order-summary')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='order-summary', admin_only=False)
 # 2026-07-09 hoyeon.han: 디자인 개선 - 사이드바를 공통(render_custom_sidebar: 로고+사용자정보+로그아웃)으로 통일
 # auth.show_user_info_sidebar()
 from ui_components import render_custom_sidebar
@@ -284,7 +289,9 @@ if process_summary_button:
         st.markdown("### ⬇️ 결과 파일 다운로드")
 
         with open(result["output_file"], "rb") as f:
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label="📥 요약 파일 다운로드",
                 data=f,
                 file_name=os.path.basename(result["output_file"]),
