@@ -262,6 +262,10 @@ APP_DIR="${SOLLUME_APP_DIR:-$HOME/sollume-finance}"
 RAW_BASE="https://raw.githubusercontent.com/hyhan061/sollume-finance/main"
 COMPOSE_FILE="docker-compose.cloud.yml"
 NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/sollume-finance}"
+# 2026-10-15 hoyeon.han: 복구 도구는 호스트의 운영 전용 가상환경에서 실행한다.
+OPS_PYTHON="${SOLLUME_OPS_PYTHON:-$APP_DIR/.venv-ops/bin/python}"
+ROLLBACK_HELPER="$APP_DIR/scripts/release_snapshot.py"
+ROLLBACK_RELEASE=""
 
 fail() { echo "배포 중단: $*" >&2; exit 1; }
 command -v docker >/dev/null || fail "Docker가 필요합니다."
@@ -269,14 +273,32 @@ command -v python3 >/dev/null || fail "설정 검증과 SQLite 백업용 Python 
 test -d "$APP_DIR" || fail "기존 운영 디렉토리를 확인하세요: $APP_DIR"
 cd "$APP_DIR"
 test -f .env || fail ".env에 인증 암호화 키·HTTPS 주소·기존 API 키를 설정하세요."
+# 2026-10-15 hoyeon.han: 터미널 export가 보관한 .env보다 우선하여 다른 키로 배포되는 것을 막는다.
+unset AUTH_ENCRYPTION_KEY AUTH_SIGNING_KEY AUTH_PUBLIC_ORIGIN ORDER_API_KEY
 test -f database/users.db || fail "기존 사용자 DB가 없습니다. 자동으로 빈 DB를 만들지 않습니다."
 test -f database/customer_master.db || fail "기존 거래처 DB가 없습니다. 원본을 복원하세요."
 test -f "$NGINX_SITE_CONFIG" || fail "엄격한 호스트 Nginx 설정을 먼저 설치하세요. OPERATIONS.md를 참고하세요."
+# 2026-10-15 hoyeon.han: 복구 지점 없이 이미지를 교체하지 않는다. 설치 절차는 ROLLBACK.md에 둔다.
+test -f "$ROLLBACK_HELPER" || fail "scripts/release_snapshot.py를 먼저 설치하세요. ROLLBACK.md의 최초 준비 절차를 확인하세요."
+test -x "$OPS_PYTHON" || fail ".venv-ops 가상환경이 필요합니다. python3 -m venv .venv-ops로 준비하세요."
+"$OPS_PYTHON" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' \
+    || fail "SOLLUME_OPS_PYTHON에는 가상환경 Python을 지정하세요."
 
 # 기존 설정이나 내장 무인증 Compose로 폴백하면 접근 차단을 우회하므로 즉시 중단한다.
 COMPOSE_STAGED=$(mktemp "${COMPOSE_FILE}.tmp.XXXXXX")
 COMPOSE_RENDERED=$(mktemp "${COMPOSE_FILE}.validated.XXXXXX")
-trap 'rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"' EXIT
+# 2026-10-15 hoyeon.han: 원래 정리 동작은 보존하고, 실패 시 복구 지점만 안내한다. 자동 롤백은 하지 않는다.
+# trap 'rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"' EXIT
+cleanup_deployment() {
+    local result=$?
+    rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"
+    if test "$result" -ne 0 && test -n "$ROLLBACK_RELEASE" && test -f "$ROLLBACK_RELEASE/manifest.json"; then
+        echo "배포가 완료되지 않았습니다. 복구 지점: $ROLLBACK_RELEASE" >&2
+        echo "rollback-oracle.sh --release 복구지점 으로 사전 점검하세요. 실제 복구는 --apply를 명시합니다." >&2
+        echo "인증 도입 전 버전은 외부 접속을 차단한 별도 복구 절차만 허용합니다. ROLLBACK.md를 확인하세요." >&2
+    fi
+}
+trap cleanup_deployment EXIT
 chmod 600 "$COMPOSE_STAGED" "$COMPOSE_RENDERED" .env
 curl -fsSL --proto '=https' --tlsv1.2 "$RAW_BASE/$COMPOSE_FILE" -o "$COMPOSE_STAGED" \
     || fail "최신 인증 Compose 다운로드에 실패했습니다. 실행 중인 구성은 변경하지 않았습니다."
@@ -317,6 +339,13 @@ if active.count('auth_request /_auth_check;') < 2:
 print('Compose의 내부 포트·운영 인증 설정 및 Nginx 필수 경로 검증 완료')
 PY
 sudo nginx -t || fail "HTTPS 인증서 또는 Nginx 설정 검증 실패. 기존 컨테이너를 유지합니다."
+
+# 2026-10-15 hoyeon.han: latest가 바뀌기 전에 실제 실행 이미지와 설정·DB를 오프라인 복구 지점으로 보관한다.
+ROLLBACK_RELEASE="$APP_DIR/database/backups/releases/before_deploy_$(date +%Y%m%d_%H%M%S)_$$"
+"$OPS_PYTHON" "$ROLLBACK_HELPER" capture --app-dir "$APP_DIR" \
+    --nginx-config "$NGINX_SITE_CONFIG" --release "$ROLLBACK_RELEASE" \
+    || fail "이전 실행 이미지·설정·DB의 복구 지점 생성에 실패했습니다. 서비스를 교체하지 않습니다."
+echo "배포 전 복구 지점 준비 완료: $ROLLBACK_RELEASE"
 
 # 이미지 다운로드와 스키마 지원 검사가 끝나기 전 기존 컨테이너를 중지하지 않는다.
 docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
