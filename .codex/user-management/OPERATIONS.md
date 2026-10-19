@@ -23,7 +23,16 @@
 <!-- 2026-10-19 hoyeon.han: 운영자가 직접 완료했다고 보고한 도메인 준비와 인증서 갱신 구성을 기록한다. -->
 ## office1 도메인·인증서 준비 상태
 
+<!-- 2026-10-19 hoyeon.han: 운영 서버 직접 전환 전 출처 설명 보존.
 다음은 운영자의 실행 결과에 근거한 상태입니다. 개발 환경에서 운영 서버에 접속해 재검증한 결과는 아닙니다.
+-->
+DNS·최초 HTTPS 준비는 운영자의 실행 결과에 근거합니다. 이후 사용자가 승인한 office1 갱신 방식 전환은 운영 서버에서 직접 실행하여 갱신 설정·플러그인 선택·시험 결과를 확인했습니다. 운영 앱 배포는 진행하지 않았습니다.
+
+<!-- 2026-10-19 hoyeon.han: 갱신 플러그인 통일 전 표의 해당 행 보존.
+| 기존 서비스 | 두 회계 DuckDNS의 HTTPS 200 및 기존 컨테이너 정상 응답 보고 |
+| 발급 방식 | Certbot `certonly --webroot`, webroot `/var/www/letsencrypt` |
+| 갱신 시험 | office1 지정 `renew --dry-run --run-deploy-hooks -v` 성공 보고 |
+-->
 
 | 항목 | 준비된 값·상태 |
 |---|---|
@@ -35,9 +44,10 @@
 | 현재 일반 HTTP 접속 | 새 주소의 HTTPS로 301 이동 |
 | 현재 HTTPS 접속 | 인증서 검증 성공, 업무 앱 대신 503 준비 응답 |
 | 인증서·개인키 | `/etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem`, 같은 폴더의 `privkey.pem` |
-| 기존 서비스 | 두 회계 DuckDNS의 HTTPS 200 및 기존 컨테이너 정상 응답 보고 |
-| 발급 방식 | Certbot `certonly --webroot`, webroot `/var/www/letsencrypt` |
-| 갱신 시험 | office1 지정 `renew --dry-run --run-deploy-hooks -v` 성공 보고 |
+| 기존 서비스 | 세 DuckDNS HTTPS 200·TLS 검증 0, 네 컨테이너의 ID·시작 시각·재시작 횟수 동일 확인 |
+| 최초 발급 방식 | Certbot `certonly --webroot`로 발급한 기존 인증서 유지 |
+| 현재 갱신 방식 | `authenticator=nginx`, `installer=nginx`로 기존 세 DuckDNS와 통일 |
+| 갱신 시험 | 전환 후 office1 지정 dry-run 성공, Authenticator·Installer 모두 nginx 선택 확인 |
 
 ### 기존 인증서와 공유하는 갱신 스케줄
 
@@ -55,9 +65,14 @@
 | `Persistent` | `true`: 타이머가 중단된 동안 놓친 calendar 실행을 재활성화 시 보완 |
 | 서비스 `Type` | `oneshot`: 갱신 명령이 끝나면 해당 실행 종료 |
 | 서비스 `ExecStart` | `/usr/bin/certbot -q renew --no-random-sleep-on-renew` |
+| 서비스 `PrivateTmp` | `true`: 서비스에 분리된 임시 디렉토리 제공 |
+
+<!-- 2026-10-19 hoyeon.han: 이전 webroot 전용 hook 및 PrivateTmp 설명 보존.
 | 서비스 `PrivateTmp` | `true`: 서비스에 분리된 임시 디렉토리 제공. office1 webroot는 `/var/www/letsencrypt`이므로 이 설정의 임시 경로가 아님 |
 
 `-q`는 출력량을 줄이며, `--no-random-sleep-on-renew`는 Certbot 자체의 임의 대기를 끕니다. 실행 분산은 위 systemd 타이머가 담당합니다. `--cert-name`이 없으므로 기존 세 DuckDNS와 office1을 포함한 보관 인증서들의 갱신 필요 여부를 확인합니다. `--no-directory-hooks`도 없으므로 office1이 실제로 갱신되면 준비한 deploy hook도 대상입니다. 매번 인증서를 다시 발급하는 것은 아니며 갱신이 필요한 인증서만 처리합니다. 다음은 운영자가 이미 확인한 예약을 다시 조회할 때 사용할 명령입니다.
+-->
+`-q`는 출력량을 줄이며, `--no-random-sleep-on-renew`는 Certbot 자체의 임의 대기를 끕니다. 실행 분산은 위 systemd 타이머가 담당합니다. `--cert-name`이 없으므로 기존 세 DuckDNS와 office1을 포함한 보관 인증서들의 갱신 필요 여부를 확인합니다. 매번 인증서를 다시 발급하는 것은 아니며 갱신이 필요한 인증서만 처리합니다. 현재 네 인증서는 모두 Nginx installer가 갱신 후 서버 반영을 담당하므로 office1 전용 reload hook은 실행 권한을 제거하여 비활성화했습니다. 다음은 확인한 예약을 다시 조회할 때 사용할 명령입니다.
 
 ```bash
 systemctl cat certbot.timer certbot.service
@@ -71,7 +86,10 @@ sudo -n find /etc/letsencrypt/renewal -maxdepth 1 -type f -name '*.conf' -print
 
 인증서별 갱신 설정의 파일 경로만 확인합니다. 실제 설정 확인 시에는 `authenticator`, `installer`, `webroot_path`와 `[webroot_map]` 등 필요한 항목만 조회하고 개인키 내용은 공유하지 않습니다.
 
+<!-- 2026-10-19 hoyeon.han: 최초 webroot 방식의 후속 작업 안내 보존.
 office1은 HTTP의 `/.well-known/acme-challenge/`에서 파일을 제공하는 webroot 방식입니다. 인증서가 갱신되어 파일이 바뀌어도 실행 중인 Nginx는 재적용 전까지 이전 인증서를 사용할 수 있으므로 다음 deploy hook을 준비했습니다.
+-->
+office1은 현재 Nginx 플러그인이 도메인 확인과 인증서 반영을 담당합니다. 초기 webroot 방식에서 사용한 다음 파일은 복구 이력으로 보존하며, `root:root` 0644로 변경하여 Certbot의 실행 가능한 directory hook 대상에서 제외했습니다. office1 갱신 설정과 `/etc/letsencrypt/cli.ini`에 이 파일을 명시적으로 실행하는 hook 설정도 없음을 확인했습니다.
 
 파일 경로:
 
@@ -79,7 +97,8 @@ office1은 HTTP의 `/.well-known/acme-challenge/`에서 파일을 제공하는 w
 /etc/letsencrypt/renewal-hooks/deploy/50-office1-reload-nginx.sh
 ```
 
-운영자가 저장하고 시험한 내용:
+<!-- 2026-10-19 hoyeon.han: 이전 제목 보존. 운영자가 저장하고 시험한 내용: -->
+비활성 상태로 보존한 기존 파일 내용(현재 갱신 후 실행하지 않음):
 
 ```sh
 #!/bin/sh
@@ -100,11 +119,52 @@ Certbot이 전달하는 `RENEWED_DOMAINS`에 office1이 있을 때만 설정 검
 
 배포와 구버전 503 복구 중에도 office1의 HTTP ACME 경로를 유지해야 합니다. 이 경로는 업무자료·로그인·다운로드로 연결하지 않습니다. 기존 DuckDNS 인증서 갱신까지 자동 보장한 것은 아니므로 해당 인증서의 실제 갱신 방식은 별도로 확인합니다.
 -->
+<!-- 2026-10-19 hoyeon.han: 갱신 플러그인 통일 전 방식과 hook 설명 보존.
 기존 `sol-fin.duckdns.org`, `sollume-finance.duckdns.org`, `sollume-n8n.duckdns.org`의 갱신 설정은 모두 `authenticator=nginx`, `installer=nginx`로 확인됐습니다. 기존 인증서는 Nginx 플러그인이 도메인 확인과 갱신 후 서버 반영을 담당합니다. office1은 `authenticator=webroot`이며 installer가 없어 준비한 파일 경로로 확인하고 별도의 deploy hook으로 Nginx에 반영합니다.
 
 Certbot이 전달하는 `RENEWED_DOMAINS`에 office1이 있을 때만 이 hook이 설정 검사 후 reload합니다. 다른 인증서의 갱신에서는 이 hook이 추가 동작을 하지 않습니다. hook 파일은 `root:root`, 0755로 준비됐습니다. 이 reload는 공유 Nginx 데몬의 전체 설정을 다시 읽으며 office1만 별도로 재시작하는 명령이 아닙니다. Docker 컨테이너를 재시작하지는 않습니다.
 
 배포와 구버전 503 복구 중에도 office1의 HTTP ACME 경로를 유지해야 합니다. 이 경로는 업무자료·로그인·다운로드로 연결하지 않습니다. 기존 인증서의 실제 갱신 방식과 공유 예약을 확인한 사실이 앞으로 모든 갱신의 성공을 보장하는 것은 아니므로, 회계 사이트 전환 후에도 각 인증서의 갱신 결과를 확인합니다.
+-->
+기존 `sol-fin.duckdns.org`, `sollume-finance.duckdns.org`, `sollume-n8n.duckdns.org`와 office1은 모두 `authenticator=nginx`, `installer=nginx`입니다. 네 인증서 모두 기존 공유 타이머에서 갱신 필요 여부를 검사하고 Nginx 플러그인으로 도메인 확인·서버 반영을 수행합니다. 새 타이머·cron을 추가하거나 기존 unit을 수정하지 않았습니다.
+
+Nginx reload는 공유 데몬의 전체 설정을 다시 읽으며 특정 사이트만 별도로 재시작하는 명령이 아닙니다. Docker 컨테이너를 재시작하지는 않습니다. `/var/www/letsencrypt`와 기존 HTTP ACME 블록은 호환·복구를 위해 유지하며 현재 플러그인 통일 작업에서 삭제하지 않았습니다. 이 경로는 업무자료·로그인·다운로드로 연결하지 않습니다.
+
+### 2026-10-19 Nginx 플러그인 통일 기록
+
+Certbot 2.9.0에서 다음 설정 전환 명령이 내부 staging 시험을 통과한 뒤 office1의 갱신 설정에 저장됐습니다. 다음 명령은 완료 기록이며 반복 실행 안내가 아닙니다.
+
+`reconfigure`는 시험에 성공한 갱신 설정을 저장하는 명령입니다. [Certbot 공식 설명](https://eff-certbot.readthedocs.io/en/stable/using.html#modifying-the-renewal-configuration-of-existing-certificates)
+
+```bash
+sudo -n certbot reconfigure --cert-name office1.sollumeesthe.com --nginx --non-interactive
+```
+
+운영 인증서를 다시 발급하거나 별도 `certbot install`을 실행하지 않았습니다. 설정 전환 직후 해시 비교에서 Nginx 전체 설정, 기존 세 DuckDNS 갱신 설정, 인증서 공개 파일, 타이머·서비스 unit은 유지됐고 최초 변경은 office1의 갱신 설정 파일뿐이었습니다. 그 후 전용 hook의 파일 내용은 보존하고 권한만 0755에서 0644로 변경했습니다.
+
+전환 후 다음 시험이 성공했으며 `Authenticator nginx`, `Installer nginx` 선택과 `all simulated renewals succeeded`를 확인했습니다.
+
+```bash
+sudo -n certbot renew --cert-name office1.sollumeesthe.com --dry-run --run-deploy-hooks --non-interactive --no-random-sleep-on-renew -v
+```
+
+<!-- 2026-10-19 hoyeon.han: 최종 외부·컨테이너 검증 전 설명 보존.
+이 시험은 현재 운영 인증서를 교체하거나 실제 만료 시 갱신 후 반영의 전 과정을 실행한 결과는 아닙니다. 시험 후 `nginx -t`가 성공했고 Nginx reload를 완료했으며 Nginx와 기존 Certbot 타이머가 활성 상태임을 확인했습니다. 최종 외부 응답·컨테이너 비교 결과는 별도 검증 기록에 추가합니다. 회계 사이트 전환 후에도 실제 갱신 결과를 확인해야 합니다.
+-->
+이 시험은 현재 운영 인증서를 교체하거나 실제 만료 시 갱신 후 반영의 전 과정을 실행한 결과는 아닙니다. 시험 후 `nginx -t`가 성공했고 Nginx reload를 완료했으며 Nginx와 기존 Certbot 타이머가 활성 상태임을 확인했습니다. 2026-10-19 08:29:36 UTC 최종 검증에서는 13개 항목이 모두 통과했습니다. HTTP office1은 HTTPS로 301 이동하고 HTTPS는 503·TLS 검증 0이며, 기존 세 DuckDNS는 HTTPS 200·TLS 검증 0을 유지했습니다. 네 컨테이너의 ID·시작 시각·재시작 횟수가 모두 동일하고 실행 중이었습니다. 제공 중인 인증서의 지문이 디스크의 유효 인증서와 일치하며 만료일은 2027-01-17 06:39:24 UTC입니다. 회계 사이트 전환 후에도 실제 갱신 결과를 확인해야 합니다.
+
+이번 전환 직전 설정 백업은 다음 비공개 폴더에 있습니다.
+
+```text
+/home/ubuntu/sollume-finance/database/backups/nginx-plugin-office1-20261019T082514Z/
+```
+
+<!-- 2026-10-19 hoyeon.han: 최종 검증 기록 추가 전 백업 설명 보존.
+폴더는 root 소유 0700이며, `configuration.tar.gz`와 `baseline.json`은 root 소유 0600입니다. Nginx·갱신 설정·hook 구성 백업과 비교 기준이며 개인키를 포함하지 않습니다. 전체 Nginx 설정을 덮어 복구하지 않습니다. office1 갱신 설정과 전용 hook만 선택하여 되돌리는 범위는 [롤백 안내](ROLLBACK.md#인증서-갱신-설정만-되돌리는-경우)를 따릅니다.
+-->
+폴더는 root 소유 0700이며, `configuration.tar.gz`·`baseline.json`·최종 `verification.json`은 root 소유 0600입니다. Nginx·갱신 설정·hook 구성 백업과 비교 기준이며 개인키를 포함하지 않습니다. `verification.json`의 `all_passed=true`와 13개 검사에서 Nginx 추적 파일·링크, 기존 세 갱신 설정, 네 인증서 fullchain, timer·service unit이 유지됐고 추가 설정 파일이 없음을 확인했습니다. 최종 변경은 office1 갱신 설정의 내용과 전용 hook의 실행 권한 제거뿐입니다. 전체 Nginx 설정을 덮어 복구하지 않습니다. office1 갱신 설정과 전용 hook만 선택하여 되돌리는 범위는 [롤백 안내](ROLLBACK.md#인증서-갱신-설정만-되돌리는-경우)를 따릅니다.
+
+비밀값을 제외한 [최종 검증 기록](office1-nginx-plugin-verification.json)을 로컬에 보관했습니다. 서버 외부에서 네 HTTPS 주소의 응답과 TLS 검증도 확인했고, 관련 로컬 Nginx 검사 9개가 통과했습니다. 이 결과는 회계앱 운영 배포나 실제 만료 시점의 인증서 갱신을 수행했다는 뜻은 아닙니다.
 
 <!-- 2026-10-19 hoyeon.han: 현재 배포 코드의 진입점 검증 범위를 명시하고 다음 필수 작업을 기록한다. -->
 ## 운영 배포 전 남은 진입점 전환·검사

@@ -1,7 +1,10 @@
 <!-- 2026-10-15 hoyeon.han: 실제 실행 이미지와 최신 업무자료를 보존하는 운영 복구 절차 -->
 # Oracle 운영 롤백
 
+<!-- 2026-10-19 hoyeon.han: 인증서 구성의 승인된 운영 전환 전 적용 범위 설명 보존.
 이 문서는 실행 절차이며 운영 서버에서 자동 실행되지 않습니다. 구현·검증은 로컬 임시 환경에서만 수행합니다. 복구 대상은 현재 시스템의 **호스트 Nginx + docker-compose.cloud.yml** 구성입니다. Docker Nginx 구성이나 다른 시스템으로 임의 적용하지 않습니다.
+-->
+이 문서는 실행 절차이며 운영 서버에서 자동 실행되지 않습니다. 앱·자료 롤백 구현과 복구 시험은 로컬 임시 환경에서 수행하며 운영 앱 배포는 진행하지 않았습니다. 아래 인증서 갱신 방식 통일만 사용자의 별도 승인을 받아 운영에서 전환·시험했습니다. 앱 복구 대상은 현재 시스템의 **호스트 Nginx + docker-compose.cloud.yml** 구성입니다. Docker Nginx 구성이나 다른 시스템으로 임의 적용하지 않습니다.
 
 <!-- 2026-10-19 hoyeon.han: 확정된 운영 도메인과 준비된 HTTP ACME 경로를 복구 경계에 반영한다. -->
 새 공개 주소는 `https://office1.sollumeesthe.com`입니다. 운영자가 DNS·인증서·HTTPS 503 준비와 갱신 시험을 완료했다고 보고했으며, 새 인증 앱은 아직 배포하지 않았습니다. 현재 설정 원본은 `/etc/nginx/sites-available/office1.sollumeesthe.com`, 활성화 링크는 `/etc/nginx/sites-enabled/zz-office1.sollumeesthe.com`입니다. 루트 도메인 `sollumeesthe.com`은 다른 서버의 기존 사이트이므로 대상에서 제외합니다.
@@ -9,7 +12,36 @@
 <!-- 2026-10-19 hoyeon.han: 기존 갱신 방식 조회 전 문구 보존.
 배포·복구 명령의 `--nginx-config`에는 **office1을 첫 번째로, 기존 회계 DuckDNS 두 사이트를 그 뒤에** 지정합니다. 기존 `n8n`·`goodsfoundry`와 다른 Nginx 사이트는 지정하지 않습니다. 공유 Nginx의 reload는 모든 사이트의 설정을 다시 읽는 작업이며 Docker 컨테이너 재시작과 다릅니다. 적용 전 전체 Nginx 설정 검사가 필요합니다. office1의 HTTP ACME 경로 `/var/www/letsencrypt/.well-known/acme-challenge/`는 업무 경로를 503으로 차단할 때도 유지합니다. 기존 인증서별 갱신 방식까지 확인한 것은 아니므로 DuckDNS의 갱신 성공까지 보장하지는 않습니다. 공유 `certbot.timer`와 office1 전용 후속 작업의 구분은 [운영 안내](OPERATIONS.md#기존-인증서와-공유하는-갱신-스케줄)를 참고합니다.
 -->
+<!-- 2026-10-19 hoyeon.han: office1 Nginx 플러그인 전환 전 설명 보존.
 배포·복구 명령의 `--nginx-config`에는 **office1을 첫 번째로, 기존 회계 DuckDNS 두 사이트를 그 뒤에** 지정합니다. 기존 `n8n`·`goodsfoundry`와 다른 Nginx 사이트는 지정하지 않습니다. 공유 Nginx의 reload는 모든 사이트의 설정을 다시 읽는 작업이며 Docker 컨테이너 재시작과 다릅니다. 적용 전 전체 Nginx 설정 검사가 필요합니다. office1의 HTTP ACME 경로 `/var/www/letsencrypt/.well-known/acme-challenge/`는 업무 경로를 503으로 차단할 때도 유지합니다. 운영자의 실제 조회에서 기존 세 DuckDNS는 Nginx 플러그인, office1은 webroot와 전용 deploy hook을 사용하며 기존 `certbot.timer`를 공유하는 것으로 확인했습니다. 실행 시각·분산 지연·실제 서비스 명령은 [운영 안내](OPERATIONS.md#기존-인증서와-공유하는-갱신-스케줄)를 참고합니다. 갱신 방식·예약 확인이 향후 갱신 성공까지 보장하는 것은 아닙니다.
+-->
+배포·복구 명령의 `--nginx-config`에는 **office1을 첫 번째로, 기존 회계 DuckDNS 두 사이트를 그 뒤에** 지정합니다. 기존 `n8n`·`goodsfoundry`와 다른 Nginx 사이트는 지정하지 않습니다. 공유 Nginx reload는 모든 사이트의 설정을 다시 읽으며 Docker 컨테이너를 재시작하지 않습니다. 적용 전 전체 설정 검사가 필요합니다. office1과 기존 세 DuckDNS의 인증서는 현재 모두 Nginx authenticator·installer를 사용하고 기존 `certbot.timer`를 공유합니다. webroot와 HTTP ACME 블록은 호환·복구용으로 유지하며 업무자료로 연결하지 않습니다. 공유 예약·office1 플러그인 전환 및 검증 내역은 [운영 안내](OPERATIONS.md#2026-10-19-nginx-플러그인-통일-기록)를 참고합니다. 갱신 시험 성공이 향후 실제 갱신 성공까지 보장하는 것은 아닙니다.
+
+<!-- 2026-10-19 hoyeon.han: 앱·자료 롤백과 분리한 인증서 갱신 설정의 제한된 복구 범위를 기록한다. -->
+## 인증서 갱신 설정만 되돌리는 경우
+
+2026-10-19 office1의 갱신 방식만 기존 세 DuckDNS와 같은 Nginx 플러그인으로 전환했습니다. 운영 인증서를 다시 발급하거나 `certbot install`을 실행하지 않았고, 회계앱·계정·DB·업무자료·공유 예약은 변경하지 않았습니다. `nginx -t`·office1 지정 dry-run 성공 후 reload를 마쳤으며 최종 서비스·인증서·컨테이너 검증 13개 항목이 모두 통과했습니다. 이는 만료 시점의 실제 갱신을 실행한 결과는 아닙니다.
+
+기존 전용 hook은 내용을 보존하고 root:root 0644로 실행 권한만 제거했습니다. office1 갱신 설정과 전역 `cli.ini`에 명시적으로 실행하는 hook도 없음을 확인했습니다. 서버 외부의 네 HTTPS 검사 결과를 포함한 [비밀값 제외 검증 기록](office1-nginx-plugin-verification.json)을 참고합니다.
+
+복구 원본 위치:
+
+```text
+/home/ubuntu/sollume-finance/database/backups/nginx-plugin-office1-20261019T082514Z/configuration.tar.gz
+```
+
+같은 폴더의 `baseline.json`과 `verification.json`에 전환 전 비교 기준과 최종 결과가 있습니다. 폴더는 root 소유 0700, 세 파일은 root 소유 0600입니다. 구성 백업에는 Nginx·renewal·hook 설정이 포함되며 개인키는 포함되지 않습니다. 현재 인증서 파일·키·기존 세 DuckDNS 설정·공유 timer는 복원 대상이 아닙니다.
+
+복구가 필요하면 다음 범위로 별도 검토 후 진행합니다. 지금 실행하는 절차가 아닙니다.
+
+1. 현재 office1 갱신 설정과 비활성 hook을 별도 비공개 위치에 먼저 보관합니다. Certbot 갱신 작업과 복구 작업을 동시에 실행하지 않습니다.
+2. 위 압축 파일의 `etc/letsencrypt/renewal/office1.sollumeesthe.com.conf`와 `etc/letsencrypt/renewal-hooks/deploy/50-office1-reload-nginx.sh` 두 항목을 확인하고 비공개 임시 폴더에 **그 두 항목만** 추출합니다. 압축을 `/`에 풀거나 `/etc/nginx` 전체에 덮어쓰지 않습니다.
+3. 추출본의 office1 갱신 설정을 확인하여 전환 전 `authenticator=webroot`·webroot `/var/www/letsencrypt` 구성임을 확인합니다. 현재 office1 HTTP ACME 경로와 Nginx 설정이 호환되는지도 점검합니다.
+4. `/etc/letsencrypt/renewal/office1.sollumeesthe.com.conf`와 `/etc/letsencrypt/renewal-hooks/deploy/50-office1-reload-nginx.sh` 두 파일만 선택 복원합니다. 소유자는 root로 유지하고 hook은 전환 전 0755로 되돌립니다. 다른 인증서·사이트·timer·service는 교체하지 않습니다.
+5. `nginx -t`와 office1 지정 `renew --dry-run --run-deploy-hooks`로 webroot 도메인 확인·후속 작업이 정상인지 검사합니다. 실패하면 전체 설정을 덮어쓰지 말고 office1 변경만 재검토합니다.
+6. HTTPS 503·TLS 검증, 기존 세 DuckDNS HTTPS, 인증서 지문·유효기간과 기존 컨테이너 상태를 다시 비교합니다. 회계앱 배포·계정·자료 복구 명령은 실행하지 않습니다.
+
+복구 목적은 갱신 설정만 webroot와 전용 hook으로 되돌리는 것입니다. 현재 유효한 인증서를 과거 인증서로 되돌리거나 개인키를 교체하는 절차가 아닙니다. 실제 복구 시에는 별도 작업 승인과 최신 상태 확인 후 필요한 명령을 작업 단위로 안내합니다.
 
 <!-- 2026-10-19 hoyeon.han: 완료한 압축 백업을 사용하는 최초 전환 절차를 우선 안내한다. -->
 ## 완료한 압축 백업 사용 — 최초 인증 전환
