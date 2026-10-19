@@ -1,5 +1,8 @@
 # Oracle Cloud 배포 가이드
 
+<!-- 2026-10-19 hoyeon.han: 현재 인증 전환 안내를 기존 신규 설치 문서보다 먼저 연결한다. -->
+> 현재 운영 주소는 `https://office1.sollumeesthe.com`입니다. 기존 계정·데이터를 유지하는 인증 전환은 [사용자관리 운영 안내](.codex/user-management/OPERATIONS.md)와 [압축 백업 기반 배포·복구 절차](.codex/user-management/ROLLBACK.md)를 따릅니다. 아래는 기존 신규 설치 가이드이며, 현재 운영 서버에서 그대로 실행하지 않습니다. 운영 앱 배포는 아직 진행하지 않았습니다.
+
 ## 📋 목차
 
 1. [사전 준비](#사전-준비)

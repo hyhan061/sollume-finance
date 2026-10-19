@@ -148,7 +148,9 @@ class ManualLocalRunner:
   if normalized==['sudo','nginx','-T']:
    self.calls.append(command)
    # 2026-10-19 hoyeon.han: 원본host포트·사이트파일 이름으로 검사하고 실제검사는별도파생구성에연결한다.
-   return '\n'.join('# configuration file '+str(path)+':\n'+path.read_text() for path in self.fixture.nginx_configs)
+   # 2026-10-19 hoyeon.han: 회계 외 사이트도 실제 Nginx 조회에 포함하여 선택적 차단을 검증한다.
+   # return '\n'.join('# configuration file '+str(path)+':\n'+path.read_text() for path in self.fixture.nginx_configs)
+   return '\n'.join('# configuration file '+str(path)+':\n'+path.read_text() for path in (*self.fixture.nginx_configs,self.fixture.unrelated_site))
   return self.base.run(normalized,input=input,env=env)
  def https_status(self,origin,path,headers=None):
   import ssl,urllib.request,urllib.error
@@ -186,14 +188,16 @@ def docker_fixture_type():
  base=existing_qa()
  class ManualFixture(base.Fixture):
   def __init__(self):
-   super().__init__(legacy=True);self.base=base;self.http_port=base.port()
-   original_command=base.command
-   def fixture_command(argv,**kwargs):
-    argv=list(argv)
-    if argv[:2]==['docker','run'] and '--name' in argv and argv[argv.index('--name')+1]==self.nginx_name:
-     argv=argv[:-1]+['-p','127.0.0.1:'+str(self.http_port)+':80',argv[-1]]
-    return original_command(argv,**kwargs)
-   base.command=fixture_command
+   # 2026-10-19 hoyeon.han: HTTP 게시·ACME mount는 공통 Fixture가 소유하므로 중복 게시하지 않는다.
+   # super().__init__(legacy=True);self.base=base;self.http_port=base.port()
+   # original_command=base.command
+   # def fixture_command(argv,**kwargs):
+   #  argv=list(argv)
+   #  if argv[:2]==['docker','run'] and '--name' in argv and argv[argv.index('--name')+1]==self.nginx_name:
+   #   argv=argv[:-1]+['-p','127.0.0.1:'+str(self.http_port)+':80',argv[-1]]
+   #  return original_command(argv,**kwargs)
+   # base.command=fixture_command
+   super().__init__(legacy=True);self.base=base
    self.nginx_configs=[self.app/'nginx.site',self.app/'legacy-nginx.site']
    self.runner=ManualLocalRunner(self)
    self.manager=self.api.ReleaseManager(self.app,self.nginx_configs[0],runner=self.runner)
@@ -211,7 +215,11 @@ def docker_fixture_type():
    base.command(self.compose('up','-d','--pull','never','--no-build','--wait','--wait-timeout','90'))
    primary=self.nginx_configs[0].read_text().replace('http://sollume-app:8501','http://127.0.0.1:8501')
    self.nginx_configs[0].write_text(primary)
-   self.nginx_configs[1].write_text('server { listen 80; server_name sol-fin.duckdns.org; return 301 https://sol-fin.duckdns.org$request_uri; }\n'+primary.replace('default_server','').replace('server_name sollumeesthe.com','server_name sol-fin.duckdns.org'))
+   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+   # self.nginx_configs[1].write_text('server { listen 80; server_name sol-fin.duckdns.org; return 301 https://sol-fin.duckdns.org$request_uri; }\n'+primary.replace('default_server','').replace('server_name sollumeesthe.com','server_name sol-fin.duckdns.org'))
+   # 2026-10-19 hoyeon.han: 공통 legacy fixture의 HTTP 블록을 재사용하여 중복 server_name을 만들지 않는다.
+   # self.nginx_configs[1].write_text('server { listen 80; server_name sol-fin.duckdns.org; return 301 https://sol-fin.duckdns.org$request_uri; }\n'+primary.replace('default_server','').replace('server_name office1.sollumeesthe.com','server_name sol-fin.duckdns.org'))
+   self.nginx_configs[1].write_text(primary.replace('default_server','').replace('server_name office1.sollumeesthe.com','server_name sol-fin.duckdns.org'))
    self.runner.run(['sudo','nginx','-t']);self.runner.run(['sudo','systemctl','reload','nginx'])
    (self.app/'.venv/bin').mkdir(parents=True);(self.app/'.venv/bin/python').symlink_to('/usr/bin/python3')
    (self.app/'database/backups/nginx-configs').mkdir(parents=True,exist_ok=True)
@@ -252,7 +260,9 @@ def docker_fixture_type():
    auth['volumes']=[volume for volume in auth['volumes'] if volume['target'] in ('/app/database','/app/processed','/app/logs')]
    auth['ports']=[{'host_ip':'127.0.0.1','published':str(self.ports[8503]),'target':8503}]
    auth['command']=['gunicorn','--bind','0.0.0.0:8503','--workers','1','--pythonpath','/app/Src','auth_gateway:create_app()']
-   auth['healthcheck']['test']=['CMD','curl','-f','-H','Host: sollumeesthe.com','http://localhost:8503/auth/health']
+   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+   # auth['healthcheck']['test']=['CMD','curl','-f','-H','Host: sollumeesthe.com','http://localhost:8503/auth/health']
+   auth['healthcheck']['test']=['CMD','curl','-f','-H','Host: office1.sollumeesthe.com','http://localhost:8503/auth/health']
    auth.pop('deploy',None);config['services']['sollume-auth']=auth
    (self.app/'docker-compose.cloud.yml').write_text(json.dumps(config))
    service=base.SecurityService(self.app/'database/users.db',self.key,self.app/'processed/secure_downloads')
@@ -268,8 +278,12 @@ def docker_fixture_type():
    write_private(self.app/'order_data/current.xlsm',b'synthetic latest orders must survive manual rollback')
    self.current_business={name:sha(self.app/name) for name in ('database/customer_master.db','order_data/current.xlsm','order_data/current.meta.json')}
    primary=(ROOT/'nginx-host-api.conf.example').read_text()
-   primary=primary.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem',str(self.app/'ssl/fullchain.pem'))
-   primary=primary.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem',str(self.app/'ssl/privkey.pem'))
+   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+   # primary=primary.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem',str(self.app/'ssl/fullchain.pem'))
+   primary=primary.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem',str(self.app/'ssl/fullchain.pem'))
+   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+   # primary=primary.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem',str(self.app/'ssl/privkey.pem'))
+   primary=primary.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/privkey.pem',str(self.app/'ssl/privkey.pem'))
    self.nginx_configs[0].write_text(primary)
    base.command(self.compose('up','-d','--pull','never','--no-build','--wait','--wait-timeout','90'))
    self.runner.run(['sudo','nginx','-t']);self.runner.run(['sudo','systemctl','reload','nginx'])
@@ -290,6 +304,8 @@ class Verification:
   if not passed:raise AssertionError(name)
  def prepare(self):
   fixture=docker_fixture_type()();self.fixtures.append(fixture);fixture.prepare_manual_files()
+  # 2026-10-19 hoyeon.han: 압축 전후 legacy 실행 상태에서 공개 ACME 파일과 다른 사이트가 살아 있다.
+  self.check('manual_initial_acme_http200_body_matches_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
   self.check('actual_gnu_tar_binary_used','GNU tar' in fixture.gnu_tar_version)
   with tarfile.open(fixture.backup/'application.tar.gz','r:gz') as archive:
    members={member.name:member for member in archive.getmembers()}
@@ -315,8 +331,12 @@ class Verification:
   values=json.loads(fixture.base.command(['docker','inspect',*fixture.canary_ids]))
   return all(item['State']['Running'] and item['Image']==fixture.nginx_image for item in values)
  def blocked(self,fixture):
-  return all(fixture.runner.https_status('https://'+host,path)==503 for host in ('sollumeesthe.com','sol-fin.duckdns.org') for path in ('/','/auth/login','/downloads/test')) and all(
-   fixture.runner.http_status('http://'+host,'/')==503 for host in ('sollumeesthe.com','sol-fin.duckdns.org'))
+  # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+  # return all(fixture.runner.https_status('https://'+host,path)==503 for host in ('sollumeesthe.com','sol-fin.duckdns.org') for path in ('/','/auth/login','/downloads/test')) and all(
+  return all(fixture.runner.https_status('https://'+host,path)==503 for host in ('office1.sollumeesthe.com','sol-fin.duckdns.org') for path in ('/','/auth/login','/downloads/test')) and all(
+   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+   # fixture.runner.http_status('http://'+host,'/')==503 for host in ('sollumeesthe.com','sol-fin.duckdns.org'))
+   fixture.runner.http_status('http://'+host,'/')==503 for host in ('office1.sollumeesthe.com','sol-fin.duckdns.org'))
  def original_archives(self,fixture):
   return all(sha(fixture.backup/name)==value for name,value in fixture.original_manual_hashes.items())
  def old_image_login(self,fixture,username,password):
@@ -345,12 +365,17 @@ class Verification:
   return len(current)==2
  def full(self,fixture):
   self.scope='complete manual archive restore rehearsal'
-  fixture.canary_ids=[]
-  for label in ('n8n','goodsfoundry'):
-   identifier=fixture.base.command(['docker','run','-d','--name',fixture.project+'-canary-'+label,
-    '--label','sollume.rollback.qa='+fixture.project,'--pull','never','--network','none','--read-only',
-    '--entrypoint','sh',fixture.nginx_image,'-c','sleep 900']).strip();fixture.canary_ids.append(identifier)
+  # 2026-10-19 hoyeon.han: 다른 서비스 canary는 공통 Fixture에서 시작하여 전 과정 보존을 확인한다.
+  # fixture.canary_ids=[]
+  # for label in ('n8n','goodsfoundry'):
+  #  identifier=fixture.base.command(['docker','run','-d','--name',fixture.project+'-canary-'+label,
+  #   '--label','sollume.rollback.qa='+fixture.project,'--pull','never','--network','none','--read-only',
+  #   '--entrypoint','sh',fixture.nginx_image,'-c','sleep 900']).strip();fixture.canary_ids.append(identifier)
   fixture.upgrade_current_to_security();manual=fixture.manual_manager()
+  self.check('manual_secure_acme200_root401_download401_and_other_sites_preserved',fixture.acme_available()
+   and fixture.runner.https_status('https://office1.sollumeesthe.com','/')==401
+   and fixture.runner.https_status('https://office1.sollumeesthe.com','/downloads/blocked-test')==401
+   and fixture.unrelated_preserved())
   before={str(path):sha(path) for path in (*fixture.nginx_configs,fixture.app/'database/users.db',fixture.app/'docker-compose.cloud.yml')}
   plan=manual.rollback()
   self.check('manual_rollback_defaults_readonly_and_never_public_resume',plan['dry_run'] and not plan['public_resume'] and all(sha(Path(path))==value for path,value in before.items()))
@@ -369,14 +394,19 @@ class Verification:
   receipt=json.loads((fixture.manual_release/'rollback-receipt.json').read_text())
   rescue=Path(receipt['recovery_release'])
   self.check('injected_image_failure_preserves_current_backup_and_all_http_https_ingress503',failed and fixture.runner.base.injected and (rescue/'users.db').is_file() and self.blocked(fixture),evidence='actual Docker/SQLite/HTTP/HTTPS; image load failure injected')
+  # 2026-10-19 hoyeon.han: 수동 복구 실패503에서도 office1 ACME만 HTTP200으로 유지한다.
+  self.check('manual_failure_acme200_body_matches_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
   self.check('failure_stops_only_accounting_containers_and_preserves_other_canaries',not fixture.base.command(fixture.compose('ps','-q')).strip() and self.canaries_running(fixture))
   self.check('failure_keeps_original_manual_archives_and_current_business_files',self.original_archives(fixture) and all(sha(fixture.app/name)==value for name,value in fixture.current_business.items()))
   fixture.runner.base.fail_stage=None
   result=manual.rollback(apply=True,legacy_private=True,restore_users=True)
   self.check('actual_manual_restore_from_partially_removed_state_completes_private',result['completed'] and not result['public_resume'] and self.blocked(fixture))
+  self.check('manual_restore_acme200_body_matches_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
   self.check('actual_inspect_config_resources_logs_bind_rw_and_loopback_ports_match_original',self.runtime_preserved(fixture))
   self.check('current_rotated_api_key_overrides_archived_key',all(dict(value.split('=',1) for value in item['Config']['Env']).get('ORDER_API_KEY')==fixture.current_api_key for item in fixture.restored_inspect if item['Config']['Labels']['com.docker.compose.service']=='sollume-api'))
-  self.check('actual_legacy_service_health_checks_pass',fixture.runner.internal_health(8501,'sollumeesthe.com') and fixture.runner.internal_health(8502,'sollumeesthe.com'))
+  # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+  # self.check('actual_legacy_service_health_checks_pass',fixture.runner.internal_health(8501,'sollumeesthe.com') and fixture.runner.internal_health(8502,'sollumeesthe.com'))
+  self.check('actual_legacy_service_health_checks_pass',fixture.runner.internal_health(8501,'office1.sollumeesthe.com') and fixture.runner.internal_health(8502,'office1.sollumeesthe.com'))
   with closing(sqlite3.connect(fixture.app/'database/users.db')) as conn:
    rows={row[0]:row[1:] for row in conn.execute('SELECT id,username,is_active,is_admin FROM users')}
   self.check('latest_added_stopped_deleted_password_changed_accounts_and_demotion_preserved',rows[111]==('qa_added',0,0) and rows[43][1]==1 and rows[77][1:]==(1,0) and all(rows[uid][1]==0 for uid in (42,99,105)))
@@ -396,6 +426,7 @@ class Verification:
   self.password_tty(fixture)
   self.check('actual_changed_admin_authenticates_privately_after_tty_reset',self.old_image_login(fixture,'qa_changed',fixture.next_password))
   self.check('manual_password_and_private_login_never_reopen_any_ingress',self.blocked(fixture) and self.canaries_running(fixture) and self.original_archives(fixture))
+  self.check('manual_password_restore_keeps_acme200_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
  def password_tty(self,fixture):
   import pty,select,subprocess
   state={'app':str(fixture.app),'backup':str(fixture.backup),'project':fixture.project,'nginx_name':fixture.nginx_name,
@@ -465,7 +496,9 @@ def main():
  if args.password_worker:
   state=json.loads(Path(args.password_worker).read_text());kind=docker_fixture_type();fixture=kind.__new__(kind)
   fixture.api=release_api();fixture.base=existing_qa();fixture.app=Path(state['app']);fixture.backup=Path(state['backup']);fixture.project=state['project'];fixture.nginx_name=state['nginx_name']
-  fixture.ports={int(key):value for key,value in state['ports'].items()};fixture.https_port=state['https_port'];fixture.http_port=state['http_port'];fixture.nginx_configs=list(map(Path,state['sites']))
+  # 2026-10-19 hoyeon.han: worker의 Nginx-T 경계에 다른 사이트도 동일하게 포함한다.
+  # fixture.ports={int(key):value for key,value in state['ports'].items()};fixture.https_port=state['https_port'];fixture.http_port=state['http_port'];fixture.nginx_configs=list(map(Path,state['sites']))
+  fixture.ports={int(key):value for key,value in state['ports'].items()};fixture.https_port=state['https_port'];fixture.http_port=state['http_port'];fixture.nginx_configs=list(map(Path,state['sites']));fixture.unrelated_site=fixture.app/'unrelated-nginx.site'
   fixture.api.EXPECTED_PUBLISHED_PORTS={name:fixture.ports[target] for name,target in fixture.api.SERVICES.items()};fixture.runner=ManualLocalRunner(fixture)
   result=fixture.manual_manager().password('qa_changed',apply=True);print(json.dumps({'completed':result['completed']}));return 0
  if not (args.docker or args.prepare_smoke):parser.error('실제 Docker는 --docker 또는 --prepare-smoke로 명시하세요.')

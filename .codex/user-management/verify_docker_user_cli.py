@@ -61,7 +61,9 @@ incoming=json.loads(sys.stdin.read())
 app=create_app({'TESTING':True})
 client=app.test_client()
 service=app.extensions['security_service']
-base='https://sollumeesthe.com'
+# 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+# base='https://sollumeesthe.com'
+base='https://office1.sollumeesthe.com'
 headers={'Origin':base}
 def csrf(path):
     response=client.get(path,base_url=base)
@@ -87,7 +89,9 @@ response=client.post('/auth/enroll',base_url=base,headers=headers,
           'confirm_password':incoming['new_password']})
 assert response.status_code==303 and response.location==base+'/'
 assert client.get('/auth/check',base_url=base).status_code==200
-cookie=client.get_cookie('__Host-sollume_session',domain='sollumeesthe.com')
+# 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+# cookie=client.get_cookie('__Host-sollume_session',domain='sollumeesthe.com')
+cookie=client.get_cookie('__Host-sollume_session',domain='office1.sollumeesthe.com')
 assert cookie and cookie.secure and cookie.http_only and cookie.path=='/'
 public=service.get_session(cookie.value)
 assert public['mfa_enrolled'] and not public['must_change_password']
@@ -178,7 +182,9 @@ class DockerCliVerifier:
         self.new_password = 'CLI-new-synthetic-' + secrets.token_urlsafe(20)
         self.sensitive_values += [self.key, self.password, self.new_password]
         self.env_path.write_text('\n'.join([
-            'AUTH_ENV=production', 'AUTH_PUBLIC_ORIGIN=https://sollumeesthe.com',
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # 'AUTH_ENV=production', 'AUTH_PUBLIC_ORIGIN=https://sollumeesthe.com',
+            'AUTH_ENV=production', 'AUTH_PUBLIC_ORIGIN=https://office1.sollumeesthe.com',
             'AUTH_ENCRYPTION_KEY=' + self.key, 'AUTH_DB_PATH=/fixture/legacy-users.db',
             'AUTH_DOWNLOAD_DIR=/fixture/downloads', 'TRUSTED_PROXY_NETWORKS=127.0.0.1/32',
             'PYTHONDONTWRITEBYTECODE=1', 'PYTHONUNBUFFERED=1',

@@ -21,7 +21,9 @@ spec.loader.exec_module(runner)
 def compose_services(filename):
     if shutil.which('docker') is None:
         pytest.skip('Docker Compose CLI가 없는 환경')
-    env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://sollumeesthe.com',
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://sollumeesthe.com',
+    env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://office1.sollumeesthe.com',
                AUTH_ENCRYPTION_KEY=Fernet.generate_key().decode(), ORDER_API_KEY='test-only-api-key')
     result = subprocess.run(['docker', 'compose', '--env-file', os.devnull, '-f', filename,
                              'config', '--format', 'json'], cwd=ROOT, env=env,
@@ -55,7 +57,9 @@ def test_app_and_auth_share_required_settings_and_persistent_storage(filename):
         env = service['environment']
         assert env['AUTH_ENV'] == 'production'
         Fernet(env['AUTH_ENCRYPTION_KEY'].encode())
-        assert env['AUTH_PUBLIC_ORIGIN'] == 'https://sollumeesthe.com'
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # assert env['AUTH_PUBLIC_ORIGIN'] == 'https://sollumeesthe.com'
+        assert env['AUTH_PUBLIC_ORIGIN'] == 'https://office1.sollumeesthe.com'
         assert env['AUTH_DB_PATH'] == '/app/database/users.db'
         mounts = {volume['target']:volume for volume in service['volumes']}
         assert Path(mounts['/app/database']['source']) == ROOT/'database'
@@ -71,7 +75,9 @@ def test_app_and_auth_share_required_settings_and_persistent_storage(filename):
 @pytest.mark.parametrize('filename', ['docker-compose.yml', 'docker-compose.cloud.yml'])
 def test_compose_missing_encryption_key_fails_before_startup(filename):
     # 실제 Compose 파서로 누락된 필수 키가 .env 자동값에 가려지지 않게 검사한다.
-    env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://sollumeesthe.com', AUTH_ENCRYPTION_KEY='', ORDER_API_KEY='test-only-api-key')
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://sollumeesthe.com', AUTH_ENCRYPTION_KEY='', ORDER_API_KEY='test-only-api-key')
+    env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://office1.sollumeesthe.com', AUTH_ENCRYPTION_KEY='', ORDER_API_KEY='test-only-api-key')
     result = subprocess.run(['docker', 'compose', '--env-file', os.devnull, '-f', filename, 'config', '--quiet'],
                             cwd=ROOT, env=env, capture_output=True, text=True)
     assert result.returncode != 0

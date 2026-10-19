@@ -84,6 +84,8 @@ class LocalRunner:
         self.injected = False
         self.nginx_checks = 0
         self.https_observations = []
+        # 2026-10-19 hoyeon.han: HTTP ACME 응답도 실제 상태·본문 해시로 기록한다.
+        self.http_observations = []
         self.docker_failures = []
 
     def run(self, argv, *, input=None, env=None):
@@ -133,7 +135,9 @@ class LocalRunner:
             return value
         context = ssl.create_default_context(cafile=str(self.fixture.app / 'ssl/fullchain.pem'))
         request = urllib.request.Request('https://127.0.0.1:' + str(self.fixture.https_port) + path,
-                                         headers={'Host': 'sollumeesthe.com', **(headers or {})})
+                                         # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                                         # headers={'Host': 'sollumeesthe.com', **(headers or {})})
+                                         headers={'Host': 'office1.sollumeesthe.com', **(headers or {})})
         # Redirect는 외부 실제 도메인에 연결하지 않고 상태만 읽는다.
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *args, **kwargs):
@@ -189,6 +193,21 @@ class Fixture:
         # 운영 CLI에는 포트 정책을 바꾸는 인자나 환경변수가 없다.
         self.api.EXPECTED_PUBLISHED_PORTS = {name:self.ports[target] for name,target in self.api.SERVICES.items()}
         self.https_port = port()
+        # 2026-10-19 hoyeon.han: 업무·비밀 폴더와 분리한 공개 검증 파일만 Nginx에 제공한다.
+        self.http_port = port()
+        self.acme_root = Path(tempfile.mkdtemp(prefix='sollume-acme-qa-', dir='/private/tmp'))
+        self.acme_root.chmod(0o755)
+        self.acme_path = '/.well-known/acme-challenge/office1-rehearsal.txt'
+        self.acme_body = 'office1-acme-rehearsal-' + self.project
+        challenge = self.acme_root / self.acme_path.lstrip('/')
+        challenge.parent.mkdir(parents=True, mode=0o755)
+        challenge.parent.parent.chmod(0o755)
+        challenge.write_text(self.acme_body)
+        challenge.chmod(0o644)
+        self.unrelated_site = self.app / 'unrelated-nginx.site'
+        self.unrelated_domain = 'canary.sollume.invalid'
+        self.unrelated_body = 'unrelated-site-kept-' + self.project
+        self.canary_ids = []
         self.key = Fernet.generate_key().decode()
         self.password = 'Synthetic-rollback-old-' + secrets.token_urlsafe(20)
         self.next_password = 'Synthetic-rollback-new-' + secrets.token_urlsafe(20)
@@ -220,7 +239,9 @@ class Fixture:
                 break
         else:
             raise RuntimeError('격리 네트워크 생성 실패')
-        env = {'AUTH_ENV': 'production', 'AUTH_PUBLIC_ORIGIN': 'https://sollumeesthe.com',
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # env = {'AUTH_ENV': 'production', 'AUTH_PUBLIC_ORIGIN': 'https://sollumeesthe.com',
+        env = {'AUTH_ENV': 'production', 'AUTH_PUBLIC_ORIGIN': 'https://office1.sollumeesthe.com',
                'AUTH_ENCRYPTION_KEY': self.key, 'ORDER_API_KEY': secrets.token_urlsafe(32)}
         self.secrets.append(env['ORDER_API_KEY'])
         self.api_key = env['ORDER_API_KEY']
@@ -235,21 +256,44 @@ class Fixture:
         (self.app / 'order_data/current.meta.json').write_text('{"original_name":"합성 발주내역.xlsm"}')
         (self.app / '거래처마스터.xlsx').write_bytes(b'synthetic master fixture not operational data')
         subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
-                        '-subj', '/CN=sollumeesthe.com', '-addext', 'subjectAltName=DNS:sollumeesthe.com,IP:127.0.0.1',
+                        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                        # '-subj', '/CN=sollumeesthe.com', '-addext', 'subjectAltName=DNS:sollumeesthe.com,IP:127.0.0.1',
+                        '-subj', '/CN=office1.sollumeesthe.com', '-addext', 'subjectAltName=DNS:office1.sollumeesthe.com,IP:127.0.0.1',
                         '-keyout', str(self.app / 'ssl/privkey.pem'), '-out', str(self.app / 'ssl/fullchain.pem')],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         (self.app / 'ssl/privkey.pem').chmod(0o600)
         nginx = (ROOT / 'nginx-host-api.conf.example').read_text()
-        nginx = nginx.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem', str(self.app / 'ssl/fullchain.pem'))
-        nginx = nginx.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem', str(self.app / 'ssl/privkey.pem'))
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # nginx = nginx.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem', str(self.app / 'ssl/fullchain.pem'))
+        nginx = nginx.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem', str(self.app / 'ssl/fullchain.pem'))
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # nginx = nginx.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem', str(self.app / 'ssl/privkey.pem'))
+        nginx = nginx.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/privkey.pem', str(self.app / 'ssl/privkey.pem'))
         if self.legacy:
-            nginx = ('server {\n listen 443 ssl default_server;\n server_name sollumeesthe.com;\n'
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # nginx = ('server {\n listen 443 ssl default_server;\n server_name sollumeesthe.com;\n'
+            nginx = ('server {\n listen 443 ssl default_server;\n server_name office1.sollumeesthe.com;\n'
                      f' ssl_certificate {self.app}/ssl/fullchain.pem;\n ssl_certificate_key {self.app}/ssl/privkey.pem;\n'
                      ' location / { proxy_pass http://sollume-app:8501; }\n}\n')
+            # 2026-10-19 hoyeon.han: 인증 도입 전 fixture에도 실제 준비 서버와 같은 ACME 경로가 있다.
+            nginx = ('server { listen 80; server_name office1.sollumeesthe.com;\n'
+                     ' location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; '
+                     'default_type text/plain; try_files $uri =404; }\n'
+                     ' location / { return 301 https://office1.sollumeesthe.com$request_uri; } }\n') + nginx
         (self.app / 'nginx.site').write_text(nginx)
+        # 2026-10-19 hoyeon.han: 다른 서비스의 가상 호스트는 별도 파일로 유지하고 복구 대상에서 제외한다.
+        self.unrelated_site.write_text(
+            'server { listen 80; server_name ' + self.unrelated_domain + '; location / { return 200 "' + self.unrelated_body + '"; } }\n'
+            'server { listen 443 ssl; server_name ' + self.unrelated_domain + ';\n'
+            f' ssl_certificate {self.app}/ssl/fullchain.pem; ssl_certificate_key {self.app}/ssl/privkey.pem;\n'
+            ' location / { return 200 "' + self.unrelated_body + '"; } }\n')
+        self.unrelated_hash = sha(self.unrelated_site)
         self.render_runtime_nginx()
+        # 2026-10-19 hoyeon.han: 기존 단일 사이트 include를 보존하고 다른 도메인도 함께 로드한다.
+        # (self.app / 'nginx-base.conf').write_text('worker_processes 1;\nevents { worker_connections 256; }\nhttp {\n'
+        #                                         + f'include {self.app}/nginx-runtime.site;\n' + '}\n')
         (self.app / 'nginx-base.conf').write_text('worker_processes 1;\nevents { worker_connections 256; }\nhttp {\n'
-                                                + f'include {self.app}/nginx-runtime.site;\n' + '}\n')
+                                                + f'include {self.app}/nginx-runtime.site;\ninclude {self.unrelated_site};\n' + '}\n')
         services = {}
         roles = {'sollume-app': 8501, 'sollume-api': 8502}
         if not self.legacy:
@@ -270,7 +314,9 @@ class Fixture:
                            'TRUSTED_PROXY_NETWORKS': self.subnet + '.10/32,' + self.subnet + '.1/32,127.0.0.1/32',
                            'STREAMLIT_SERVER_HEADLESS': 'true', 'STREAMLIT_SERVER_FILE_WATCHER_TYPE': 'none',
                            'STREAMLIT_BROWSER_GATHER_USAGE_STATS': 'false', 'STREAMLIT_SERVER_RUN_ON_SAVE': 'false',
-                           'STREAMLIT_BROWSER_SERVER_ADDRESS': 'sollumeesthe.com', 'STREAMLIT_BROWSER_SERVER_PORT': '443'}
+                           # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                           # 'STREAMLIT_BROWSER_SERVER_ADDRESS': 'sollumeesthe.com', 'STREAMLIT_BROWSER_SERVER_PORT': '443'}
+                           'STREAMLIT_BROWSER_SERVER_ADDRESS': 'office1.sollumeesthe.com', 'STREAMLIT_BROWSER_SERVER_PORT': '443'}
             service = {'image': self.image_tag, 'pull_policy': 'never', 'environment': environment,
                        'volumes': volumes, 'ports': [{'host_ip': '127.0.0.1', 'published': str(self.ports[target]), 'target': target}],
                        'read_only': True, 'tmpfs': ['/tmp:size=256m'], 'security_opt': ['no-new-privileges:true'],
@@ -280,7 +326,9 @@ class Fixture:
             health_path = {8501: '/_stcore/health', 8502: '/health', 8503: '/auth/health'}[target]
             health_args = ['CMD', 'curl', '-f']
             if target == 8503:
-                health_args += ['-H', 'Host: sollumeesthe.com']
+                # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                # health_args += ['-H', 'Host: sollumeesthe.com']
+                health_args += ['-H', 'Host: office1.sollumeesthe.com']
             service['healthcheck'] = {'test': health_args + ['http://localhost:' + str(target) + health_path],
                                       'interval': '2s', 'timeout': '10s', 'retries': 3, 'start_period': '5s'}
             if name == 'sollume-app':
@@ -297,12 +345,24 @@ class Fixture:
                    'networks': {'sollume-network': {'external': True, 'name': self.network}}}
         (self.app / 'docker-compose.cloud.yml').write_text(json.dumps(compose, ensure_ascii=False, indent=2))
         command(self.compose('up', '-d', '--pull', 'never', '--no-build'))
-        command(['docker', 'run', '-d', '--name', self.nginx_name, '--network', self.network,
+        # 2026-10-19 hoyeon.han: 기존 HTTPS 전용 실행을 보존하고 비밀 없는 ACME 경로·HTTP 고포트만 추가한다.
+        # command(['docker', 'run', '-d', '--name', self.nginx_name, '--network', self.network,
+        #          '--ip', self.subnet + '.10', '--label', 'sollume.rollback.qa=' + self.project,
+        #          '-p', '127.0.0.1:' + str(self.https_port) + ':443',
+        #          '-v', f'{self.app}:{self.app}:ro', '-v', f'{self.app}/nginx-base.conf:/etc/nginx/nginx.conf:ro', self.nginx_image])
+        command(['docker', 'run', '-d', '--pull', 'never', '--name', self.nginx_name, '--network', self.network,
                  '--ip', self.subnet + '.10', '--label', 'sollume.rollback.qa=' + self.project,
-                 '-p', '127.0.0.1:' + str(self.https_port) + ':443',
+                 '-p', '127.0.0.1:' + str(self.https_port) + ':443', '-p', '127.0.0.1:' + str(self.http_port) + ':80',
+                 '-v', f'{self.acme_root}:/var/www/letsencrypt:ro',
                  '-v', f'{self.app}:{self.app}:ro', '-v', f'{self.app}/nginx-base.conf:/etc/nginx/nginx.conf:ro', self.nginx_image])
+        for label in ('n8n', 'goodsfoundry'):
+            self.canary_ids.append(command(['docker', 'run', '-d', '--pull', 'never', '--network', 'none', '--read-only',
+                '--name', self.project + '-canary-' + label, '--label', 'sollume.rollback.qa=' + self.project,
+                '--entrypoint', 'sh', self.nginx_image, '-c', 'sleep 1800']).strip())
         for attempt in range(45):
-            if all(self.runner.internal_health(target, 'sollumeesthe.com') for target in roles.values()):
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # if all(self.runner.internal_health(target, 'sollumeesthe.com') for target in roles.values()):
+            if all(self.runner.internal_health(target, 'office1.sollumeesthe.com') for target in roles.values()):
                 break
             time.sleep(1)
         else:
@@ -317,6 +377,37 @@ class Fixture:
             content = content.replace('http://127.0.0.1:' + str(target),
                                       'http://host.docker.internal:' + str(self.ports[target]))
         (self.app / 'nginx-runtime.site').write_text(content)
+
+    # 2026-10-19 hoyeon.han: 외부 DNS·프록시 없이 격리 포트로만 요청하며 상태와 본문을 함께 확인한다.
+    def site_probe(self, scheme, host, path='/'):
+        target_port = self.https_port if scheme == 'https' else self.http_port
+        handlers = [urllib.request.ProxyHandler({})]
+        if scheme == 'https':
+            handlers.append(urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=str(self.app / 'ssl/fullchain.pem'))))
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                return None
+        handlers.append(NoRedirect())
+        request = urllib.request.Request(f'{scheme}://127.0.0.1:{target_port}{path}', headers={'Host': host})
+        try:
+            with urllib.request.build_opener(*handlers).open(request, timeout=10) as response:
+                status, body = response.status, response.read(4096)
+        except urllib.error.HTTPError as exc:
+            status, body = exc.code, exc.read(4096)
+        except (OSError, urllib.error.URLError):
+            status, body = 0, b''
+        observations = self.runner.http_observations if scheme == 'http' else self.runner.https_observations
+        observations.append({'host': host, 'path': path, 'status': status, 'body_sha256': hashlib.sha256(body).hexdigest()})
+        return status, body
+
+    def acme_available(self):
+        return self.site_probe('http', 'office1.sollumeesthe.com', self.acme_path) == (200, self.acme_body.encode())
+
+    def unrelated_preserved(self):
+        current = json.loads(command(['docker', 'inspect', *self.canary_ids]))
+        return (sha(self.unrelated_site) == self.unrelated_hash
+                and all(item['State']['Running'] and item['Image'] == self.nginx_image for item in current)
+                and all(self.site_probe(scheme, self.unrelated_domain) == (200, self.unrelated_body.encode()) for scheme in ('http', 'https')))
 
     def seed_users(self):
         hashed = bcrypt.hashpw(self.password.encode(), bcrypt.gensalt()).decode()
@@ -350,7 +441,9 @@ class Fixture:
     def real_https_mfa_login(self):
         browser = requests.Session()
         base = 'https://127.0.0.1:' + str(self.https_port)
-        headers = {'Host': 'sollumeesthe.com', 'Origin': 'https://sollumeesthe.com'}
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # headers = {'Host': 'sollumeesthe.com', 'Origin': 'https://sollumeesthe.com'}
+        headers = {'Host': 'office1.sollumeesthe.com', 'Origin': 'https://office1.sollumeesthe.com'}
         def request(method, path, **kwargs):
             return browser.request(method, base + path, headers=headers,
                                    verify=str(self.app / 'ssl/fullchain.pem'), allow_redirects=False, timeout=15, **kwargs)
@@ -376,9 +469,13 @@ class Fixture:
         command(['docker', 'image', 'rm', self.image_tag], check=False)
         remaining = command(['docker', 'ps', '-aq', '--filter', 'label=sollume.rollback.qa=' + self.project]).strip()
         shutil.rmtree(self.app, ignore_errors=True)
+        # 2026-10-19 hoyeon.han: 독립 ACME 공개 파일 경로도 테스트 종료 시 제거한다.
+        shutil.rmtree(self.acme_root, ignore_errors=True)
         networks=command(['docker','network','ls','--filter','label=sollume.rollback.qa='+self.project,'--format','{{.ID}}']).strip()
         tags=command(['docker','image','ls','--format','{{.Repository}}:{{.Tag}}',self.image_tag]).strip()
-        return not remaining and not networks and not tags and not self.app.exists()
+        # 2026-10-19 hoyeon.han: 기존 정리 조건에 독립 ACME 임시 폴더 제거를 추가한다.
+        # return not remaining and not networks and not tags and not self.app.exists()
+        return not remaining and not networks and not tags and not self.app.exists() and not self.acme_root.exists()
 
 
 class Verification:
@@ -406,7 +503,11 @@ class Verification:
         fixture = Fixture()
         self.fixtures.append(fixture)
         fixture.prepare()
-        self.check('initial_real_https_requires_auth', fixture.runner.https_status('https://sollumeesthe.com', '/') == 401)
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # self.check('initial_real_https_requires_auth', fixture.runner.https_status('https://sollumeesthe.com', '/') == 401)
+        self.check('initial_real_https_requires_auth', fixture.runner.https_status('https://office1.sollumeesthe.com', '/') == 401)
+        # 2026-10-19 hoyeon.han: 정상 인증 설정에서도 갱신 경로와 다른 서비스를 유지한다.
+        self.check('secure_acme_http200_body_matches_and_other_sites_preserved', fixture.acme_available() and fixture.unrelated_preserved())
         # 미체크포인트 WAL에 커밋된 행도 SQLite backup API로 캡처되어야 한다.
         held = sqlite3.connect(fixture.app / 'database/users.db')
         held.execute('PRAGMA journal_mode=WAL')
@@ -491,8 +592,16 @@ class Verification:
                 else:
                     os.environ[key]=value
         self.check('secure_restore_completed_with_public_auth_guards', restored['completed'] and restored['public_resume']
-                   and fixture.runner.https_status('https://sollumeesthe.com', '/') == 401
-                   and fixture.runner.https_status('https://sollumeesthe.com', '/media/qa') == 403)
+                   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                   # and fixture.runner.https_status('https://sollumeesthe.com', '/') == 401
+                   and fixture.runner.https_status('https://office1.sollumeesthe.com', '/') == 401
+                   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                   # and fixture.runner.https_status('https://sollumeesthe.com', '/media/qa') == 403)
+                   and fixture.runner.https_status('https://office1.sollumeesthe.com', '/media/qa') == 403)
+        # 2026-10-19 hoyeon.han: 성공한 보안 복구 후 ACME 예외가 업무·다운로드 인증을 우회하지 않는다.
+        self.check('secure_restore_acme200_download401_and_other_sites_preserved', fixture.acme_available()
+                   and fixture.runner.https_status('https://office1.sollumeesthe.com', '/downloads/blocked-test') == 401
+                   and fixture.unrelated_preserved())
         with closing(sqlite3.connect(fixture.app / 'database/users.db')) as conn, conn:
             current = conn.execute('SELECT id,username,password_hash,is_active,is_admin,permissions,mfa_secret_cipher FROM users ORDER BY id').fetchall()
             counts = {table: conn.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0] for table in fixture.api.SESSION_TABLES}
@@ -513,7 +622,9 @@ class Verification:
             dict(value.split('=',1) for value in item['Config']['Env']).get('ORDER_API_KEY') == fixture.api_key
             and dict(value.split('=',1) for value in item['Config']['Env']).get('AUTH_ENCRYPTION_KEY') == fixture.key
             for item in actual))
-        self.check('revoked_pre_rollback_session_cookie_is_denied', fixture.runner.https_status('https://sollumeesthe.com', '/',
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # self.check('revoked_pre_rollback_session_cookie_is_denied', fixture.runner.https_status('https://sollumeesthe.com', '/',
+        self.check('revoked_pre_rollback_session_cookie_is_denied', fixture.runner.https_status('https://office1.sollumeesthe.com', '/',
                    {'Cookie':'__Host-sollume_session='+fixture.session_token}) == 401)
         self.check('actual_https_mfa_login_with_preserved_encrypted_secret_succeeds', fixture.real_https_mfa_login())
         self.scenarios['secure_restore'] = {'passed': True, 'evidence': 'actual Docker/Compose/SQLite/HTTPS'}
@@ -588,13 +699,20 @@ class Verification:
             receipt = json.loads((snapshot / 'rollback-receipt.json').read_text())
             rescue = Path(receipt['recovery_release'])
             passed = rejected and fixture.runner.injected and (rescue / 'users.db').is_file()
-            passed = passed and fixture.runner.https_status('https://sollumeesthe.com', '/') == 503
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # passed = passed and fixture.runner.https_status('https://sollumeesthe.com', '/') == 503
+            passed = passed and fixture.runner.https_status('https://office1.sollumeesthe.com', '/') == 503
             self.check(stage + '_failure_keeps_actual_https503_and_current_state_backup', passed,
                        evidence='actual Docker/HTTPS with one injected failing operation')
+            # 2026-10-19 hoyeon.han: 각 실제 503 실패 상태에서도 공개 ACME만 유지한다.
+            self.check(stage + '_failure_acme200_download503_and_other_sites_preserved', fixture.acme_available()
+                       and fixture.runner.https_status('https://office1.sollumeesthe.com', '/downloads/blocked-test') == 503
+                       and fixture.unrelated_preserved())
             results[stage] = {'passed': True, 'evidence': 'actual Docker/HTTPS; failing operation injected'}
             fixture.runner.fail_stage = None
             retried = fixture.manager.rollback(str(snapshot), apply=True)
             self.check(stage + '_failure_can_retry_from_partially_stopped_services', retried['completed'])
+            self.check(stage + '_retry_acme200_and_other_sites_preserved', fixture.acme_available() and fixture.unrelated_preserved())
             fixture.prune_rescues({snapshot})
         self.scenarios['failure_paths'] = results
 
@@ -607,7 +725,9 @@ class Verification:
         self.check('missing_service_recovery_metadata_contains_no_plaintext_secrets',all(
             not any(secret in p.read_text() for secret in fixture.secrets) for p in metadata))
         self.check('missing_auth_service_after_failed_deployment_can_restore', result['completed']
-                   and fixture.runner.https_status('https://sollumeesthe.com', '/') == 401)
+                   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                   # and fixture.runner.https_status('https://sollumeesthe.com', '/') == 401)
+                   and fixture.runner.https_status('https://office1.sollumeesthe.com', '/') == 401)
         fixture.prune_rescues({snapshot})
 
     def legacy(self):
@@ -640,13 +760,19 @@ class Verification:
             conn.execute('UPDATE users SET username=? WHERE id=109',('qa_new_identity',))
         command(fixture.compose('up','-d','--pull','never','--no-build'))
         site=(ROOT/'nginx-host-api.conf.example').read_text()
-        site=site.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem',str(fixture.app/'ssl/fullchain.pem'))
-        site=site.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem',str(fixture.app/'ssl/privkey.pem'))
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # site=site.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem',str(fixture.app/'ssl/fullchain.pem'))
+        site=site.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem',str(fixture.app/'ssl/fullchain.pem'))
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # site=site.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem',str(fixture.app/'ssl/privkey.pem'))
+        site=site.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/privkey.pem',str(fixture.app/'ssl/privkey.pem'))
         (fixture.app/'nginx.site').write_text(site)
         fixture.runner.run(['sudo','nginx','-t'])
         fixture.runner.run(['sudo','systemctl','reload','nginx'])
         for attempt in range(30):
-            if fixture.runner.internal_health(8503,'sollumeesthe.com'):
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # if fixture.runner.internal_health(8503,'sollumeesthe.com'):
+            if fixture.runner.internal_health(8503,'office1.sollumeesthe.com'):
                 break
             time.sleep(1)
         current_hash=sha(fixture.app/'database/users.db')
@@ -663,7 +789,11 @@ class Verification:
                    and sha(fixture.app/'database/users.db')==current_hash)
         restored=fixture.manager.rollback(str(snapshot),apply=True,legacy_private=True,restore_users=True)
         self.check('legacy_restore_keeps_real_https503',restored['completed'] and not restored['public_resume']
-                   and all(fixture.runner.https_status('https://sollumeesthe.com',p)==503 for p in ('/','/auth/login','/media/test','/downloads/test')))
+                   # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                   # and all(fixture.runner.https_status('https://sollumeesthe.com',p)==503 for p in ('/','/auth/login','/media/test','/downloads/test')))
+                   and all(fixture.runner.https_status('https://office1.sollumeesthe.com',p)==503 for p in ('/','/auth/login','/media/test','/downloads/test')))
+        # 2026-10-19 hoyeon.han: 구버전 복구는 업무503을 유지하면서 인증서 갱신과 타 서비스는 보존한다.
+        self.check('legacy_restore_acme200_body_matches_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
         with closing(sqlite3.connect(fixture.app/'database/users.db')) as conn, conn:
             rows={row[0]:row for row in conn.execute('SELECT id,username,password_hash,is_active,is_admin FROM users')}
         self.check('legacy_restore_does_not_revive_changed_deleted_stopped_or_reassigned_accounts',
@@ -690,7 +820,9 @@ class Verification:
         self.check('legacy_password_apply_requires_hidden_input_tty',non_tty)
         self.legacy_password_tty(fixture,snapshot)
         self.old_image_login(fixture,'qa_changed',fixture.next_password,expected=True)
-        self.check('legacy_password_reset_never_reopens_public_https',fixture.runner.https_status('https://sollumeesthe.com','/')==503)
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # self.check('legacy_password_reset_never_reopens_public_https',fixture.runner.https_status('https://sollumeesthe.com','/')==503)
+        self.check('legacy_password_reset_never_reopens_public_https',fixture.runner.https_status('https://office1.sollumeesthe.com','/')==503)
         self.scenarios['legacy_restore']={'passed':True,'evidence':'actual legacy/current images, SQLite, Docker/Compose, HTTPS, PTY'}
 
     def old_image_login(self,fixture,username,password,*,expected):

@@ -3,6 +3,14 @@
 
 이 문서는 실행 절차이며 운영 서버에서 자동 실행되지 않습니다. 구현·검증은 로컬 임시 환경에서만 수행합니다. 복구 대상은 현재 시스템의 **호스트 Nginx + docker-compose.cloud.yml** 구성입니다. Docker Nginx 구성이나 다른 시스템으로 임의 적용하지 않습니다.
 
+<!-- 2026-10-19 hoyeon.han: 확정된 운영 도메인과 준비된 HTTP ACME 경로를 복구 경계에 반영한다. -->
+새 공개 주소는 `https://office1.sollumeesthe.com`입니다. 운영자가 DNS·인증서·HTTPS 503 준비와 갱신 시험을 완료했다고 보고했으며, 새 인증 앱은 아직 배포하지 않았습니다. 현재 설정 원본은 `/etc/nginx/sites-available/office1.sollumeesthe.com`, 활성화 링크는 `/etc/nginx/sites-enabled/zz-office1.sollumeesthe.com`입니다. 루트 도메인 `sollumeesthe.com`은 다른 서버의 기존 사이트이므로 대상에서 제외합니다.
+
+<!-- 2026-10-19 hoyeon.han: 기존 갱신 방식 조회 전 문구 보존.
+배포·복구 명령의 `--nginx-config`에는 **office1을 첫 번째로, 기존 회계 DuckDNS 두 사이트를 그 뒤에** 지정합니다. 기존 `n8n`·`goodsfoundry`와 다른 Nginx 사이트는 지정하지 않습니다. 공유 Nginx의 reload는 모든 사이트의 설정을 다시 읽는 작업이며 Docker 컨테이너 재시작과 다릅니다. 적용 전 전체 Nginx 설정 검사가 필요합니다. office1의 HTTP ACME 경로 `/var/www/letsencrypt/.well-known/acme-challenge/`는 업무 경로를 503으로 차단할 때도 유지합니다. 기존 인증서별 갱신 방식까지 확인한 것은 아니므로 DuckDNS의 갱신 성공까지 보장하지는 않습니다. 공유 `certbot.timer`와 office1 전용 후속 작업의 구분은 [운영 안내](OPERATIONS.md#기존-인증서와-공유하는-갱신-스케줄)를 참고합니다.
+-->
+배포·복구 명령의 `--nginx-config`에는 **office1을 첫 번째로, 기존 회계 DuckDNS 두 사이트를 그 뒤에** 지정합니다. 기존 `n8n`·`goodsfoundry`와 다른 Nginx 사이트는 지정하지 않습니다. 공유 Nginx의 reload는 모든 사이트의 설정을 다시 읽는 작업이며 Docker 컨테이너 재시작과 다릅니다. 적용 전 전체 Nginx 설정 검사가 필요합니다. office1의 HTTP ACME 경로 `/var/www/letsencrypt/.well-known/acme-challenge/`는 업무 경로를 503으로 차단할 때도 유지합니다. 운영자의 실제 조회에서 기존 세 DuckDNS는 Nginx 플러그인, office1은 webroot와 전용 deploy hook을 사용하며 기존 `certbot.timer`를 공유하는 것으로 확인했습니다. 실행 시각·분산 지연·실제 서비스 명령은 [운영 안내](OPERATIONS.md#기존-인증서와-공유하는-갱신-스케줄)를 참고합니다. 갱신 방식·예약 확인이 향후 갱신 성공까지 보장하는 것은 아닙니다.
+
 <!-- 2026-10-19 hoyeon.han: 완료한 압축 백업을 사용하는 최초 전환 절차를 우선 안내한다. -->
 ## 완료한 압축 백업 사용 — 최초 인증 전환
 
@@ -26,6 +34,7 @@
 <!-- 2026-10-19 hoyeon.han: 검사 전 운영 Compose를 새 파일로 미리 교체하는 실수를 방지한다. -->
 운영 반영 시에는 검토한 `scripts/release_snapshot.py`, `rollback-oracle.sh`, `deploy-oracle.sh`만 선택적으로 가져옵니다. 기존 `docker-compose.cloud.yml`과 `.env`의 API 키·DB·업무파일을 새 체크아웃으로 덮어쓰지 않습니다. Compose는 배포 스크립트가 검증·백업 후 교체합니다. 인증 설정은 기존 `.env`의 API 키를 유지하면서 추가합니다.
 
+<!-- 2026-10-19 hoyeon.han: 변수 할당을 사용하던 기존 안내를 보존한다. 실행 예시는 아래 절대경로 명령이다.
 ```bash
 cd /home/ubuntu/sollume-finance
 SOLLUME_BACKUP_DIR="$PWD/database/backups/releases/실제백업폴더명"
@@ -34,11 +43,29 @@ SOLLUME_BACKUP_DIR="$PWD/database/backups/releases/실제백업폴더명"
   --app-dir "$PWD" \
   --backup-dir "$SOLLUME_BACKUP_DIR"
 ```
+-->
+프로젝트 디렉토리로 이동합니다.
+
+```bash
+cd /home/ubuntu/sollume-finance
+```
+
+아래 명령은 원본 백업을 점검합니다. `실제백업폴더명`만 보관 중인 실제 폴더명으로 바꾸며 변수에 값을 할당하거나 다른 명령을 함께 실행하지 않습니다.
+
+```bash
+/home/ubuntu/sollume-finance/rollback-oracle.sh \
+  --app-dir /home/ubuntu/sollume-finance \
+  --backup-dir /home/ubuntu/sollume-finance/database/backups/releases/실제백업폴더명 \
+  --nginx-config /etc/nginx/sites-enabled/zz-office1.sollumeesthe.com \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin
+```
 
 기본 실행은 계획만 확인하며 DB·컨테이너·Nginx를 변경하지 않습니다. 필요한 DB와 부속 WAL을 임시 폴더에서 검사하고, 실제 컨테이너 설정과 저장 이미지의 관계, 압축 경로·필수 파일·손상 여부를 확인합니다. `.venv`의 정상 심볼릭 링크 등 선택하지 않는 항목은 추출하지 않습니다. 계정·키·전체 inspect 내용은 출력하지 않습니다.
 
 ### 2. 배포 직전 준비 — 승인된 배포 일정에만 실행
 
+<!-- 2026-10-19 hoyeon.han: 새 도메인 확정 전 두 사이트 배포 예시를 보존한다.
 배포 스크립트에는 백업 폴더와 **모든 회계 Nginx 사이트**를 지정합니다. 첫 사이트는 새 인증 정책을 설치할 사이트입니다. 현재 알려진 두 사이트는 `sollume-finance`, `sol-fin`입니다. 새 도메인을 별도 사이트에 구성했다면 그 경로를 첫 번째로 지정하고 기존 두 경로를 뒤에 추가합니다. DNS·실제 TLS 인증서·기존 주소 처리·외부 직접 포트 차단은 먼저 준비해야 합니다.
 
 ```bash
@@ -47,8 +74,21 @@ SOLLUME_BACKUP_DIR="$PWD/database/backups/releases/실제백업폴더명"
   --nginx-config /etc/nginx/sites-enabled/sollume-finance \
   --nginx-config /etc/nginx/sites-enabled/sol-fin
 ```
+-->
+배포 스크립트에는 백업 폴더와 **세 회계 Nginx 사이트**를 지정합니다. office1이 첫 번째이며 인증 정책 설치 대상입니다. 준비된 office1의 HTTPS 503 설정은 인증 정책 전체를 설치한 상태가 아니므로, 배포 직전 검증한 `nginx-host-api.conf.example`의 내용을 office1 설정 원본에 반영하고 `nginx -t`를 통과해야 합니다. 기존 두 회계 사이트의 무인증 접속도 전환 절차에서 함께 차단합니다. 외부 직접 포트 차단 등 나머지 사전 조건을 확인한 뒤 승인된 운영 일정에만 아래 명령을 실행합니다.
+
+```bash
+/home/ubuntu/sollume-finance/deploy-oracle.sh \
+  --backup-dir /home/ubuntu/sollume-finance/database/backups/releases/실제백업폴더명 \
+  --nginx-config /etc/nginx/sites-enabled/zz-office1.sollumeesthe.com \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin
+```
 
 이 명령은 **실제 배포 명령**입니다. 백업 점검용으로 실행하지 않습니다. 내부 `manual-prepare --check-current`가 원본 세 파일과 현재 실제 이미지·명령·데이터 마운트·자원 제한·계정 상태를 대조한 뒤 비공개 복구 정보를 작성합니다. 현재 설정이 백업과 다르면 이미지 pull과 서비스 교체 전에 멈춥니다. 원래 Compose의 문자열·빈 명령 표현을 실제 명령과 단순 비교하던 `capture`는 이 경로에서 실행하지 않습니다.
+
+<!-- 2026-10-19 hoyeon.han: 배포 사전 검사의 기존 진입점 확인 한계를 기록한다. -->
+**현재 배포 성공만으로 기존 주소의 무인증 접근 차단은 보장되지 않습니다.** `manual-prepare --check-current`는 위 백업·실행 상태 대조이며, 전달한 Nginx 사이트의 누락 여부나 기존 DuckDNS 프록시의 차단까지 확인하지 않습니다. `_blocked_sites(False)`는 실제 롤백의 차단 검사입니다. 따라서 운영 배포 전 기존 두 회계 DuckDNS를 새 주소로 이동시키거나 차단하도록 전환하고 외부에서 확인해야 하며, 배포용 공통 진입점 사전 검사도 보강·검증해야 합니다. office1 도메인 준비 작업에서는 이 보강이나 운영 전환을 수행하지 않았습니다. 이 조건을 해소하기 전에는 위 배포 명령을 실행하지 않습니다.
 
 추가 DB 백업은 Ubuntu가 쓰도록 준비된 `database/backups/releases/` 아래에만 만듭니다. 상위 `database/backups`의 root 소유권과 기존 백업을 변경하지 않습니다. `sudo -v` 대신 실제 필요한 관리자 명령의 비대화식 권한을 사용하며, 비밀번호가 필요하면 서비스 변경 전에 중단합니다. 보관 원본 세 파일이 바뀌면 준비 정보를 그대로 재사용하지 않습니다.
 
@@ -56,6 +96,7 @@ SOLLUME_BACKUP_DIR="$PWD/database/backups/releases/실제백업폴더명"
 
 먼저 같은 백업과 모든 회계 사이트를 지정하여 계획을 확인합니다.
 
+<!-- 2026-10-19 hoyeon.han: 기존 두 사이트·변수 기반 복구 계획 예시 보존.
 ```bash
 ./rollback-oracle.sh \
   --app-dir "$PWD" --backup-dir "$SOLLUME_BACKUP_DIR" \
@@ -63,12 +104,33 @@ SOLLUME_BACKUP_DIR="$PWD/database/backups/releases/실제백업폴더명"
   --nginx-config /etc/nginx/sites-enabled/sol-fin \
   --legacy-private --restore-users
 ```
+-->
+```bash
+/home/ubuntu/sollume-finance/rollback-oracle.sh \
+  --app-dir /home/ubuntu/sollume-finance \
+  --backup-dir /home/ubuntu/sollume-finance/database/backups/releases/실제백업폴더명 \
+  --nginx-config /etc/nginx/sites-enabled/zz-office1.sollumeesthe.com \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin \
+  --legacy-private --restore-users
+```
 
 실제 복구가 승인된 경우에만 같은 명령에 `--apply`를 추가하고 Nginx 설정을 쓸 수 있는 운영자 권한으로 실행합니다. 다음은 실제 변경 명령입니다.
 
+<!-- 2026-10-19 hoyeon.han: 기존 두 사이트·변수 기반 복구 적용 예시 보존.
 ```bash
 sudo -n ./rollback-oracle.sh \
   --app-dir "$PWD" --backup-dir "$SOLLUME_BACKUP_DIR" \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin \
+  --legacy-private --restore-users --apply
+```
+-->
+```bash
+sudo -n /home/ubuntu/sollume-finance/rollback-oracle.sh \
+  --app-dir /home/ubuntu/sollume-finance \
+  --backup-dir /home/ubuntu/sollume-finance/database/backups/releases/실제백업폴더명 \
+  --nginx-config /etc/nginx/sites-enabled/zz-office1.sollumeesthe.com \
   --nginx-config /etc/nginx/sites-enabled/sollume-finance \
   --nginx-config /etc/nginx/sites-enabled/sol-fin \
   --legacy-private --restore-users --apply
@@ -84,12 +146,25 @@ sudo -n ./rollback-oracle.sh \
 
 인증 등록으로 비밀번호 해시가 바뀐 관리자는 구버전에서 비활성화될 수 있습니다. 완료된 비공개 복구 뒤, 현재도 유효한 기존 계정만 명시적으로 새 비밀번호를 설정할 수 있습니다. 먼저 `--apply` 없이 점검하고 실제 변경 시에만 추가합니다.
 
+<!-- 2026-10-19 hoyeon.han: 기존 두 사이트·변수 기반 비밀번호 적용 예시 보존.
 ```bash
 sudo -n .venv-ops/bin/python scripts/release_snapshot.py manual-password \
   --app-dir "$PWD" --backup-dir "$SOLLUME_BACKUP_DIR" \
   --nginx-config /etc/nginx/sites-enabled/sollume-finance \
   --nginx-config /etc/nginx/sites-enabled/sol-fin \
   --username 실제관리자아이디 --apply
+```
+-->
+다음 명령은 `--apply`가 없어 계획만 확인합니다. 실제 비밀번호 변경을 승인받은 때에만 같은 명령 끝에 `--apply`를 추가합니다.
+
+```bash
+sudo -n /home/ubuntu/sollume-finance/.venv-ops/bin/python /home/ubuntu/sollume-finance/scripts/release_snapshot.py manual-password \
+  --app-dir /home/ubuntu/sollume-finance \
+  --backup-dir /home/ubuntu/sollume-finance/database/backups/releases/실제백업폴더명 \
+  --nginx-config /etc/nginx/sites-enabled/zz-office1.sollumeesthe.com \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin \
+  --username 실제관리자아이디
 ```
 
 터미널에서 새 비밀번호를 숨김 입력합니다. 이 명령은 서버 `ubuntu` 비밀번호 변경과 별개입니다. 최근 정지·삭제된 계정은 허용하지 않으며, 외부 503 차단과 저장 이미지가 맞는지 다시 검사합니다. SSH 키·OS 계정·다른 서비스는 변경하지 않습니다.

@@ -19,7 +19,9 @@ def command(args, **kwargs):
 
 
 def main():
-    env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://sollumeesthe.com',
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://sollumeesthe.com',
+    env = dict(os.environ, AUTH_PUBLIC_ORIGIN='https://office1.sollumeesthe.com',
                AUTH_ENCRYPTION_KEY=Fernet.generate_key().decode(), ORDER_API_KEY='test-only-resource-policy')
     source = command(['git', 'show', 'main:docker-compose.cloud.yml']).stdout
     previous = json.loads(command(['docker', 'compose', '--env-file', os.devnull, '-f', '-',

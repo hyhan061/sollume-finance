@@ -47,7 +47,9 @@ def ui_env(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     key = Fernet.generate_key().decode("ascii")
     settings = {
-        "AUTH_ENV": "production", "AUTH_PUBLIC_ORIGIN": "https://sollumeesthe.com",
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # "AUTH_ENV": "production", "AUTH_PUBLIC_ORIGIN": "https://sollumeesthe.com",
+        "AUTH_ENV": "production", "AUTH_PUBLIC_ORIGIN": "https://office1.sollumeesthe.com",
         "AUTH_ENCRYPTION_KEY": key, "AUTH_DB_PATH": str(tmp_path / "database/users.db"),
         "AUTH_DOWNLOAD_DIR": str(tmp_path / "downloads"), "TRUSTED_PROXY_NETWORKS": "127.0.0.1/32",
     }

@@ -53,7 +53,9 @@ MOUNT_SETS = {
     'sollume-auth': {'/app/database', '/app/processed', '/app/logs'},
     'sollume-api': {'/app/order_data', '/app/logs'},
 }
-APPROVED_NGINX_SHA256 = '628df0b4489d9bfccf1aec0e09e394d50d33bcb183f2ce19c3f027fc49be2820'
+# 2026-10-19 hoyeon.han: office1 전용 템플릿·고정 ACME 경로만 승인하며 기존 전체 정책을 대체합니다.
+# APPROVED_NGINX_SHA256 = '628df0b4489d9bfccf1aec0e09e394d50d33bcb183f2ce19c3f027fc49be2820'
+APPROVED_NGINX_SHA256 = '291f15ba4a6ad62449911ea7161157f1501e9b757e277d554d442b1a95b56a51'
 
 
 class SafetyError(ValueError):
@@ -658,7 +660,9 @@ class ReleaseManager:
                 assert len(key) == 32
             except (ValueError, UnicodeError, AssertionError) as exc:
                 raise SafetyError('현재 AUTH_ENCRYPTION_KEY 설정이 필요합니다.') from exc
-            if env.get('AUTH_PUBLIC_ORIGIN') != 'https://sollumeesthe.com':
+            # 2026-10-19 hoyeon.han: 별도 운영 사이트인 루트 도메인을 회계 복구 대상으로 사용하지 않습니다.
+            # if env.get('AUTH_PUBLIC_ORIGIN') != 'https://sollumeesthe.com':
+            if env.get('AUTH_PUBLIC_ORIGIN') != 'https://office1.sollumeesthe.com':
                 raise SafetyError('현재 HTTPS 공개 주소를 확인하세요.')
             if hashlib.sha256(env['AUTH_ENCRYPTION_KEY'].encode()).hexdigest() != manifest.get('auth_key_sha256'):
                 raise SafetyError('스냅샷 이후 암호화 키가 바뀌었습니다. 자동 키 회전 복구는 지원하지 않습니다.')
@@ -712,7 +716,9 @@ class ReleaseManager:
         while True:
             # if self.runner.https_status('https://sollumeesthe.com', path, headers) == expected:
             #     return True
-            status = self.runner.https_status('https://sollumeesthe.com', path, headers)
+            # 2026-10-19 hoyeon.han: 승인한 office1 호스트의 실제 TLS·차단 응답만 확인합니다.
+            # status = self.runner.https_status('https://sollumeesthe.com', path, headers)
+            status = self.runner.https_status('https://office1.sollumeesthe.com', path, headers)
             consecutive = consecutive + 1 if status == expected else 0
             remaining = deadline - time.monotonic()
             if consecutive >= 3 and remaining >= 0:
@@ -725,9 +731,18 @@ class ReleaseManager:
     def _maintenance(tls):
         cert = json.dumps(tls['cert'], ensure_ascii=False)
         key = json.dumps(tls['key'], ensure_ascii=False)
-        return ('# 2026-10-15 hoyeon.han: 복구 중 모든 외부 업무 요청을 차단한다.\n'
-                'server { listen 80 default_server; server_name _; return 503; }\n'
-                'server { listen 443 ssl default_server; server_name sollumeesthe.com;\n'
+        # 2026-10-19 hoyeon.han: 기존 전체 호스트 차단 표현을 보존하고 office1 업무 경로만 차단합니다.
+        # return ('# 2026-10-15 hoyeon.han: 복구 중 모든 외부 업무 요청을 차단한다.\n'
+        #         'server { listen 80 default_server; server_name _; return 503; }\n'
+        #         'server { listen 443 ssl default_server; server_name sollumeesthe.com;\n'
+        #         f' ssl_certificate {cert}; ssl_certificate_key {key};\n'
+        #         ' ssl_protocols TLSv1.2 TLSv1.3; add_header Cache-Control no-store always; return 503; }\n')
+        return ('# 2026-10-19 hoyeon.han: office1 업무 요청 차단 중 고정된 ACME 갱신 경로를 유지한다.\n'
+                'server { listen 80; server_name office1.sollumeesthe.com;\n'
+                ' location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; '
+                'default_type text/plain; try_files $uri =404; }\n'
+                ' location / { add_header Cache-Control no-store always; return 503; } }\n'
+                'server { listen 443 ssl; server_name office1.sollumeesthe.com;\n'
                 f' ssl_certificate {cert}; ssl_certificate_key {key};\n'
                 ' ssl_protocols TLSv1.2 TLSv1.3; add_header Cache-Control no-store always; return 503; }\n')
 
@@ -845,12 +860,16 @@ class ReleaseManager:
                 raise SafetyError('실제로 시작한 이미지가 고정 이미지와 다릅니다.')
             self._assert_runtime(started_config, started)
             for name in manifest['services']:
-                if not self.runner.internal_health(SERVICES[name], host='sollumeesthe.com'):
+                # 2026-10-19 hoyeon.han: 인증 서비스의 허용 Host도 office1과 일치시킵니다.
+                # if not self.runner.internal_health(SERVICES[name], host='sollumeesthe.com'):
+                if not self.runner.internal_health(SERVICES[name], host='office1.sollumeesthe.com'):
                     raise SafetyError('복구 서비스의 내부 상태 검사가 실패했습니다.')
             if manifest['secure']:
                 receipt['stage'] = 'restore_secure_nginx'
                 for denied_path in ('/auth/check', '/downloads/' + '0' * 32):
-                    if self.runner.internal_status(8503, denied_path, host='sollumeesthe.com',
+                    # 2026-10-19 hoyeon.han: 접근·다운로드 거절 검증은 office1 Host를 사용합니다.
+                    # if self.runner.internal_status(8503, denied_path, host='sollumeesthe.com',
+                    if self.runner.internal_status(8503, denied_path, host='office1.sollumeesthe.com',
                                                    headers={'X-Forwarded-Proto': 'https'}) != 401:
                         raise SafetyError('내부 인증 서버의 미인증 접근 거부를 확인하지 못했습니다.')
                 candidate = self._replace_tls((path / 'nginx.site').read_text(), tls)
@@ -986,7 +1005,9 @@ MANUAL_SERVICES = {'sollume-app', 'sollume-api'}
 MANUAL_MAX_APP = 4 * 1024 ** 3
 MANUAL_MAX_IMAGES = 12 * 1024 ** 3
 MANUAL_MAX_DB = 256 * 1024 ** 2
-MANUAL_DOMAINS = {'sollumeesthe.com', 'sol-fin.duckdns.org', 'sollume-finance.duckdns.org'}
+# 2026-10-19 hoyeon.han: 다른 사이트인 루트 도메인을 제외하고 회계 진입점 세 곳만 승인합니다.
+# MANUAL_DOMAINS = {'sollumeesthe.com', 'sol-fin.duckdns.org', 'sollume-finance.duckdns.org'}
+MANUAL_DOMAINS = {'office1.sollumeesthe.com', 'sol-fin.duckdns.org', 'sollume-finance.duckdns.org'}
 
 
 def _manual_name(name):
@@ -1490,8 +1511,20 @@ class ManualBackupManager(ReleaseManager):
                 if not listens or not hosts or any(host not in MANUAL_DOMAINS | {'_'} for host in hosts):
                     raise SafetyError('회계 사이트의 실제 DNS 이름·listen을 확인할 수 없습니다.')
                 all_hosts.extend(host for host in hosts if host != '_')
-                blocks.append('server {\n' + ''.join(' '.join(value) + ';\n' for value in directives) +
-                              'add_header Cache-Control no-store always; return 503;\n}\n')
+                # 2026-10-19 hoyeon.han: 원본 location/root/alias/include는 복사하지 않고 고정 ACME 경로만 재생성합니다.
+                # blocks.append('server {\n' + ''.join(' '.join(value) + ';\n' for value in directives) +
+                #               'add_header Cache-Control no-store always; return 503;\n}\n')
+                http_acme = ('office1.sollumeesthe.com' in hosts and
+                             any(value[0].rsplit(':', 1)[-1] == '80' and 'ssl' not in value for value in listens))
+                if http_acme and (hosts != ['office1.sollumeesthe.com'] or
+                                  any(value[0].rsplit(':', 1)[-1] != '80' or 'ssl' in value for value in listens)):
+                    raise SafetyError('office1 인증서 갱신용 HTTP server는 다른 도메인·HTTPS와 분리해야 합니다.')
+                denied = 'add_header Cache-Control no-store always; return 503;\n'
+                if http_acme:
+                    denied = ('location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; '
+                              'default_type text/plain; try_files $uri =404; }\n'
+                              'location / { ' + denied + '}\n')
+                blocks.append('server {\n' + ''.join(' '.join(value) + ';\n' for value in directives) + denied + '}\n')
                 local_plans.append((hosts, listens)); index = end
             if not blocks or not all_hosts:
                 raise SafetyError('차단할 회계 도메인을 확인할 수 없습니다.')

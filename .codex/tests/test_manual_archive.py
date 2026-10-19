@@ -90,14 +90,18 @@ def shell_fixture(tmp_path):
  app=tmp_path/'app';(app/'scripts').mkdir(parents=True);(app/'database/backups/releases').mkdir(parents=True,mode=0o700)
  (app/'database/backups').chmod(0o755)
  for name in ('users.db','customer_master.db'):(app/'database'/name).write_bytes(b'synthetic unchanged database')
- (app/'.env').write_text('AUTH_ENV=production\nAUTH_PUBLIC_ORIGIN=https://sollumeesthe.com\nAUTH_ENCRYPTION_KEY=synthetic-not-an-operational-key\nORDER_API_KEY=synthetic-api\n');(app/'.env').chmod(0o600)
+ # 2026-10-19 hoyeon.han: 실제 운영 도메인으로 wrapper의 사전 차단을 검증합니다.
+ # (app/'.env').write_text('AUTH_ENV=production\nAUTH_PUBLIC_ORIGIN=https://sollumeesthe.com\nAUTH_ENCRYPTION_KEY=synthetic-not-an-operational-key\nORDER_API_KEY=synthetic-api\n');(app/'.env').chmod(0o600)
+ (app/'.env').write_text('AUTH_ENV=production\nAUTH_PUBLIC_ORIGIN=https://office1.sollumeesthe.com\nAUTH_ENCRYPTION_KEY=synthetic-not-an-operational-key\nORDER_API_KEY=synthetic-api\n');(app/'.env').chmod(0o600)
  (app/'docker-compose.cloud.yml').write_text('{"original":"unchanged"}')
  sites=[tmp_path/'primary.site',tmp_path/'legacy.site']
  for site in sites:site.write_text((ROOT/'nginx-host-api.conf.example').read_text())
  backup=app/'database/backups/releases/manual-original';backup.mkdir(mode=0o700)
  calls=tmp_path/'calls.jsonl';rendered=tmp_path/'rendered.json'
  rendered.write_text(json.dumps({'services':{name:{'ports':[{'host_ip':'127.0.0.1','target':port}],
-  'environment':{'AUTH_ENV':'production','AUTH_PUBLIC_ORIGIN':'https://sollumeesthe.com','AUTH_ENCRYPTION_KEY':'synthetic-key'}}
+  # 2026-10-19 hoyeon.han: 렌더링된 합성 Compose도 office1으로 제한합니다.
+  # 'environment':{'AUTH_ENV':'production','AUTH_PUBLIC_ORIGIN':'https://sollumeesthe.com','AUTH_ENCRYPTION_KEY':'synthetic-key'}}
+  'environment':{'AUTH_ENV':'production','AUTH_PUBLIC_ORIGIN':'https://office1.sollumeesthe.com','AUTH_ENCRYPTION_KEY':'synthetic-key'}}
   for name,port in {'sollume-app':8501,'sollume-api':8502,'sollume-auth':8503}.items()}}))
  helper=app/'scripts/release_snapshot.py'
  helper.write_text('import json,os,pathlib,sys\nwith pathlib.Path(os.environ["MANUAL_QA_CALLS"]).open("a") as log:log.write(json.dumps(["helper",*sys.argv[1:]])+"\\n")\nprint(json.dumps({"dry_run":True,"validated":True}))\nraise SystemExit(int(os.environ.get("MANUAL_QA_HELPER_STATUS","17")))\n')
@@ -215,7 +219,9 @@ def test_current_nonempty_sqlite_journal_rejected_without_modifying_original_dat
  'server { listen 443 ssl; server_name sol-fin.duckdns.org; set $hidden http://127.0.0.1:8501; location / { proxy_pass $hidden; } }'])
 def test_unlisted_quoted_alias_or_variable_nginx_accounting_route_is_rejected(fixture,hidden):
  helper,value=fixture;primary=value.root/'primary.site';extra=value.root/'unlisted.site'
- primary.write_text('server { listen 443 ssl; server_name sollumeesthe.com; location / { proxy_pass http://127.0.0.1:8501; } }')
+ # 2026-10-19 hoyeon.han: 도메인 거절보다 누락된 proxy 탐지가 먼저 검증되도록 정상 office1을 사용합니다.
+ # primary.write_text('server { listen 443 ssl; server_name sollumeesthe.com; location / { proxy_pass http://127.0.0.1:8501; } }')
+ primary.write_text('server { listen 443 ssl; server_name office1.sollumeesthe.com; location / { proxy_pass http://127.0.0.1:8501; } }')
  extra.write_text(hidden);before={path:helper.sha(path) for path in (primary,extra)}
  class Runner(helper.RecordingRunner):
   def run(self,argv,**kwargs):
@@ -230,7 +236,9 @@ def test_unlisted_quoted_alias_or_variable_nginx_accounting_route_is_rejected(fi
 
 def test_shared_accounting_and_n8n_site_rejected_before_config_replacement(fixture):
  helper,value=fixture;site=value.root/'mixed.site'
- site.write_text('server { listen 443 ssl; server_name sollumeesthe.com n8n.sollumeesthe.com; location / { proxy_pass http://127.0.0.1:8501; } }')
+ # 2026-10-19 hoyeon.han: office1과 다른 서비스가 혼합된 사이트는 계속 거절합니다.
+ # site.write_text('server { listen 443 ssl; server_name sollumeesthe.com n8n.sollumeesthe.com; location / { proxy_pass http://127.0.0.1:8501; } }')
+ site.write_text('server { listen 443 ssl; server_name office1.sollumeesthe.com n8n.sollumeesthe.com; location / { proxy_pass http://127.0.0.1:8501; } }')
  before=helper.sha(site)
  class Runner(helper.RecordingRunner):
   def run(self,argv,**kwargs):
@@ -240,6 +248,55 @@ def test_shared_accounting_and_n8n_site_rejected_before_config_replacement(fixtu
  runner=Runner(value);api=helper.release_api()
  with pytest.raises(ValueError):api.ManualBackupManager(value.app,value.backup,[site],runner=runner)._blocked_sites(False)
  assert helper.sha(site)==before and not any('reload' in command for command in runner.calls)
+
+
+def test_manual_rollback_preserves_only_fixed_office1_http_acme_path_and_other_service(fixture):
+ """2026-10-19 hoyeon.han: 기존 임의 파일 경로는 복사하지 않고 office1 갱신 경로만 생성합니다."""
+ helper,value=fixture;api=helper.release_api()
+ office=value.root/'office1.site';legacy=value.root/'duckdns.site';other=value.root/'n8n.site'
+ office.write_text('server { listen 80; server_name office1.sollumeesthe.com; '
+  'location /old { alias /private/old-data; } location / { return 301 https://office1.sollumeesthe.com$request_uri; } }\n'
+  'server { listen 443 ssl; server_name office1.sollumeesthe.com; '
+  'ssl_certificate /certificate.pem; ssl_certificate_key /private.pem; '
+  'location / { proxy_pass http://127.0.0.1:8501; } }')
+ legacy.write_text('server { listen 80; server_name sol-fin.duckdns.org; '
+  'location / { proxy_pass http://127.0.0.1:8501; } }')
+ other.write_text('server { listen 443 ssl; server_name sollume-n8n.duckdns.org; '
+  'location / { proxy_pass http://127.0.0.1:5678; } }');untouched=other.read_bytes()
+ class Runner:
+  def __init__(self):self.calls=[]
+  def run(self,argv,**kwargs):
+   self.calls.append(list(argv))
+   if list(argv)==['sudo','-n','nginx','-T']:
+    return '\n'.join('# configuration file '+str(path)+':\n'+path.read_text() for path in (office,legacy,other))
+   assert list(argv) in (['sudo','-n','nginx','-t'],['sudo','-n','systemctl','reload','nginx'])
+   return ''
+ runner=Runner();service=api.ManualBackupManager(value.app,value.backup,[office,legacy],runner=runner)
+ plans=service._blocked_sites(True);rendered=office.read_text();blocked_legacy=legacy.read_text()
+ assert rendered.count('root /var/www/letsencrypt;')==1
+ assert 'location ^~ /.well-known/acme-challenge/' in rendered and 'try_files $uri =404;' in rendered
+ assert rendered.count('return 503;')==2 and 'location / { add_header Cache-Control no-store always; return 503;' in rendered
+ assert not any(token in rendered for token in ('/private/old-data','alias ','proxy_pass','return 301','default_server'))
+ assert 'acme-challenge' not in blocked_legacy and 'return 503;' in blocked_legacy
+ assert other.read_bytes()==untouched
+ assert ('office1.sollumeesthe.com' in plans[0][0] and ['80'] in plans[0][1])
+
+
+@pytest.mark.parametrize('hostnames',['sollumeesthe.com','office1.sollumeesthe.com sollumeesthe.com',
+ 'office1.sollumeesthe.com sol-fin.duckdns.org'])
+def test_root_domain_or_mixed_office1_acme_server_is_rejected_before_write(fixture,hostnames):
+ """2026-10-19 hoyeon.han: 루트 사이트는 복구 대상이 아니며 ACME 예외를 다른 도메인에 확장하지 않습니다."""
+ helper,value=fixture;api=helper.release_api();site=value.root/'rejected.site'
+ site.write_text('server { listen 80; server_name '+hostnames+'; location / { proxy_pass http://127.0.0.1:8501; } }')
+ before=site.read_bytes()
+ class Runner:
+  def __init__(self):self.calls=[]
+  def run(self,argv,**kwargs):
+   self.calls.append(list(argv));assert list(argv)==['sudo','-n','nginx','-T']
+   return '# configuration file '+str(site)+':\n'+site.read_text()
+ runner=Runner();service=api.ManualBackupManager(value.app,value.backup,[site],runner=runner)
+ with pytest.raises(api.SafetyError):service._blocked_sites(True)
+ assert site.read_bytes()==before and len(runner.calls)==1
 
 
 def test_manual_user_merge_keeps_added_accounts_inactive_and_revoked_states(fixture):

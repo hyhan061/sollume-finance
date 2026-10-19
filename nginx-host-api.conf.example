@@ -60,27 +60,57 @@
 
 # http { } 안에서 읽는 구성이다. 호스트용은 sites-enabled에 배치한다.
 # 2026-10-14 hoyeon.han: 운영 도메인은 AUTH_PUBLIC_ORIGIN과 반드시 일치해야 한다.
-map $http_upgrade $connection_upgrade {
+# 2026-10-19 hoyeon.han: 다른 호스트 사이트와 map·rate-limit 이름이 충돌하지 않도록 분리한다.
+# map $http_upgrade $connection_upgrade {
+map $http_upgrade $office1_connection_upgrade {
     default upgrade;
     '' close;
 }
-map "$http_upgrade:$http_accept" $is_browser_page {
+# 2026-10-19 hoyeon.han: 다른 호스트 사이트와 map·rate-limit 이름이 충돌하지 않도록 분리한다.
+# map "$http_upgrade:$http_accept" $is_browser_page {
+map "$http_upgrade:$http_accept" $office1_is_browser_page {
     default 0;
     ~*^:.*text/html 1;
 }
-limit_req_zone $binary_remote_addr zone=auth_login:10m rate=10r/m;
+# 2026-10-19 hoyeon.han: 다른 호스트 사이트와 map·rate-limit 이름이 충돌하지 않도록 분리한다.
+# limit_req_zone $binary_remote_addr zone=auth_login:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=office1_auth_login:10m rate=10r/m;
 
 server {
-    listen 80 default_server;
-    server_name _;
-    return 301 https://sollumeesthe.com$request_uri;
+    # 2026-10-19 hoyeon.han: 기존 사이트의 기본 HTTP 서버 선택을 변경하지 않는다.
+    # listen 80 default_server;
+    listen 80;
+    # 2026-10-19 hoyeon.han: office1 요청만 이 HTTP 사이트에 연결한다.
+    # server_name _;
+    server_name office1.sollumeesthe.com;
+    # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+    # return 301 https://sollumeesthe.com$request_uri;
+    # 2026-10-19 hoyeon.han: 인증서 발급 경로를 제외한 요청만 HTTPS로 이동한다.
+    # return 301 https://office1.sollumeesthe.com$request_uri;
+    # 2026-10-19 hoyeon.han: webroot 인증서 갱신 경로는 HTTP로 계속 제공한다.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+    location / {
+        return 301 https://office1.sollumeesthe.com$request_uri;
+    }
 }
 server {
-    listen 443 ssl default_server;
-    server_name sollumeesthe.com;
+    # 2026-10-19 hoyeon.han: 기존 사이트의 기본 HTTPS 서버 선택을 변경하지 않는다.
+    # listen 443 ssl default_server;
+    listen 443 ssl;
+    # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+    # server_name sollumeesthe.com;
+    server_name office1.sollumeesthe.com;
     # 실제 TLS 인증서 파일을 준비해야 한다. 더미 인증서나 HTTP 폴백은 제공하지 않는다.
-    ssl_certificate /etc/letsencrypt/live/sollumeesthe.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/sollumeesthe.com/privkey.pem;
+    # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+    # ssl_certificate /etc/letsencrypt/live/sollumeesthe.com/fullchain.pem;
+    ssl_certificate /etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem;
+    # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+    # ssl_certificate_key /etc/letsencrypt/live/sollumeesthe.com/privkey.pem;
+    ssl_certificate_key /etc/letsencrypt/live/office1.sollumeesthe.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     add_header Strict-Transport-Security "max-age=31536000" always;
     add_header X-Content-Type-Options nosniff always;
@@ -88,7 +118,9 @@ server {
     client_max_body_size 300M;
 
     # 공개 호스트 이외의 요청은 라우팅하지 않는다.
-    if ($host != sollumeesthe.com) { return 444; }
+    # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+    # if ($host != sollumeesthe.com) { return 444; }
+    if ($host != office1.sollumeesthe.com) { return 444; }
 
     # 인증 검사는 Nginx 내부 요청만 가능하며 캐시하거나 요청 본문을 전달하지 않는다.
     location = /_auth_check {
@@ -97,11 +129,15 @@ server {
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header Cookie $http_cookie;
-        proxy_set_header Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header Host sollumeesthe.com;
+        proxy_set_header Host office1.sollumeesthe.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_set_header X-Forwarded-Host office1.sollumeesthe.com;
         proxy_cache off;
         proxy_connect_timeout 5s;
         proxy_read_timeout 10s;
@@ -113,15 +149,21 @@ server {
 
     # 비밀번호 및 MFA 입력은 인증 서버에서만 처리한다. 기존 헤더의 IP를 신뢰하지 않는다.
     location ^~ /auth/ {
-        limit_req zone=auth_login burst=20 nodelay;
+        # 2026-10-19 hoyeon.han: 다른 호스트 사이트와 map·rate-limit 이름이 충돌하지 않도록 분리한다.
+        # limit_req zone=auth_login burst=20 nodelay;
+        limit_req zone=office1_auth_login burst=20 nodelay;
         limit_req_status 429;
         client_max_body_size 1M;
         proxy_pass http://127.0.0.1:8503;
-        proxy_set_header Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header Host sollumeesthe.com;
+        proxy_set_header Host office1.sollumeesthe.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_set_header X-Forwarded-Host office1.sollumeesthe.com;
         proxy_cache off;
         access_log off;
     }
@@ -134,11 +176,15 @@ server {
     location ^~ /downloads/ {
         auth_request /_auth_check;
         proxy_pass http://127.0.0.1:8503;
-        proxy_set_header Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header Host sollumeesthe.com;
+        proxy_set_header Host office1.sollumeesthe.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_set_header X-Forwarded-Host office1.sollumeesthe.com;
         proxy_cache off;
         proxy_read_timeout 120s;
         access_log off;
@@ -147,7 +193,9 @@ server {
     # 기존 발주내역 API는 Flask의 X-API-Key 인증만으로 접근한다.
     location ^~ /api/ {
         proxy_pass http://127.0.0.1:8502;
-        proxy_set_header Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header Host sollumeesthe.com;
+        proxy_set_header Host office1.sollumeesthe.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
@@ -162,19 +210,27 @@ server {
         proxy_pass http://127.0.0.1:8501;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: 다른 호스트 사이트와 map·rate-limit 이름이 충돌하지 않도록 분리한다.
+        # proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Connection $office1_connection_upgrade;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header Host sollumeesthe.com;
+        proxy_set_header Host office1.sollumeesthe.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        # 2026-10-19 hoyeon.han: office1의 인증서·공개 호스트를 사용한다.
+        # proxy_set_header X-Forwarded-Host sollumeesthe.com;
+        proxy_set_header X-Forwarded-Host office1.sollumeesthe.com;
         proxy_set_header X-Auth-User "";
         proxy_set_header X-Auth-Role "";
         proxy_cache off;
         proxy_read_timeout 60s;
     }
     location @auth_denied {
-        if ($is_browser_page = 1) { return 302 /auth/login; }
+        # 2026-10-19 hoyeon.han: 다른 호스트 사이트와 map·rate-limit 이름이 충돌하지 않도록 분리한다.
+        # if ($is_browser_page = 1) { return 302 /auth/login; }
+        if ($office1_is_browser_page = 1) { return 302 /auth/login; }
         # WS·업로드·프로그램 호출은 로그인 페이지로 성공 응답을 위장하지 않는다.
         return 401;
     }

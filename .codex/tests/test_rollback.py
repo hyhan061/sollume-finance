@@ -34,7 +34,9 @@ def test_deployment_capture_failure_stops_before_any_pull_or_up(tmp_path):
     for name in ('users.db', 'customer_master.db'):
         (app / 'database' / name).write_bytes(b'synthetic untouched database fixture')
     source_key=base64.urlsafe_b64encode(b'0'*32).decode()
-    (app / '.env').write_text('AUTH_PUBLIC_ORIGIN=https://sollumeesthe.com\nAUTH_ENCRYPTION_KEY='+source_key+'\nORDER_API_KEY=synthetic-api-key\n')
+    # 2026-10-19 hoyeon.han: 승인한 office1 공개 주소로 배포 중단 경계를 검증합니다.
+    # (app / '.env').write_text('AUTH_PUBLIC_ORIGIN=https://sollumeesthe.com\nAUTH_ENCRYPTION_KEY='+source_key+'\nORDER_API_KEY=synthetic-api-key\n')
+    (app / '.env').write_text('AUTH_PUBLIC_ORIGIN=https://office1.sollumeesthe.com\nAUTH_ENCRYPTION_KEY='+source_key+'\nORDER_API_KEY=synthetic-api-key\n')
     (app / 'docker-compose.cloud.yml').write_text('{"unchanged":"running compose fixture"}')
     source_nginx = ROOT / 'nginx-host-api.conf.example'
     nginx = tmp_path / 'nginx.site'
@@ -50,7 +52,9 @@ def test_deployment_capture_failure_stops_before_any_pull_or_up(tmp_path):
     required = {'sollume-app': 8501, 'sollume-auth': 8503, 'sollume-api': 8502}
     config = {'services': {name: {
         'ports': [{'host_ip': '127.0.0.1', 'target': port}],
-        'environment': {'AUTH_ENV': 'production', 'AUTH_PUBLIC_ORIGIN': 'https://sollumeesthe.com',
+        # 2026-10-19 hoyeon.han: 렌더링된 운영 Compose도 office1과 일치시킵니다.
+        # 'environment': {'AUTH_ENV': 'production', 'AUTH_PUBLIC_ORIGIN': 'https://sollumeesthe.com',
+        'environment': {'AUTH_ENV': 'production', 'AUTH_PUBLIC_ORIGIN': 'https://office1.sollumeesthe.com',
                         'AUTH_ENCRYPTION_KEY': 'synthetic-not-real-key'},
     } for name, port in required.items()}}
     rendered = tmp_path / 'rendered.json'
@@ -131,10 +135,39 @@ def test_quoted_hash_in_certificate_filename_is_not_a_comment(tmp_path):
     cert=tmp_path/'test#certificate.pem'
     key=tmp_path/'test#key.pem'
     source=(ROOT/'nginx-host-api.conf.example').read_text()
-    source=source.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem',json.dumps(str(cert)))
-    source=source.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem',json.dumps(str(key)))
+    # 2026-10-19 hoyeon.han: office1 인증서 경로 치환에서도 # 문자를 주석으로 오인하지 않습니다.
+    # source=source.replace('/etc/letsencrypt/live/sollumeesthe.com/fullchain.pem',json.dumps(str(cert)))
+    # source=source.replace('/etc/letsencrypt/live/sollumeesthe.com/privkey.pem',json.dumps(str(key)))
+    source=source.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem',json.dumps(str(cert)))
+    source=source.replace('/etc/letsencrypt/live/office1.sollumeesthe.com/privkey.pem',json.dumps(str(key)))
     api._approved_nginx(source)
     assert api._certificates(source)=={'cert':str(cert),'key':str(key)}
+
+
+def test_secure_maintenance_keeps_office1_acme_without_default_server_or_other_hosts():
+    """2026-10-19 hoyeon.han: 공개 업무는 차단하고 고정 office1 HTTP 갱신 경로만 허용합니다."""
+    api=release_api()
+    content=api.ReleaseManager._maintenance({'cert':'/office1/fullchain.pem','key':'/office1/privkey.pem'})
+    assert content.count('server_name office1.sollumeesthe.com;')==2
+    assert 'default_server' not in content and 'server_name _' not in content
+    assert 'root /var/www/letsencrypt;' in content and 'try_files $uri =404;' in content
+    assert 'location ^~ /.well-known/acme-challenge/' in content
+    assert 'location / { add_header Cache-Control no-store always; return 503;' in content
+    assert content.count('return 503;')==2
+    assert 'server_name sollumeesthe.com;' not in content
+
+
+@pytest.mark.parametrize('old_setting',[
+    ('office1.sollumeesthe.com','sollumeesthe.com'),
+    ('listen 443 ssl;','listen 443 ssl default_server;'),
+    ('root /var/www/letsencrypt;','root /private/accounting-data;'),
+    ('root /var/www/letsencrypt;','alias /private/accounting-data;'),
+])
+def test_office1_policy_rejects_old_domain_default_server_and_nonapproved_acme_root(old_setting):
+    """2026-10-19 hoyeon.han: ACME 추가가 광범위한 파일 공개나 기존 루트 정책 허용으로 이어지지 않습니다."""
+    api=release_api();source=(ROOT/'nginx-host-api.conf.example').read_text()
+    assert old_setting[0] in source
+    with pytest.raises(api.SafetyError):api._approved_nginx(source.replace(*old_setting))
 
 
 @pytest.fixture(scope='module')

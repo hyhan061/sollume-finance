@@ -263,7 +263,9 @@ umask 077
 APP_DIR="${SOLLUME_APP_DIR:-$HOME/sollume-finance}"
 RAW_BASE="https://raw.githubusercontent.com/hyhan061/sollume-finance/main"
 COMPOSE_FILE="docker-compose.cloud.yml"
-NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/sollume-finance}"
+# 2026-10-19 hoyeon.han: 서버에 준비한 office1 전용 Nginx 활성화 링크를 기본값으로 사용한다.
+# NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/sollume-finance}"
+NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/zz-office1.sollumeesthe.com}"
 # 2026-10-15 hoyeon.han: 복구 도구는 호스트의 운영 전용 가상환경에서 실행한다.
 OPS_PYTHON="${SOLLUME_OPS_PYTHON:-$APP_DIR/.venv-ops/bin/python}"
 ROLLBACK_HELPER="$APP_DIR/scripts/release_snapshot.py"
@@ -365,13 +367,22 @@ for name, port in required.items():
         env = service.get('environment', {})
         if env.get('AUTH_ENV') != 'production':
             raise SystemExit('운영 인증 모드가 필요합니다.')
-        if env.get('AUTH_PUBLIC_ORIGIN') != 'https://sollumeesthe.com':
+        # 2026-10-19 hoyeon.han: office1 공개 주소와 인증 서버의 호스트를 일치시킨다.
+        # if env.get('AUTH_PUBLIC_ORIGIN') != 'https://sollumeesthe.com':
+        if env.get('AUTH_PUBLIC_ORIGIN') != 'https://office1.sollumeesthe.com':
             raise SystemExit('운영 공개 주소와 Nginx 도메인이 일치해야 합니다.')
         if not env.get('AUTH_ENCRYPTION_KEY'):
             raise SystemExit('인증 암호화 키가 필요합니다.')
 nginx = pathlib.Path(sys.argv[2]).read_text()
 active = '\n'.join(line.split('#',1)[0] for line in nginx.splitlines())
+# 2026-10-19 hoyeon.han: 다른 호스트의 인증서·사이트 설정으로 배포되지 않도록 office1을 명시 검증한다.
+# for required_text in ('listen 443 ssl', 'ssl_certificate', 'auth_request /_auth_check;',
+#                       'location = /_auth_check', 'internal;', '/auth/check',
+#                       'location ^~ /media/', 'return 403;', 'location ^~ /downloads/'):
 for required_text in ('listen 443 ssl', 'ssl_certificate', 'auth_request /_auth_check;',
+                      'server_name office1.sollumeesthe.com;',
+                      'ssl_certificate /etc/letsencrypt/live/office1.sollumeesthe.com/fullchain.pem;',
+                      'ssl_certificate_key /etc/letsencrypt/live/office1.sollumeesthe.com/privkey.pem;',
                       'location = /_auth_check', 'internal;', '/auth/check',
                       'location ^~ /media/', 'return 403;', 'location ^~ /downloads/'):
     if required_text not in active:
@@ -443,13 +454,23 @@ docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 12
 sudo -n systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
 
 curl -fsS http://127.0.0.1:8501/_stcore/health >/dev/null || fail "회계앱 상태 검사 실패"
-curl -fsS -H 'Host: sollumeesthe.com' http://127.0.0.1:8503/auth/health >/dev/null || fail "인증 서버 상태 검사 실패"
-HTTP_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --resolve sollumeesthe.com:443:127.0.0.1 \
-    -H 'Accept: application/json' https://sollumeesthe.com/)
+# 2026-10-19 hoyeon.han: office1 공개 주소와 인증 서버의 호스트를 일치시킨다.
+# curl -fsS -H 'Host: sollumeesthe.com' http://127.0.0.1:8503/auth/health >/dev/null || fail "인증 서버 상태 검사 실패"
+curl -fsS -H 'Host: office1.sollumeesthe.com' http://127.0.0.1:8503/auth/health >/dev/null || fail "인증 서버 상태 검사 실패"
+# 2026-10-19 hoyeon.han: 실제 DNS 대신 루프백을 사용하여 office1의 TLS·접근 차단을 검사한다.
+# HTTP_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --resolve sollumeesthe.com:443:127.0.0.1 \
+#     -H 'Accept: application/json' https://sollumeesthe.com/)
+HTTP_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --resolve office1.sollumeesthe.com:443:127.0.0.1 \
+    -H 'Accept: application/json' https://office1.sollumeesthe.com/)
 test "$HTTP_STATUS" = 401 || fail "미인증 업무 접근이 차단되지 않았습니다(HTTP $HTTP_STATUS)."
-MEDIA_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --resolve sollumeesthe.com:443:127.0.0.1 \
-    https://sollumeesthe.com/media/blocked-test)
+# 2026-10-19 hoyeon.han: 실제 DNS 대신 루프백을 사용하여 office1의 TLS·접근 차단을 검사한다.
+# MEDIA_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --resolve sollumeesthe.com:443:127.0.0.1 \
+#     https://sollumeesthe.com/media/blocked-test)
+MEDIA_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --resolve office1.sollumeesthe.com:443:127.0.0.1 \
+    https://office1.sollumeesthe.com/media/blocked-test)
 test "$MEDIA_STATUS" = 403 || fail "기존 media 다운로드 경로가 차단되지 않았습니다."
-echo "배포 및 기본 접근 차단 검증 완료: https://sollumeesthe.com"
+# 2026-10-19 hoyeon.han: office1 공개 주소와 인증 서버의 호스트를 일치시킨다.
+# echo "배포 및 기본 접근 차단 검증 완료: https://sollumeesthe.com"
+echo "배포 및 기본 접근 차단 검증 완료: https://office1.sollumeesthe.com"
 echo "초기 인증 등록·계정 권한·외부 포트 차단은 OPERATIONS.md의 운영 점검을 완료하세요."
 echo "8501·8502·8503의 인터넷 Ingress는 열지 않습니다."

@@ -86,7 +86,9 @@ class Runtime:
 
     def request(self, method, path, session=None, headers=None, retry_rate=False, **kwargs):
         client = session or requests
-        h = {'Host': 'sollumeesthe.com', 'Origin': 'https://sollumeesthe.com'}
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # h = {'Host': 'sollumeesthe.com', 'Origin': 'https://sollumeesthe.com'}
+        h = {'Host': 'office1.sollumeesthe.com', 'Origin': 'https://office1.sollumeesthe.com'}
         if headers:
             h.update(headers)
         for attempt in range(15):
@@ -143,8 +145,12 @@ class Runtime:
         self.users = {'admin': 42, 'staff': 77, 'other': other['id']}
         self.codes = {name: self.service.issue_enrollment_local(uid) for name, uid in self.users.items()}
         subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
-                        '-subj', '/CN=sollumeesthe.com', '-addext',
-                        'subjectAltName=DNS:sollumeesthe.com,IP:127.0.0.1',
+                        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                        # '-subj', '/CN=sollumeesthe.com', '-addext',
+                        '-subj', '/CN=office1.sollumeesthe.com', '-addext',
+                        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                        # 'subjectAltName=DNS:sollumeesthe.com,IP:127.0.0.1',
+                        'subjectAltName=DNS:office1.sollumeesthe.com,IP:127.0.0.1',
                         '-keyout', str(self.tmp / 'ssl/privkey.pem'), '-out', str(self.tmp / 'ssl/fullchain.pem')],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         os.chmod(self.tmp / 'ssl/privkey.pem', 0o600)
@@ -159,7 +165,9 @@ class Runtime:
         self.proxy_ip = subnet + '.10'
         self.env_path = self.tmp / 'runtime.env'
         self.env_path.write_text('\n'.join([
-            'AUTH_ENV=production', 'AUTH_PUBLIC_ORIGIN=https://sollumeesthe.com',
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # 'AUTH_ENV=production', 'AUTH_PUBLIC_ORIGIN=https://sollumeesthe.com',
+            'AUTH_ENV=production', 'AUTH_PUBLIC_ORIGIN=https://office1.sollumeesthe.com',
             'AUTH_ENCRYPTION_KEY=' + self.key, 'AUTH_DB_PATH=/app/database/users.db',
             'AUTH_DOWNLOAD_DIR=/app/processed/secure_downloads',
             'TRUSTED_PROXY_NETWORKS=' + self.proxy_ip + '/32,127.0.0.1/32',
@@ -169,7 +177,9 @@ class Runtime:
             'STREAMLIT_SERVER_RUN_ON_SAVE=false', 'STREAMLIT_SERVER_HEADLESS=true',
             'STREAMLIT_SERVER_FILE_WATCHER_TYPE=none', 'STREAMLIT_CLIENT_SHOW_ERROR_DETAILS=false',
             'STREAMLIT_BROWSER_GATHER_USAGE_STATS=false',
-            'STREAMLIT_BROWSER_SERVER_ADDRESS=sollumeesthe.com', 'STREAMLIT_BROWSER_SERVER_PORT=443',
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # 'STREAMLIT_BROWSER_SERVER_ADDRESS=sollumeesthe.com', 'STREAMLIT_BROWSER_SERVER_PORT=443',
+            'STREAMLIT_BROWSER_SERVER_ADDRESS=office1.sollumeesthe.com', 'STREAMLIT_BROWSER_SERVER_PORT=443',
         ]) + '\n')
         os.chmod(self.env_path, 0o600)
         self.image_id = docker('image', 'inspect', self.image, '--format', '{{.Id}}').stdout.strip()
@@ -227,8 +237,12 @@ class Runtime:
             args += ['-v', f'{self.tmp}/{path}:/app/{path}']
         docker(*args, self.image_id, *command)
 
-    def handshake(self, token='', origin='https://sollumeesthe.com', extra=None):
-        headers = {'Host': 'sollumeesthe.com', 'Upgrade': 'websocket', 'Connection': 'Upgrade',
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # def handshake(self, token='', origin='https://sollumeesthe.com', extra=None):
+    def handshake(self, token='', origin='https://office1.sollumeesthe.com', extra=None):
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # headers = {'Host': 'sollumeesthe.com', 'Upgrade': 'websocket', 'Connection': 'Upgrade',
+        headers = {'Host': 'office1.sollumeesthe.com', 'Upgrade': 'websocket', 'Connection': 'Upgrade',
                    'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': base64.b64encode(secrets.token_bytes(16)).decode(),
                    'Sec-WebSocket-Protocol': 'streamlit', 'Origin': origin}
         if token:
@@ -236,7 +250,9 @@ class Runtime:
         headers.update(extra or {})
         context = ssl._create_unverified_context()
         with socket.create_connection(('127.0.0.1', self.secure_port), timeout=10) as connection:
-            with context.wrap_socket(connection, server_hostname='sollumeesthe.com') as secure:
+            # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+            # with context.wrap_socket(connection, server_hostname='sollumeesthe.com') as secure:
+            with context.wrap_socket(connection, server_hostname='office1.sollumeesthe.com') as secure:
                 secure.sendall(('GET /_stcore/stream HTTP/1.1\r\n' +
                                 ''.join(f'{name}: {value}\r\n' for name, value in headers.items()) + '\r\n').encode())
                 result = b''
@@ -275,7 +291,9 @@ class Runtime:
                                 data={'csrf_token': csrf, 'stage': 'complete', 'otp': otp,
                                       'new_password': self.password, 'confirm_password': self.password})
         self.record(name + '_mfa_enrollment_and_forced_password_change_completes_login',
-                    response.status_code == 303 and response.headers.get('Location') == 'https://sollumeesthe.com/')
+                    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                    # response.status_code == 303 and response.headers.get('Location') == 'https://sollumeesthe.com/')
+                    response.status_code == 303 and response.headers.get('Location') == 'https://office1.sollumeesthe.com/')
         token = next((c.value for c in browser.cookies if c.name == '__Host-sollume_session'), '')
         self.record(name + '_production_session_cookie_secure_http_only_host_only',
                     bool(token) and any('__Host-sollume_session=' in h and 'Secure' in h and 'HttpOnly' in h
@@ -292,7 +310,9 @@ class Runtime:
     def test(self):
         response = self.request('GET', '/', headers={'Accept': 'text/html'})
         self.record('anonymous_browser_root_redirects_login', response.status_code == 302
-                    and response.headers.get('Location') in ('/auth/login', 'https://sollumeesthe.com/auth/login'),
+                    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                    # and response.headers.get('Location') in ('/auth/login', 'https://sollumeesthe.com/auth/login'),
+                    and response.headers.get('Location') in ('/auth/login', 'https://office1.sollumeesthe.com/auth/login'),
                     status=response.status_code, location=response.headers.get('Location'))
         for path in ('/', '/daily-voucher', '/users', '/system', '/_stcore/upload_file/fake/fake', '/static/fake.js'):
             self.record('anonymous_http_blocked_' + path.replace('/', '_'), self.request('GET', path).status_code == 401)
@@ -318,7 +338,9 @@ class Runtime:
         http_response = requests.get(f'http://127.0.0.1:{self.http_port}/users', headers={'Host': 'attacker.example'},
                                      allow_redirects=False, timeout=10)
         self.record('http_redirect_fixed_https_domain_no_host_reflection',
-                    http_response.status_code == 301 and http_response.headers.get('Location') == 'https://sollumeesthe.com/users')
+                    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+                    # http_response.status_code == 301 and http_response.headers.get('Location') == 'https://sollumeesthe.com/users')
+                    http_response.status_code == 301 and http_response.headers.get('Location') == 'https://office1.sollumeesthe.com/users')
         browser = requests.Session()
         csrf, login_page = self.csrf('/auth/login', browser)
         self.record('login_form_security_headers_and_no_store',
@@ -343,8 +365,12 @@ class Runtime:
 results={}
 for path in ('/auth/check','/auth/login'):
     req=urllib.request.Request('http://sollume-auth:8503'+path,headers={
-        'Host':'sollumeesthe.com','X-Real-IP':'127.0.0.1','X-Forwarded-For':'127.0.0.1',
-        'X-Forwarded-Proto':'https','X-Forwarded-Host':'sollumeesthe.com'})
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # 'Host':'sollumeesthe.com','X-Real-IP':'127.0.0.1','X-Forwarded-For':'127.0.0.1',
+        'Host':'office1.sollumeesthe.com','X-Real-IP':'127.0.0.1','X-Forwarded-For':'127.0.0.1',
+        # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+        # 'X-Forwarded-Proto':'https','X-Forwarded-Host':'sollumeesthe.com'})
+        'X-Forwarded-Proto':'https','X-Forwarded-Host':'office1.sollumeesthe.com'})
     try:
         response=urllib.request.urlopen(req,timeout=10)
         results[path]=response.status

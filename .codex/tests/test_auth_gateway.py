@@ -19,7 +19,9 @@ from auth_gateway import create_app, load_security_settings, session_cookie_name
 from security_service import SecurityError, SecurityService
 
 
-ORIGIN = "https://sollumeesthe.com"
+# 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+# ORIGIN = "https://sollumeesthe.com"
+ORIGIN = "https://office1.sollumeesthe.com"
 INITIAL_PASSWORD = "Initial test phrase 914!"
 NEW_PASSWORD = "Changed test phrase 739!"
 
@@ -63,7 +65,9 @@ def _post(env, path, values, *, get_path=None, client=None, headers=None, **kwar
 
 
 def _cookie(env, name="__Host-sollume_session", client=None):
-    cookie = (client or env.client).get_cookie(name, domain="sollumeesthe.com")
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # cookie = (client or env.client).get_cookie(name, domain="sollumeesthe.com")
+    cookie = (client or env.client).get_cookie(name, domain="office1.sollumeesthe.com")
     return cookie.value if cookie else None
 
 
@@ -121,7 +125,9 @@ def test_enrollment_and_mfa_login_cookie_security(env):
 def test_real_mfa_required_after_registration_and_otp_replay_rejected(env):
     secret, token, _ = _enroll(env)
     env.service.revoke_session(token)
-    env.client.delete_cookie("__Host-sollume_session", domain="sollumeesthe.com")
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # env.client.delete_cookie("__Host-sollume_session", domain="sollumeesthe.com")
+    env.client.delete_cookie("__Host-sollume_session", domain="office1.sollumeesthe.com")
     response = _post(env, "/auth/login", {"username": "staff.one", "password": NEW_PASSWORD})
     assert response.location == "/auth/mfa"
     response = _post(env, "/auth/mfa", {"otp": pyotp.TOTP(secret).at(env.clock[0])})
@@ -147,7 +153,9 @@ def test_cross_site_origin_is_blocked_even_with_correct_csrf(env):
 
 def test_signed_csrf_cookie_cannot_be_forged(env):
     nonce = _csrf(_get(env, "/auth/login"))
-    env.client.set_cookie("__Host-sollume_csrf", "tampered-signature", domain="sollumeesthe.com", secure=True)
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # env.client.set_cookie("__Host-sollume_csrf", "tampered-signature", domain="sollumeesthe.com", secure=True)
+    env.client.set_cookie("__Host-sollume_csrf", "tampered-signature", domain="office1.sollumeesthe.com", secure=True)
     response = env.client.post("/auth/login", base_url=ORIGIN, data={"csrf_token": nonce, "username": "staff.one", "password": INITIAL_PASSWORD}, headers={"Origin": ORIGIN})
     assert response.status_code == 400
 
@@ -271,7 +279,9 @@ def test_body_size_limit_and_unexpected_errors_do_not_leak_secrets(env, monkeypa
     assert "PRIVATE_SECRET_PASSWORD_OTP" not in caplog.text
 
 
-@pytest.mark.parametrize("origin", ["http://sollumeesthe.com", "https://localhost", "https://sollumeesthe.com/path", "https://sollumeesthe.com?next=x", "https://user:password@sollumeesthe.com", "https://sollumeesthe.com#fragment"])
+# 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+# @pytest.mark.parametrize("origin", ["http://sollumeesthe.com", "https://localhost", "https://sollumeesthe.com/path", "https://sollumeesthe.com?next=x", "https://user:password@sollumeesthe.com", "https://sollumeesthe.com#fragment"])
+@pytest.mark.parametrize("origin", ["http://office1.sollumeesthe.com", "https://localhost", "https://office1.sollumeesthe.com/path", "https://office1.sollumeesthe.com?next=x", "https://user:password@office1.sollumeesthe.com", "https://office1.sollumeesthe.com#fragment"])
 def test_invalid_production_configuration_fails_closed(env, origin):
     with pytest.raises(ValueError):
         load_security_settings({**env.config, "AUTH_PUBLIC_ORIGIN": origin})
@@ -286,16 +296,22 @@ def test_development_accepts_only_loopback_and_redirects_to_fixed_local_app(env)
     response = client.post("/auth/login", base_url="http://localhost:8503", data={"csrf_token": _csrf(page), "username": "staff.one", "password": INITIAL_PASSWORD}, headers={"Origin": "http://localhost:8503"})
     challenge = next(cookie for cookie in response.headers.getlist("Set-Cookie") if cookie.startswith("sollume_dev_challenge="))
     assert "Secure" not in challenge and "HttpOnly" in challenge
-    assert client.get("/auth/login", base_url="http://sollumeesthe.com").status_code == 400
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # assert client.get("/auth/login", base_url="http://sollumeesthe.com").status_code == 400
+    assert client.get("/auth/login", base_url="http://office1.sollumeesthe.com").status_code == 400
     assert session_cookie_name(load_security_settings(dev_config)) == "sollume_dev_session"
-    for changes in ({"AUTH_PUBLIC_ORIGIN": "http://sollumeesthe.com"}, {"AUTH_DEV_APP_ORIGIN": "https://attacker.example"}):
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # for changes in ({"AUTH_PUBLIC_ORIGIN": "http://sollumeesthe.com"}, {"AUTH_DEV_APP_ORIGIN": "https://attacker.example"}):
+    for changes in ({"AUTH_PUBLIC_ORIGIN": "http://office1.sollumeesthe.com"}, {"AUTH_DEV_APP_ORIGIN": "https://attacker.example"}):
         with pytest.raises(ValueError):
             load_security_settings({**dev_config, **changes})
 
 
 def test_http_requires_trusted_https_termination_and_health_stays_internal(env):
     # 2026-10-14 hoyeon.han: TLS 종료 프록시를 가장한 외부 요청은 거부한다.
-    plain_origin = "http://sollumeesthe.com"
+    # 2026-10-19 hoyeon.han: 기존 도메인 검증을 보존하고 확정된 office1 주소로 검사합니다.
+    # plain_origin = "http://sollumeesthe.com"
+    plain_origin = "http://office1.sollumeesthe.com"
     assert env.client.get("/auth/login", base_url=plain_origin).status_code == 400
     assert env.client.get("/auth/login", base_url=plain_origin, headers={"X-Forwarded-Proto": "https"}, environ_overrides={"REMOTE_ADDR": "198.51.100.14"}).status_code == 400
     assert env.client.get("/auth/login", base_url=plain_origin, headers={"X-Forwarded-Proto": "https"}, environ_overrides={"REMOTE_ADDR": "127.0.0.1"}).status_code == 200
