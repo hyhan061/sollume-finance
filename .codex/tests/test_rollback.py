@@ -29,6 +29,8 @@ def test_deployment_capture_failure_stops_before_any_pull_or_up(tmp_path):
     app.mkdir()
     (app / 'scripts').mkdir()
     (app / 'database').mkdir()
+    # 2026-10-19 hoyeon.han: 운영에서 준비한 쓰기 가능한 releases를 재현해 capture 실패 자체를 검증한다.
+    (app / 'database/backups/releases').mkdir(parents=True, mode=0o700)
     for name in ('users.db', 'customer_master.db'):
         (app / 'database' / name).write_bytes(b'synthetic untouched database fixture')
     source_key=base64.urlsafe_b64encode(b'0'*32).decode()
@@ -69,7 +71,9 @@ elif name=='curl':
  else:
   raise SystemExit(92)
 elif name=='sudo':
- if sys.argv[1:]!=['nginx','-t']:
+ # 2026-10-19 hoyeon.han: 비대화식 sudo 인자도 실제 셸과 동일하게 검사한다.
+ # if sys.argv[1:]!=['nginx','-t']:
+ if sys.argv[1:]!=['-n','nginx','-t']:
   raise SystemExit(93)
 '''.replace('PYTHON', sys.executable)
     for name in ('docker', 'curl', 'sudo'):

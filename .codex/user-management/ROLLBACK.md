@@ -3,6 +3,104 @@
 
 이 문서는 실행 절차이며 운영 서버에서 자동 실행되지 않습니다. 구현·검증은 로컬 임시 환경에서만 수행합니다. 복구 대상은 현재 시스템의 **호스트 Nginx + docker-compose.cloud.yml** 구성입니다. Docker Nginx 구성이나 다른 시스템으로 임의 적용하지 않습니다.
 
+<!-- 2026-10-19 hoyeon.han: 완료한 압축 백업을 사용하는 최초 전환 절차를 우선 안내한다. -->
+## 완료한 압축 백업 사용 — 최초 인증 전환
+
+2026-10-19 운영자가 만든 아래 세 파일을 그대로 사용합니다. `capture`를 다시 실행하거나 이미지를 다시 저장할 필요는 없습니다.
+
+| 파일 | 용도 |
+|---|---|
+| `application.tar.gz` | 기존 사용자·거래처 DB, 설정, 업무파일과 사전에 복사한 Nginx 설정 |
+| `images.tar` | 실제 실행하던 이미지. 태그가 아닌 저장된 이미지 ID로 복구 |
+| `containers.json` | 실제 명령·환경·마운트·CPU·메모리·원래 프로젝트와 경로 |
+
+이 방식은 **인증 도입 전 앱·API 두 서비스의 백업**을 지원합니다. 보안 버전 간 복구는 아래의 전용 snapshot 절차를 사용합니다. 원본 압축 파일은 수정하지 않으며, 운영 폴더에 전체 압축을 덮어풀지 않습니다. 업무자료는 현재 것을 유지하고 필요한 사용자 DB와 실행 설정만 선택하여 처리합니다.
+
+<!-- 2026-10-19 hoyeon.han: 환경값을 재해석하지 않는 Compose raw env_file 지원 버전을 기록한다. -->
+복구 Compose는 실제 환경값의 `$`·따옴표를 보존하기 위해 `env_file`의 `format: raw`를 사용합니다. Docker Compose 2.30.0 이상이 필요하며, 운영자가 확인한 서버 버전은 5.0.0입니다. 실제 실행 전 Compose 렌더 검사를 통과해야 합니다. [Docker 공식 설명](https://docs.docker.com/reference/compose-file/services/#format)
+
+### 1. 변경 없는 백업 점검
+
+새 `scripts/release_snapshot.py`와 `rollback-oracle.sh`를 운영에 가져가는 것은 별도 운영 일정에 수행합니다. 아래는 나중에 사용할 명령이며 지금 운영 배포를 지시하는 명령이 아닙니다. `실제백업폴더명`은 이미 완료한 폴더명으로 바꿉니다.
+
+<!-- 2026-10-19 hoyeon.han: 검사 전 운영 Compose를 새 파일로 미리 교체하는 실수를 방지한다. -->
+운영 반영 시에는 검토한 `scripts/release_snapshot.py`, `rollback-oracle.sh`, `deploy-oracle.sh`만 선택적으로 가져옵니다. 기존 `docker-compose.cloud.yml`과 `.env`의 API 키·DB·업무파일을 새 체크아웃으로 덮어쓰지 않습니다. Compose는 배포 스크립트가 검증·백업 후 교체합니다. 인증 설정은 기존 `.env`의 API 키를 유지하면서 추가합니다.
+
+```bash
+cd /home/ubuntu/sollume-finance
+SOLLUME_BACKUP_DIR="$PWD/database/backups/releases/실제백업폴더명"
+
+./rollback-oracle.sh \
+  --app-dir "$PWD" \
+  --backup-dir "$SOLLUME_BACKUP_DIR"
+```
+
+기본 실행은 계획만 확인하며 DB·컨테이너·Nginx를 변경하지 않습니다. 필요한 DB와 부속 WAL을 임시 폴더에서 검사하고, 실제 컨테이너 설정과 저장 이미지의 관계, 압축 경로·필수 파일·손상 여부를 확인합니다. `.venv`의 정상 심볼릭 링크 등 선택하지 않는 항목은 추출하지 않습니다. 계정·키·전체 inspect 내용은 출력하지 않습니다.
+
+### 2. 배포 직전 준비 — 승인된 배포 일정에만 실행
+
+배포 스크립트에는 백업 폴더와 **모든 회계 Nginx 사이트**를 지정합니다. 첫 사이트는 새 인증 정책을 설치할 사이트입니다. 현재 알려진 두 사이트는 `sollume-finance`, `sol-fin`입니다. 새 도메인을 별도 사이트에 구성했다면 그 경로를 첫 번째로 지정하고 기존 두 경로를 뒤에 추가합니다. DNS·실제 TLS 인증서·기존 주소 처리·외부 직접 포트 차단은 먼저 준비해야 합니다.
+
+```bash
+./deploy-oracle.sh \
+  --backup-dir "$SOLLUME_BACKUP_DIR" \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin
+```
+
+이 명령은 **실제 배포 명령**입니다. 백업 점검용으로 실행하지 않습니다. 내부 `manual-prepare --check-current`가 원본 세 파일과 현재 실제 이미지·명령·데이터 마운트·자원 제한·계정 상태를 대조한 뒤 비공개 복구 정보를 작성합니다. 현재 설정이 백업과 다르면 이미지 pull과 서비스 교체 전에 멈춥니다. 원래 Compose의 문자열·빈 명령 표현을 실제 명령과 단순 비교하던 `capture`는 이 경로에서 실행하지 않습니다.
+
+추가 DB 백업은 Ubuntu가 쓰도록 준비된 `database/backups/releases/` 아래에만 만듭니다. 상위 `database/backups`의 root 소유권과 기존 백업을 변경하지 않습니다. `sudo -v` 대신 실제 필요한 관리자 명령의 비대화식 권한을 사용하며, 비밀번호가 필요하면 서비스 변경 전에 중단합니다. 보관 원본 세 파일이 바뀌면 준비 정보를 그대로 재사용하지 않습니다.
+
+### 3. 문제가 생겼을 때 구버전 복구
+
+먼저 같은 백업과 모든 회계 사이트를 지정하여 계획을 확인합니다.
+
+```bash
+./rollback-oracle.sh \
+  --app-dir "$PWD" --backup-dir "$SOLLUME_BACKUP_DIR" \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin \
+  --legacy-private --restore-users
+```
+
+실제 복구가 승인된 경우에만 같은 명령에 `--apply`를 추가하고 Nginx 설정을 쓸 수 있는 운영자 권한으로 실행합니다. 다음은 실제 변경 명령입니다.
+
+```bash
+sudo -n ./rollback-oracle.sh \
+  --app-dir "$PWD" --backup-dir "$SOLLUME_BACKUP_DIR" \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin \
+  --legacy-private --restore-users --apply
+```
+
+복구는 모든 회계 사이트의 503 차단을 검증하고 정확한 회계앱·API·인증 컨테이너만 중지합니다. 최신 사용자 DB·현재 `.env`·인증키·설정은 비공개로 먼저 보관합니다. 최신 거래처 DB·발주내역·업로드·결과 파일은 복원하거나 삭제하지 않습니다. 저장 이미지의 실제 명령과 기존 CPU·메모리 정책으로 시작하되 포트는 루프백으로 제한하고 새 pull·build를 하지 않습니다. `n8n`, `goodsfoundry`의 컨테이너·사이트는 대상에 포함하지 않습니다.
+
+구버전 사용자 DB에서 최근 정지·삭제·관리자 강등·비밀번호 변경을 되살리지 않습니다. 백업 이후 추가된 계정도 가능한 공통 계정정보를 보존하되, 구버전 비밀번호 호환을 확인할 수 없으면 비활성으로 두고 운영자 재설정을 요구합니다. 최신 MFA·권한·감사 이력 전체는 복구 직전 사용자 DB에 보관합니다. ID·아이디 충돌이나 검사 실패가 있으면 임의로 합치지 않고 중단합니다.
+
+구버전은 MFA·화면 권한·다운로드 보호가 없으므로 **복구가 성공해도 외부 접속은 503으로 유지**합니다. SSH 터널로 운영자만 점검합니다. 전체 Nginx 설정에서 다른 회계 진입점이 발견되거나 외부 차단을 확인하지 못하면 공개 복구를 진행하지 않습니다. 실패 기록의 경로와 단계만 공유하고 DB·키·inspect 원문은 공유하지 않습니다.
+
+### 4. 구버전 운영자 로그인 복구
+
+인증 등록으로 비밀번호 해시가 바뀐 관리자는 구버전에서 비활성화될 수 있습니다. 완료된 비공개 복구 뒤, 현재도 유효한 기존 계정만 명시적으로 새 비밀번호를 설정할 수 있습니다. 먼저 `--apply` 없이 점검하고 실제 변경 시에만 추가합니다.
+
+```bash
+sudo -n .venv-ops/bin/python scripts/release_snapshot.py manual-password \
+  --app-dir "$PWD" --backup-dir "$SOLLUME_BACKUP_DIR" \
+  --nginx-config /etc/nginx/sites-enabled/sollume-finance \
+  --nginx-config /etc/nginx/sites-enabled/sol-fin \
+  --username 실제관리자아이디 --apply
+```
+
+터미널에서 새 비밀번호를 숨김 입력합니다. 이 명령은 서버 `ubuntu` 비밀번호 변경과 별개입니다. 최근 정지·삭제된 계정은 허용하지 않으며, 외부 503 차단과 저장 이미지가 맞는지 다시 검사합니다. SSH 키·OS 계정·다른 서비스는 변경하지 않습니다.
+
+---
+
+<!-- 2026-10-19 hoyeon.han: 아래 내용은 기존 전용 snapshot 형식에 대한 별도 지원 절차이다. -->
+## 기존 전용 snapshot 형식
+
+이하 `--release` 명령은 `capture`로 만든 전용 복구 지점에만 사용합니다. 위의 압축 백업에는 `--backup-dir`를 사용하세요. 두 형식의 manifest를 서로 대신 사용하지 않습니다.
+
 ## 복구 방식
 
 | 대상 | 사용자·업무자료 | 공개 접속 |

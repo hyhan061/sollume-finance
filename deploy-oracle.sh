@@ -257,6 +257,8 @@
 
 # 2026-10-14 hoyeon.han: 운영 적용 전 인증·HTTPS·DB 보존을 검증한다.
 set -euo pipefail
+# 2026-10-19 hoyeon.han: 실행 설정과 추가 DB 백업을 기본 0600/0700으로 작성한다.
+umask 077
 
 APP_DIR="${SOLLUME_APP_DIR:-$HOME/sollume-finance}"
 RAW_BASE="https://raw.githubusercontent.com/hyhan061/sollume-finance/main"
@@ -268,8 +270,37 @@ ROLLBACK_HELPER="$APP_DIR/scripts/release_snapshot.py"
 ROLLBACK_RELEASE=""
 
 fail() { echo "배포 중단: $*" >&2; exit 1; }
+# 2026-10-19 hoyeon.han: 완료한 압축 백업을 명시적으로 지정하면 재캡처 대신 검증하여 사용한다.
+MANUAL_BACKUP_DIR=""
+NGINX_CONFIG_ARGS=()
+while test "$#" -gt 0; do
+    case "$1" in
+        --backup-dir)
+            test "$#" -ge 2 && test -n "$2" || fail "--backup-dir에 압축 백업의 절대 경로를 지정하세요."
+            MANUAL_BACKUP_DIR="$2"
+            shift 2
+            ;;
+        --nginx-config)
+            test "$#" -ge 2 && test -n "$2" || fail "--nginx-config에 회계 사이트 설정의 절대 경로를 지정하세요."
+            if test "${#NGINX_CONFIG_ARGS[@]}" -eq 0; then NGINX_SITE_CONFIG="$2"; fi
+            NGINX_CONFIG_ARGS+=(--nginx-config "$2")
+            shift 2
+            ;;
+        -h|--help)
+            echo "사용법: deploy-oracle.sh [--backup-dir 절대백업경로] [--nginx-config 인증사이트] [--nginx-config 기존회계사이트 ...]"
+            echo "실제 배포 명령입니다. 수동 백업 점검만 할 때는 rollback-oracle.sh --backup-dir 경로를 사용하세요."
+            exit 0
+            ;;
+        *) fail "지원하지 않는 인자입니다. --help를 확인하세요." ;;
+    esac
+done
+if test "${#NGINX_CONFIG_ARGS[@]}" -eq 0; then NGINX_CONFIG_ARGS=(--nginx-config "$NGINX_SITE_CONFIG"); fi
+if test -n "$MANUAL_BACKUP_DIR"; then
+    case "$MANUAL_BACKUP_DIR" in /*) ;; *) fail "압축 백업은 절대 경로로 지정하세요." ;; esac
+fi
 command -v docker >/dev/null || fail "Docker가 필요합니다."
-command -v python3 >/dev/null || fail "설정 검증과 SQLite 백업용 Python 3이 필요합니다."
+# command -v python3 >/dev/null || fail "설정 검증과 SQLite 백업용 Python 3이 필요합니다."
+# 2026-10-19 hoyeon.han: 호스트 Python 프로그램은 아래 검증한 운영 가상환경으로만 실행한다.
 test -d "$APP_DIR" || fail "기존 운영 디렉토리를 확인하세요: $APP_DIR"
 cd "$APP_DIR"
 test -f .env || fail ".env에 인증 암호화 키·HTTPS 주소·기존 API 키를 설정하세요."
@@ -283,6 +314,9 @@ test -f "$ROLLBACK_HELPER" || fail "scripts/release_snapshot.py를 먼저 설치
 test -x "$OPS_PYTHON" || fail ".venv-ops 가상환경이 필요합니다. python3 -m venv .venv-ops로 준비하세요."
 "$OPS_PYTHON" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' \
     || fail "SOLLUME_OPS_PYTHON에는 가상환경 Python을 지정하세요."
+# 2026-10-19 hoyeon.han: 상위 backups 소유권을 바꾸지 않고 기존 releases 쓰기 가능 여부를 먼저 검사한다.
+test -d database/backups/releases && test -w database/backups/releases \
+    || fail "Ubuntu 소유·0700인 database/backups/releases를 먼저 준비하세요. 상위 backups는 변경하지 않습니다."
 
 # 기존 설정이나 내장 무인증 Compose로 폴백하면 접근 차단을 우회하므로 즉시 중단한다.
 COMPOSE_STAGED=$(mktemp "${COMPOSE_FILE}.tmp.XXXXXX")
@@ -292,7 +326,13 @@ COMPOSE_RENDERED=$(mktemp "${COMPOSE_FILE}.validated.XXXXXX")
 cleanup_deployment() {
     local result=$?
     rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"
-    if test "$result" -ne 0 && test -n "$ROLLBACK_RELEASE" && test -f "$ROLLBACK_RELEASE/manifest.json"; then
+    # 2026-10-19 hoyeon.han: 수동 백업 복구는 자동 snapshot과 다른 인자로 점검한다.
+    # if test "$result" -ne 0 && test -n "$ROLLBACK_RELEASE" && test -f "$ROLLBACK_RELEASE/manifest.json"; then
+    if test "$result" -ne 0 && test -n "$MANUAL_BACKUP_DIR" && test -n "$ROLLBACK_RELEASE"; then
+        echo "배포가 완료되지 않았습니다. 보존한 압축 백업: $MANUAL_BACKUP_DIR" >&2
+        echo "rollback-oracle.sh --backup-dir 백업경로 --app-dir 원래앱경로 --nginx-config 회계사이트(각각 지정) 로 점검하세요." >&2
+        echo "복구는 자동 실행하지 않습니다. 구버전 복구 후 공개 접속은 차단 상태로 유지합니다." >&2
+    elif test "$result" -ne 0 && test -n "$ROLLBACK_RELEASE" && test -f "$ROLLBACK_RELEASE/manifest.json"; then
         echo "배포가 완료되지 않았습니다. 복구 지점: $ROLLBACK_RELEASE" >&2
         echo "rollback-oracle.sh --release 복구지점 으로 사전 점검하세요. 실제 복구는 --apply를 명시합니다." >&2
         echo "인증 도입 전 버전은 외부 접속을 차단한 별도 복구 절차만 허용합니다. ROLLBACK.md를 확인하세요." >&2
@@ -306,7 +346,9 @@ docker compose --env-file .env -f "$COMPOSE_STAGED" config --format json > "$COM
     || fail "인증 환경변수 또는 Compose 검증 실패. 실행 중인 구성은 변경하지 않았습니다."
 
 # 출력 JSON에는 키가 포함되므로 화면·로그에 출력하지 않고 비공개 임시 파일에서만 검사한다.
-python3 - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" <<'PY'
+# python3 - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" <<'PY'
+# 2026-10-19 hoyeon.han: Compose·Nginx 검증도 운영 가상환경에서 실행한다.
+"$OPS_PYTHON" - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" <<'PY'
 import json, pathlib, sys
 from urllib.parse import urlsplit
 config = json.loads(pathlib.Path(sys.argv[1]).read_text())
@@ -338,13 +380,29 @@ if active.count('auth_request /_auth_check;') < 2:
     raise SystemExit('업무 화면과 다운로드 모두 Nginx 인증 검사가 필요합니다.')
 print('Compose의 내부 포트·운영 인증 설정 및 Nginx 필수 경로 검증 완료')
 PY
-sudo nginx -t || fail "HTTPS 인증서 또는 Nginx 설정 검증 실패. 기존 컨테이너를 유지합니다."
+# sudo nginx -t || fail "HTTPS 인증서 또는 Nginx 설정 검증 실패. 기존 컨테이너를 유지합니다."
+# 2026-10-19 hoyeon.han: 비밀번호 프롬프트에서 배포가 멈추지 않도록 실제 명령 권한을 확인한다.
+sudo -n nginx -t || fail "관리자 권한·HTTPS 인증서·Nginx 설정 검증 실패. 기존 컨테이너를 유지합니다."
 
 # 2026-10-15 hoyeon.han: latest가 바뀌기 전에 실제 실행 이미지와 설정·DB를 오프라인 복구 지점으로 보관한다.
-ROLLBACK_RELEASE="$APP_DIR/database/backups/releases/before_deploy_$(date +%Y%m%d_%H%M%S)_$$"
-"$OPS_PYTHON" "$ROLLBACK_HELPER" capture --app-dir "$APP_DIR" \
-    --nginx-config "$NGINX_SITE_CONFIG" --release "$ROLLBACK_RELEASE" \
-    || fail "이전 실행 이미지·설정·DB의 복구 지점 생성에 실패했습니다. 서비스를 교체하지 않습니다."
+# ROLLBACK_RELEASE="$APP_DIR/database/backups/releases/before_deploy_$(date +%Y%m%d_%H%M%S)_$$"
+# "$OPS_PYTHON" "$ROLLBACK_HELPER" capture --app-dir "$APP_DIR" \
+#     --nginx-config "$NGINX_SITE_CONFIG" --release "$ROLLBACK_RELEASE" \
+#     || fail "이전 실행 이미지·설정·DB의 복구 지점 생성에 실패했습니다. 서비스를 교체하지 않습니다."
+# 2026-10-19 hoyeon.han: 압축 백업의 원본 3파일을 재저장하지 않고 현재 실행 상태와 대조한다.
+if test -n "$MANUAL_BACKUP_DIR"; then
+    MANUAL_PREPARE_RESULT=$("$OPS_PYTHON" "$ROLLBACK_HELPER" manual-prepare \
+        --app-dir "$APP_DIR" --backup-dir "$MANUAL_BACKUP_DIR" \
+        "${NGINX_CONFIG_ARGS[@]}" --check-current) \
+        || fail "압축 백업 또는 현재 실행 상태 검증에 실패했습니다. 서비스를 교체하지 않습니다."
+    ROLLBACK_RELEASE=$("$OPS_PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["release"])' <<< "$MANUAL_PREPARE_RESULT") \
+        || fail "압축 백업의 복구 준비 결과를 확인할 수 없습니다."
+else
+    ROLLBACK_RELEASE="$APP_DIR/database/backups/releases/before_deploy_$(date +%Y%m%d_%H%M%S)_$$"
+    "$OPS_PYTHON" "$ROLLBACK_HELPER" capture --app-dir "$APP_DIR" \
+        --nginx-config "$NGINX_SITE_CONFIG" --release "$ROLLBACK_RELEASE" \
+        || fail "이전 실행 이미지·설정·DB의 복구 지점 생성에 실패했습니다. 서비스를 교체하지 않습니다."
+fi
 echo "배포 전 복구 지점 준비 완료: $ROLLBACK_RELEASE"
 
 # 이미지 다운로드와 스키마 지원 검사가 끝나기 전 기존 컨테이너를 중지하지 않는다.
@@ -358,14 +416,21 @@ docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypo
     -c 'import sys; assert sys.prefix != sys.base_prefix, "Docker Python 가상환경이 없습니다."; sys.path[:0] = ["/app/Src", "/app/scripts"]; import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode, manage_users, init_users_db' \
     || fail "이미지의 가상환경 또는 인증·관리 CLI 검증에 실패했습니다. 수정된 Dockerfile과 필수 모듈을 포함해 이미지를 다시 빌드·게시하세요."
 
-BACKUP_DIR="database/backups/before_security_$(date +%Y%m%d_%H%M%S)"
+# BACKUP_DIR="database/backups/before_security_$(date +%Y%m%d_%H%M%S)"
+# 2026-10-19 hoyeon.han: root 소유 backups를 변경하지 않고 준비된 releases 아래에 보관한다.
+BACKUP_DIR="database/backups/releases/before_security_$(date +%Y%m%d_%H%M%S)_$$"
 mkdir -p "$BACKUP_DIR" processed/secure_downloads
 chmod 700 "$BACKUP_DIR" processed/secure_downloads
-python3 - "$BACKUP_DIR" <<'PY'
+# python3 - "$BACKUP_DIR" <<'PY'
+# 2026-10-19 hoyeon.han: DB 백업 연결을 명시적으로 닫고 운영 가상환경을 사용한다.
+"$OPS_PYTHON" - "$BACKUP_DIR" <<'PY'
 import pathlib, sqlite3, sys
+from contextlib import closing
 for name in ('users.db', 'customer_master.db'):
-    with sqlite3.connect(f'file:database/{name}?mode=ro', uri=True) as source:
-        with sqlite3.connect(str(pathlib.Path(sys.argv[1])/name)) as destination:
+    # with sqlite3.connect(f'file:database/{name}?mode=ro', uri=True) as source:
+    #     with sqlite3.connect(str(pathlib.Path(sys.argv[1])/name)) as destination:
+    with closing(sqlite3.connect(f'file:database/{name}?mode=ro', uri=True)) as source:
+        with closing(sqlite3.connect(str(pathlib.Path(sys.argv[1])/name))) as destination, destination:
             source.backup(destination)
 print('기존 사용자·거래처 DB의 일관된 백업 완료')
 PY
@@ -373,7 +438,9 @@ if test -f "$COMPOSE_FILE"; then cp "$COMPOSE_FILE" "$BACKUP_DIR/docker-compose.
 mv "$COMPOSE_STAGED" "$COMPOSE_FILE"
 docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
     || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
-sudo systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
+# sudo systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
+# 2026-10-19 hoyeon.han: 적용 단계에서도 비대화식 관리자 권한을 사용한다.
+sudo -n systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
 
 curl -fsS http://127.0.0.1:8501/_stcore/health >/dev/null || fail "회계앱 상태 검사 실패"
 curl -fsS -H 'Host: sollumeesthe.com' http://127.0.0.1:8503/auth/health >/dev/null || fail "인증 서버 상태 검사 실패"
