@@ -276,6 +276,9 @@ ROLLBACK_RELEASE=""
 fail() { echo "배포 중단: $*" >&2; exit 1; }
 # 2026-10-19 hoyeon.han: 완료한 압축 백업을 명시적으로 지정하면 재캡처 대신 검증하여 사용한다.
 MANUAL_BACKUP_DIR=""
+# 2026-10-20 hoyeon.han: 준비한 로컬 이미지 ID와 Compose는 함께 지정해야 오프라인 모드가 된다.
+LOCAL_COMPOSE_SOURCE=""
+LOCAL_IMAGE_ID=""
 NGINX_CONFIG_ARGS=()
 while test "$#" -gt 0; do
     case "$1" in
@@ -290,14 +293,34 @@ while test "$#" -gt 0; do
             NGINX_CONFIG_ARGS+=(--nginx-config "$2")
             shift 2
             ;;
+        --compose-file)
+            test "$#" -ge 2 && test -n "$2" || fail "--compose-file에 준비한 Compose 절대 경로를 지정하세요."
+            LOCAL_COMPOSE_SOURCE="$2"
+            shift 2
+            ;;
+        --local-image-id)
+            test "$#" -ge 2 && test -n "$2" || fail "--local-image-id에 준비한 sha256 이미지 ID를 지정하세요."
+            LOCAL_IMAGE_ID="$2"
+            shift 2
+            ;;
         -h|--help)
-            echo "사용법: deploy-oracle.sh [--backup-dir 절대백업경로] [--nginx-config 인증사이트] [--nginx-config 기존회계사이트 ...]"
+            # echo "사용법: deploy-oracle.sh [--backup-dir 절대백업경로] [--nginx-config 인증사이트] [--nginx-config 기존회계사이트 ...]"
+            echo "사용법: deploy-oracle.sh [--backup-dir 절대백업경로] [--nginx-config 인증사이트] [--nginx-config 기존회계사이트 ...] [--compose-file 절대경로 --local-image-id sha256:이미지ID]"
+            echo "오프라인 준비본은 --compose-file과 --local-image-id를 반드시 함께 지정합니다. 다운로드·pull·build 없이 정확한 로컬 Linux ARM64 이미지만 사용합니다."
             echo "실제 배포 명령입니다. 수동 백업 점검만 할 때는 rollback-oracle.sh --backup-dir 경로를 사용하세요."
             exit 0
             ;;
         *) fail "지원하지 않는 인자입니다. --help를 확인하세요." ;;
     esac
 done
+# 2026-10-20 hoyeon.han: 잘못된 선택은 외부 명령·파일 생성·서비스 교체 전에 중단한다.
+if test -n "$LOCAL_COMPOSE_SOURCE" || test -n "$LOCAL_IMAGE_ID"; then
+    test -n "$LOCAL_COMPOSE_SOURCE" && test -n "$LOCAL_IMAGE_ID" \
+        || fail "--compose-file과 --local-image-id를 함께 지정하세요."
+    case "$LOCAL_COMPOSE_SOURCE" in /*) ;; *) fail "준비한 Compose는 절대 경로로 지정하세요." ;; esac
+    test -f "$LOCAL_COMPOSE_SOURCE" && test -r "$LOCAL_COMPOSE_SOURCE" || fail "준비한 Compose 파일을 읽을 수 없습니다."
+    [[ "$LOCAL_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "로컬 이미지 ID는 sha256: 다음에 소문자 16진수 64자리여야 합니다."
+fi
 if test "${#NGINX_CONFIG_ARGS[@]}" -eq 0; then NGINX_CONFIG_ARGS=(--nginx-config "$NGINX_SITE_CONFIG"); fi
 if test -n "$MANUAL_BACKUP_DIR"; then
     case "$MANUAL_BACKUP_DIR" in /*) ;; *) fail "압축 백업은 절대 경로로 지정하세요." ;; esac
@@ -354,20 +377,48 @@ cleanup_deployment() {
 }
 trap cleanup_deployment EXIT
 chmod 600 "$COMPOSE_STAGED" "$COMPOSE_RENDERED" .env
-curl -fsSL --proto '=https' --tlsv1.2 "$RAW_BASE/$COMPOSE_FILE" -o "$COMPOSE_STAGED" \
-    || fail "최신 인증 Compose 다운로드에 실패했습니다. 실행 중인 구성은 변경하지 않았습니다."
+# curl -fsSL --proto '=https' --tlsv1.2 "$RAW_BASE/$COMPOSE_FILE" -o "$COMPOSE_STAGED" \
+#     || fail "최신 인증 Compose 다운로드에 실패했습니다. 실행 중인 구성은 변경하지 않았습니다."
+# 2026-10-20 hoyeon.han: 오프라인 모드에서는 main/latest를 조회하지 않고 준비본만 고정한다.
+if test -n "$LOCAL_IMAGE_ID"; then
+    cp "$LOCAL_COMPOSE_SOURCE" "$COMPOSE_STAGED" || fail "준비한 Compose 복사에 실패했습니다."
+    LOCAL_IMAGE_METADATA=$(docker image inspect --format '{{.Id}} {{.Os}} {{.Architecture}}' "$LOCAL_IMAGE_ID") \
+        || fail "준비한 이미지가 로컬 Docker에 없습니다. pull 없이 중단합니다."
+    LOCAL_DOCKER_PLATFORM=$(docker info --format '{{.OSType}} {{.Architecture}}') \
+        || fail "현재 Docker 실행 플랫폼을 확인할 수 없습니다."
+    "$OPS_PYTHON" - "$LOCAL_IMAGE_ID" "$LOCAL_IMAGE_METADATA" "$LOCAL_DOCKER_PLATFORM" <<'PY'
+import sys
+expected, image, host = sys.argv[1], sys.argv[2].split(), sys.argv[3].split()
+if len(image) != 3 or image != [expected, 'linux', 'arm64']:
+    raise SystemExit('준비한 이미지 ID·Linux ARM64 플랫폼이 일치하지 않습니다.')
+if len(host) != 2 or host[0] != 'linux' or host[1] not in ('arm64', 'aarch64'):
+    raise SystemExit('현재 Docker 플랫폼이 준비한 Linux ARM64 이미지와 다릅니다.')
+print('준비한 로컬 이미지 확인: ' + expected + ' / linux/arm64')
+PY
+else
+    curl -fsSL --proto '=https' --tlsv1.2 "$RAW_BASE/$COMPOSE_FILE" -o "$COMPOSE_STAGED" \
+        || fail "최신 인증 Compose 다운로드에 실패했습니다. 실행 중인 구성은 변경하지 않았습니다."
+fi
 docker compose --env-file .env -f "$COMPOSE_STAGED" config --format json > "$COMPOSE_RENDERED" \
     || fail "인증 환경변수 또는 Compose 검증 실패. 실행 중인 구성은 변경하지 않았습니다."
 
 # 출력 JSON에는 키가 포함되므로 화면·로그에 출력하지 않고 비공개 임시 파일에서만 검사한다.
 # python3 - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" <<'PY'
 # 2026-10-19 hoyeon.han: Compose·Nginx 검증도 운영 가상환경에서 실행한다.
-"$OPS_PYTHON" - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" <<'PY'
+# "$OPS_PYTHON" - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" <<'PY'
+# 2026-10-20 hoyeon.han: 오프라인 준비본은 세 서비스의 image 필드도 정확한 같은 로컬 ID여야 한다.
+"$OPS_PYTHON" - "$COMPOSE_RENDERED" "$NGINX_SITE_CONFIG" "$LOCAL_IMAGE_ID" <<'PY'
 import json, pathlib, sys
 from urllib.parse import urlsplit
 config = json.loads(pathlib.Path(sys.argv[1]).read_text())
 services = config.get('services', {})
 required = {'sollume-app':8501, 'sollume-api':8502, 'sollume-auth':8503}
+if sys.argv[3] and (set(services) != set(required) or
+                    any(not isinstance(service, dict) or service.get('image') != sys.argv[3] for service in services.values())):
+    raise SystemExit('준비한 Compose의 세 서비스는 모두 지정한 로컬 이미지 ID와 정확히 일치해야 합니다.')
+# 2026-10-20 hoyeon.han: 빈 build 항목과 build pull 정책도 거절하여 일회성 검사에서 빌드가 실행되지 않게 한다.
+if sys.argv[3] and any('build' in service or service.get('pull_policy') == 'build' for service in services.values()):
+    raise SystemExit('오프라인 준비본에는 build 항목이나 pull_policy: build를 사용할 수 없습니다.')
 for name, port in required.items():
     service = services.get(name)
     if not service:
@@ -441,13 +492,29 @@ fi
 echo "배포 전 복구 지점 준비 완료: $ROLLBACK_RELEASE"
 
 # 이미지 다운로드와 스키마 지원 검사가 끝나기 전 기존 컨테이너를 중지하지 않는다.
-docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
-    || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+# docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
+#     || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+# 2026-10-20 hoyeon.han: 로컬 ID 모드는 기존 검증한 이미지만 사용하고 레지스트리에 접근하지 않는다.
+if test -z "$LOCAL_IMAGE_ID"; then
+    docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
+        || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+fi
 # 2026-10-14 hoyeon.han: DB를 열지 않고 Docker 가상환경과 인증·관리 CLI 포함 여부를 검사한다.
 # docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypoint python sollume-auth \
 #     -c 'import sys; sys.path.insert(0,"/app/Src"); import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode' \
 #     || fail "이미지에 승인된 인증 모듈이 없습니다. 이미지를 먼저 빌드·게시하세요."
-docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypoint python sollume-auth \
+# docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypoint python sollume-auth \
+#     -c 'import sys; assert sys.prefix != sys.base_prefix, "Docker Python 가상환경이 없습니다."; sys.path[:0] = ["/app/Src", "/app/scripts"]; import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode, manage_users, init_users_db' \
+#     || fail "이미지의 가상환경 또는 인증·관리 CLI 검증에 실패했습니다. 수정된 Dockerfile과 필수 모듈을 포함해 이미지를 다시 빌드·게시하세요."
+# 2026-10-20 hoyeon.han: 오프라인 모드의 일회성 모듈 검사에도 pull을 명시 금지한다.
+run_candidate_auth_check() {
+    if test -n "$LOCAL_IMAGE_ID"; then
+        docker compose --env-file .env -f "$COMPOSE_STAGED" run --pull never "$@"
+    else
+        docker compose --env-file .env -f "$COMPOSE_STAGED" run "$@"
+    fi
+}
+run_candidate_auth_check --rm --no-deps --entrypoint python sollume-auth \
     -c 'import sys; assert sys.prefix != sys.base_prefix, "Docker Python 가상환경이 없습니다."; sys.path[:0] = ["/app/Src", "/app/scripts"]; import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode, manage_users, init_users_db' \
     || fail "이미지의 가상환경 또는 인증·관리 CLI 검증에 실패했습니다. 수정된 Dockerfile과 필수 모듈을 포함해 이미지를 다시 빌드·게시하세요."
 
@@ -478,8 +545,16 @@ docker compose --env-file .env -f "$COMPOSE_STAGED" config --format json > "$COM
     --compose-json "$COMPOSE_RENDERED" "${NGINX_CONFIG_ARGS[@]}" --baseline "$PREFLIGHT_RESULT" >/dev/null \
     || fail "배포 준비 중 진입점 정책이 변경되었거나 차단 검사가 실패했습니다. 서비스를 교체하지 않습니다."
 mv "$COMPOSE_STAGED" "$COMPOSE_FILE"
-docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
-    || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
+# docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
+#     || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
+# 2026-10-20 hoyeon.han: 서비스 교체에서도 로컬 고정 이미지만 사용하고 암묵적인 pull·build를 금지한다.
+if test -n "$LOCAL_IMAGE_ID"; then
+    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --pull never --no-build --wait --wait-timeout 120 \
+        || fail "로컬 고정 이미지 서비스 준비 실패. 비공개 복구 안내를 확인하세요."
+else
+    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
+        || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
+fi
 # sudo systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
 # 2026-10-19 hoyeon.han: 적용 단계에서도 비대화식 관리자 권한을 사용한다.
 sudo -n systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
