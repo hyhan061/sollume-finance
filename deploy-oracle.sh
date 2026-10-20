@@ -269,6 +269,8 @@ NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/zz-offi
 # 2026-10-15 hoyeon.han: 복구 도구는 호스트의 운영 전용 가상환경에서 실행한다.
 OPS_PYTHON="${SOLLUME_OPS_PYTHON:-$APP_DIR/.venv-ops/bin/python}"
 ROLLBACK_HELPER="$APP_DIR/scripts/release_snapshot.py"
+# 2026-10-20 hoyeon.han: 두 백업 방식에 동일한 읽기 전용 진입점 검사를 적용한다.
+PREFLIGHT_HELPER="$APP_DIR/scripts/deployment_preflight.py"
 ROLLBACK_RELEASE=""
 
 fail() { echo "배포 중단: $*" >&2; exit 1; }
@@ -304,6 +306,8 @@ command -v docker >/dev/null || fail "Docker가 필요합니다."
 # command -v python3 >/dev/null || fail "설정 검증과 SQLite 백업용 Python 3이 필요합니다."
 # 2026-10-19 hoyeon.han: 호스트 Python 프로그램은 아래 검증한 운영 가상환경으로만 실행한다.
 test -d "$APP_DIR" || fail "기존 운영 디렉토리를 확인하세요: $APP_DIR"
+# 2026-10-20 hoyeon.han: 검사 대상·임시 파일이 항상 같은 원래 앱 경로를 가리키게 한다.
+case "$APP_DIR" in /*) ;; *) fail "SOLLUME_APP_DIR에는 기존 앱의 절대 경로를 지정하세요." ;; esac
 cd "$APP_DIR"
 test -f .env || fail ".env에 인증 암호화 키·HTTPS 주소·기존 API 키를 설정하세요."
 # 2026-10-15 hoyeon.han: 터미널 export가 보관한 .env보다 우선하여 다른 키로 배포되는 것을 막는다.
@@ -313,6 +317,7 @@ test -f database/customer_master.db || fail "기존 거래처 DB가 없습니다
 test -f "$NGINX_SITE_CONFIG" || fail "엄격한 호스트 Nginx 설정을 먼저 설치하세요. OPERATIONS.md를 참고하세요."
 # 2026-10-15 hoyeon.han: 복구 지점 없이 이미지를 교체하지 않는다. 설치 절차는 ROLLBACK.md에 둔다.
 test -f "$ROLLBACK_HELPER" || fail "scripts/release_snapshot.py를 먼저 설치하세요. ROLLBACK.md의 최초 준비 절차를 확인하세요."
+test -f "$PREFLIGHT_HELPER" || fail "scripts/deployment_preflight.py를 먼저 준비하세요. 진입점 검사 없이 배포하지 않습니다."
 test -x "$OPS_PYTHON" || fail ".venv-ops 가상환경이 필요합니다. python3 -m venv .venv-ops로 준비하세요."
 "$OPS_PYTHON" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' \
     || fail "SOLLUME_OPS_PYTHON에는 가상환경 Python을 지정하세요."
@@ -321,13 +326,20 @@ test -d database/backups/releases && test -w database/backups/releases \
     || fail "Ubuntu 소유·0700인 database/backups/releases를 먼저 준비하세요. 상위 backups는 변경하지 않습니다."
 
 # 기존 설정이나 내장 무인증 Compose로 폴백하면 접근 차단을 우회하므로 즉시 중단한다.
-COMPOSE_STAGED=$(mktemp "${COMPOSE_FILE}.tmp.XXXXXX")
-COMPOSE_RENDERED=$(mktemp "${COMPOSE_FILE}.validated.XXXXXX")
+# COMPOSE_STAGED=$(mktemp "${COMPOSE_FILE}.tmp.XXXXXX")
+# COMPOSE_RENDERED=$(mktemp "${COMPOSE_FILE}.validated.XXXXXX")
+# 2026-10-20 hoyeon.han: 검사기의 절대 경로 요구에 맞추며 상대 경로를 전달하지 않는다.
+COMPOSE_STAGED=$(mktemp "$APP_DIR/${COMPOSE_FILE}.tmp.XXXXXX")
+COMPOSE_RENDERED=$(mktemp "$APP_DIR/${COMPOSE_FILE}.validated.XXXXXX")
+# 2026-10-20 hoyeon.han: 정책 지문만 보관하며 렌더링된 비밀 설정은 출력하지 않는다.
+PREFLIGHT_RESULT=$(mktemp "$APP_DIR/${COMPOSE_FILE}.preflight.XXXXXX")
 # 2026-10-15 hoyeon.han: 원래 정리 동작은 보존하고, 실패 시 복구 지점만 안내한다. 자동 롤백은 하지 않는다.
 # trap 'rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"' EXIT
 cleanup_deployment() {
     local result=$?
-    rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"
+    # rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED"
+    # 2026-10-20 hoyeon.han: 검사 기준 파일도 성공·실패 모두 삭제한다.
+    rm -f "$COMPOSE_STAGED" "$COMPOSE_RENDERED" "$PREFLIGHT_RESULT"
     # 2026-10-19 hoyeon.han: 수동 백업 복구는 자동 snapshot과 다른 인자로 점검한다.
     # if test "$result" -ne 0 && test -n "$ROLLBACK_RELEASE" && test -f "$ROLLBACK_RELEASE/manifest.json"; then
     if test "$result" -ne 0 && test -n "$MANUAL_BACKUP_DIR" && test -n "$ROLLBACK_RELEASE"; then
@@ -395,6 +407,18 @@ PY
 # 2026-10-19 hoyeon.han: 비밀번호 프롬프트에서 배포가 멈추지 않도록 실제 명령 권한을 확인한다.
 sudo -n nginx -t || fail "관리자 권한·HTTPS 인증서·Nginx 설정 검증 실패. 기존 컨테이너를 유지합니다."
 
+# 2026-10-20 hoyeon.han: manual/capture 분기와 pull 전에 활성 Nginx 전체 및 직접 포트 전환 계획을 검사한다.
+"$OPS_PYTHON" "$PREFLIGHT_HELPER" ready --app-dir "$APP_DIR" \
+    --compose-json "$COMPOSE_RENDERED" "${NGINX_CONFIG_ARGS[@]}" > "$PREFLIGHT_RESULT" \
+    || fail "기존 DuckDNS·추가 진입점·직접 포트 사전 검사 실패. 서비스를 교체하지 않습니다."
+"$OPS_PYTHON" - "$PREFLIGHT_RESULT" <<'PY'
+import json, pathlib, sys
+result = json.loads(pathlib.Path(sys.argv[1]).read_text())
+print('전체 회계 진입점의 배포 사전 검사 완료')
+if result.get('runtime_transition_required'):
+    print('주의: 기존 공개 8501 포트는 서비스 교체 때 루프백으로 전환해야 합니다. 교체 후 재검증 전에는 배포 완료가 아닙니다.')
+PY
+
 # 2026-10-15 hoyeon.han: latest가 바뀌기 전에 실제 실행 이미지와 설정·DB를 오프라인 복구 지점으로 보관한다.
 # ROLLBACK_RELEASE="$APP_DIR/database/backups/releases/before_deploy_$(date +%Y%m%d_%H%M%S)_$$"
 # "$OPS_PYTHON" "$ROLLBACK_HELPER" capture --app-dir "$APP_DIR" \
@@ -446,12 +470,26 @@ for name in ('users.db', 'customer_master.db'):
 print('기존 사용자·거래처 DB의 일관된 백업 완료')
 PY
 if test -f "$COMPOSE_FILE"; then cp "$COMPOSE_FILE" "$BACKUP_DIR/docker-compose.cloud.yml"; fi
+# 2026-10-20 hoyeon.han: 준비·이미지 다운로드 중 Certbot 또는 다른 작업이 정책을 바꾸면 교체를 중단한다.
+# 2026-10-20 hoyeon.han: 최초 JSON을 재사용하지 않고 실제 적용할 YAML·현재 .env를 다시 해석한다.
+docker compose --env-file .env -f "$COMPOSE_STAGED" config --format json > "$COMPOSE_RENDERED" \
+    || fail "서비스 교체 직전 Compose 재검증 실패. 서비스를 교체하지 않습니다."
+"$OPS_PYTHON" "$PREFLIGHT_HELPER" ready --app-dir "$APP_DIR" \
+    --compose-json "$COMPOSE_RENDERED" "${NGINX_CONFIG_ARGS[@]}" --baseline "$PREFLIGHT_RESULT" >/dev/null \
+    || fail "배포 준비 중 진입점 정책이 변경되었거나 차단 검사가 실패했습니다. 서비스를 교체하지 않습니다."
 mv "$COMPOSE_STAGED" "$COMPOSE_FILE"
 docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
     || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
 # sudo systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
 # 2026-10-19 hoyeon.han: 적용 단계에서도 비대화식 관리자 권한을 사용한다.
 sudo -n systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."
+
+# 2026-10-20 hoyeon.han: 실제 바인딩·호스트 수신·기존 주소·화면·다운로드 응답이 안전해야 완료 처리한다.
+docker compose --env-file .env -f "$COMPOSE_FILE" config --format json > "$COMPOSE_RENDERED" \
+    || fail "적용 후 Compose 해석에 실패했습니다. 배포 완료로 처리하지 않습니다."
+"$OPS_PYTHON" "$PREFLIGHT_HELPER" verify --app-dir "$APP_DIR" \
+    --compose-json "$COMPOSE_RENDERED" "${NGINX_CONFIG_ARGS[@]}" --baseline "$PREFLIGHT_RESULT" \
+    || fail "배포 후 인증 우회 검사 실패. 배포 완료로 처리하지 않습니다. 비공개 복구 지점과 운영 안내를 확인하세요."
 
 curl -fsS http://127.0.0.1:8501/_stcore/health >/dev/null || fail "회계앱 상태 검사 실패"
 # 2026-10-19 hoyeon.han: office1 공개 주소와 인증 서버의 호스트를 일치시킨다.
@@ -472,5 +510,7 @@ test "$MEDIA_STATUS" = 403 || fail "기존 media 다운로드 경로가 차단�
 # 2026-10-19 hoyeon.han: office1 공개 주소와 인증 서버의 호스트를 일치시킨다.
 # echo "배포 및 기본 접근 차단 검증 완료: https://sollumeesthe.com"
 echo "배포 및 기본 접근 차단 검증 완료: https://office1.sollumeesthe.com"
-echo "초기 인증 등록·계정 권한·외부 포트 차단은 OPERATIONS.md의 운영 점검을 완료하세요."
+# echo "초기 인증 등록·계정 권한·외부 포트 차단은 OPERATIONS.md의 운영 점검을 완료하세요."
+# 2026-10-20 hoyeon.han: 호스트 검사와 서버 외부 검증의 범위를 구분한다.
+echo "초기 인증 등록·계정 권한과 서버 외부에서의 직접 포트 차단 확인은 OPERATIONS.md의 운영 점검을 완료하세요."
 echo "8501·8502·8503의 인터넷 Ingress는 열지 않습니다."

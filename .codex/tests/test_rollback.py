@@ -47,6 +47,12 @@ def test_deployment_capture_failure_stops_before_any_pull_or_up(tmp_path):
                       'with pathlib.Path(os.environ["ROLLBACK_QA_COMMANDS"]).open("a") as log:\n'
                       ' log.write(json.dumps(["capture-helper",*sys.argv[1:],{"inherited_auth_exports":any(k in os.environ for k in ("AUTH_ENCRYPTION_KEY","AUTH_SIGNING_KEY","AUTH_PUBLIC_ORIGIN","ORDER_API_KEY"))}])+"\\n")\n'
                       'raise SystemExit(17)\n')
+    # 2026-10-20 hoyeon.han: 공통 검사를 통과시켜 기존 capture 실패 경계 자체를 계속 검사한다.
+    (app / 'scripts/deployment_preflight.py').write_text(
+        'import json,os,pathlib,sys\n'
+        'with pathlib.Path(os.environ["ROLLBACK_QA_COMMANDS"]).open("a") as log:\n'
+        ' log.write(json.dumps(["preflight-helper",*sys.argv[1:]])+"\\n")\n'
+        'print(json.dumps({"runtime_transition_required":False}))\n')
     fake_bin = tmp_path / 'bin'
     fake_bin.mkdir()
     required = {'sollume-app': 8501, 'sollume-auth': 8503, 'sollume-api': 8502}

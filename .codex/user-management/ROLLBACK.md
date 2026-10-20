@@ -80,7 +80,10 @@
 
 별도의 로컬 합성 자료로 새 partial OCI 저장 형식의 [실제 Docker 복구 39개 검사](oci-partial-manual-results-20261020.md)가 모두 통과했습니다. 이미지 load 실패 후 재시도, 최신 계정·비밀번호 변경·정지·삭제·관리자 강등 상태의 보존, 비공개 복구와 로그인, 업무자료 보존을 확인했습니다. [상세 결과](oci-partial-manual-results-20261020.json)의 helper 원본·기존 업무파일 9개·기존 캐시 태그/ID가 유지됐고 시험 자원 정리도 완료됐습니다. [최종 단위 검사 84 passed, 5 skipped](oci-backup-unit-results-20261020.xml)에서 생략된 5개는 별도 snapshot Docker 통합 옵션을 지정하지 않은 기존 시험입니다.
 
-기존 저장 형식의 [실제 Docker 복구 회귀 37개 검사](oci-original-manual-results-20261020.md)도 같은 최종 helper로 모두 통과했습니다. [상세 회귀 결과](oci-original-manual-results-20261020.json)에서 실행 중 helper 원본 불변, 기존 업무파일 9개 불변과 시험 자원 정리를 재확인했습니다. 캐시 이미지 태그·ID의 명시적 보존 대조는 새 partial OCI 형식의 39개 검사에만 포함됩니다. 기존 형식의 37개 검사와 구분하여, 모든 시험 종료 후 별도 Docker CLI 조회에서 기존 네 캐시 태그의 ID가 원래와 동일함을 확인했습니다. 시험 하니스의 Docker 태그·정리·비동기 Nginx reload 응답 대기 보완은 실제 helper의 안전 판정을 바꾸지 않았습니다. 두 로컬 복구 시험과 운영 백업의 조회형 검증은 서로 다른 범위이며, 서버의 helper 파일 설치·운영 이미지 교체·배포는 이번 작업에 포함하지 않았습니다. 운영 도구 선택 설치, 새 이미지 준비와 기존 주소의 공통 진입점 사전 검사 보강은 후속 작업입니다.
+<!-- 2026-10-20 hoyeon.han: 공통 진입점 검사 구현 전의 후속 작업 설명을 보존한다.
+기존 저장 형식의 실제 Docker 복구 회귀 37개 검사도 통과했습니다. 운영 도구 선택 설치, 새 이미지 준비와 기존 주소의 공통 진입점 사전 검사 보강은 후속 작업입니다.
+-->
+기존 저장 형식의 [실제 Docker 복구 회귀 37개 검사](oci-original-manual-results-20261020.md)도 같은 최종 helper로 모두 통과했습니다. [상세 회귀 결과](oci-original-manual-results-20261020.json)에서 실행 중 helper 원본 불변, 기존 업무파일 9개 불변과 시험 자원 정리를 재확인했습니다. 캐시 이미지 태그·ID의 명시적 보존 대조는 새 partial OCI 형식의 39개 검사에만 포함됩니다. 기존 형식의 37개 검사와 구분하여, 모든 시험 종료 후 별도 Docker CLI 조회에서 기존 네 캐시 태그의 ID가 원래와 동일함을 확인했습니다. 시험 하니스의 Docker 태그·정리·비동기 Nginx reload 응답 대기 보완은 실제 helper의 안전 판정을 바꾸지 않았습니다. 두 로컬 복구 시험과 운영 백업의 조회형 검증은 서로 다른 범위이며, 서버의 helper 파일 설치·운영 이미지 교체·배포는 이번 작업에 포함하지 않았습니다. 로컬에 추가한 공통 진입점 검사는 [운영 안내](OPERATIONS.md#운영-배포-전-남은-진입점-전환검사)를 따릅니다. 운영 도구 선택 설치·새 이미지 준비·기존 주소 전환은 후속 운영 작업입니다.
 
 <!-- 2026-10-19 hoyeon.han: 환경값을 재해석하지 않는 Compose raw env_file 지원 버전을 기록한다. -->
 복구 Compose는 실제 환경값의 `$`·따옴표를 보존하기 위해 `env_file`의 `format: raw`를 사용합니다. Docker Compose 2.30.0 이상이 필요하며, 운영자가 확인한 서버 버전은 5.0.0입니다. 실제 실행 전 Compose 렌더 검사를 통과해야 합니다. [Docker 공식 설명](https://docs.docker.com/reference/compose-file/services/#format)
@@ -93,7 +96,10 @@
 이번 OCI 검증에서는 서버에 저장된 기존 helper를 수정본으로 교체하지 않았고 `rollback-oracle.sh`도 아직 설치되지 않았습니다. 승인된 helper·배포·롤백 도구의 선택 설치와 해시 확인은 이후 운영 일정에 진행해야 합니다. 조회형 재검증의 통과가 아래 명령의 설치 완료나 기존 주소의 무인증 접근 차단 검증을 뜻하지 않습니다.
 
 <!-- 2026-10-19 hoyeon.han: 검사 전 운영 Compose를 새 파일로 미리 교체하는 실수를 방지한다. -->
-운영 반영 시에는 검토한 `scripts/release_snapshot.py`, `rollback-oracle.sh`, `deploy-oracle.sh`만 선택적으로 가져옵니다. 기존 `docker-compose.cloud.yml`과 `.env`의 API 키·DB·업무파일을 새 체크아웃으로 덮어쓰지 않습니다. Compose는 배포 스크립트가 검증·백업 후 교체합니다. 인증 설정은 기존 `.env`의 API 키를 유지하면서 추가합니다.
+<!-- 2026-10-20 hoyeon.han: 공통 검사 추가 전의 도구 목록을 보존한다.
+운영 반영 시에는 검토한 scripts/release_snapshot.py, rollback-oracle.sh, deploy-oracle.sh만 선택적으로 가져옵니다.
+-->
+운영 반영 시에는 검토한 `scripts/release_snapshot.py`, `scripts/deployment_preflight.py`, `rollback-oracle.sh`, `deploy-oracle.sh`를 같은 버전으로 선택적으로 가져옵니다. 기존 `docker-compose.cloud.yml`과 `.env`의 API 키·DB·업무파일을 새 체크아웃으로 덮어쓰지 않습니다. Compose는 배포 스크립트가 검증·백업 후 교체합니다. 인증 설정은 기존 `.env`의 API 키를 유지하면서 추가합니다. 배포 전 세 회계 주소의 활성 설정과 기존 주소의 실제 차단·리다이렉트가 공통 검사를 통과해야 합니다.
 
 <!-- 2026-10-19 hoyeon.han: 변수 할당을 사용하던 기존 안내를 보존한다. 실행 예시는 아래 절대경로 명령이다.
 ```bash
@@ -148,8 +154,11 @@ cd /home/ubuntu/sollume-finance
 
 이 명령은 **실제 배포 명령**입니다. 백업 점검용으로 실행하지 않습니다. 내부 `manual-prepare --check-current`가 원본 세 파일과 현재 실제 이미지·명령·데이터 마운트·자원 제한·계정 상태를 대조한 뒤 비공개 복구 정보를 작성합니다. 현재 설정이 백업과 다르면 이미지 pull과 서비스 교체 전에 멈춥니다. 원래 Compose의 문자열·빈 명령 표현을 실제 명령과 단순 비교하던 `capture`는 이 경로에서 실행하지 않습니다.
 
-<!-- 2026-10-19 hoyeon.han: 배포 사전 검사의 기존 진입점 확인 한계를 기록한다. -->
+<!-- 2026-10-20 hoyeon.han: 공통 검사 추가 전의 한계를 이력으로 보존한다.
+2026-10-19 hoyeon.han: 배포 사전 검사의 기존 진입점 확인 한계를 기록한다.
 **현재 배포 성공만으로 기존 주소의 무인증 접근 차단은 보장되지 않습니다.** `manual-prepare --check-current`는 위 백업·실행 상태 대조이며, 전달한 Nginx 사이트의 누락 여부나 기존 DuckDNS 프록시의 차단까지 확인하지 않습니다. `_blocked_sites(False)`는 실제 롤백의 차단 검사입니다. 따라서 운영 배포 전 기존 두 회계 DuckDNS를 새 주소로 이동시키거나 차단하도록 전환하고 외부에서 확인해야 하며, 배포용 공통 진입점 사전 검사도 보강·검증해야 합니다. office1 도메인 준비 작업에서는 이 보강이나 운영 전환을 수행하지 않았습니다. 이 조건을 해소하기 전에는 위 배포 명령을 실행하지 않습니다.
+-->
+로컬 수정본은 `manual-prepare`와 별도로 공통 `ready`를 실행하며 세 회계 주소의 활성 설정과 기존 주소의 실제 차단·고정 리다이렉트를 검사합니다. 구버전의 공개 8501은 교체할 항목으로 표시하고, 교체 후 `verify`는 실제 포트 바인딩·호스트 수신과 미로그인 화면·다운로드 차단까지 요구합니다. 전체 과정은 [진입점 검사 범위](OPERATIONS.md#운영-배포-전-남은-진입점-전환검사)를 따릅니다. 운영의 기존 두 주소를 전환하거나 서버 도구를 설치한 상태는 아니므로 위 배포 명령을 지금 실행하지 않습니다.
 
 추가 DB 백업은 Ubuntu가 쓰도록 준비된 `database/backups/releases/` 아래에만 만듭니다. 상위 `database/backups`의 root 소유권과 기존 백업을 변경하지 않습니다. `sudo -v` 대신 실제 필요한 관리자 명령의 비대화식 권한을 사용하며, 비밀번호가 필요하면 서비스 변경 전에 중단합니다. 보관 원본 세 파일이 바뀌면 준비 정보를 그대로 재사용하지 않습니다.
 
@@ -250,11 +259,15 @@ sudo -n /home/ubuntu/sollume-finance/.venv-ops/bin/python /home/ubuntu/sollume-f
 
 ## 최초 준비 — 운영자가 나중에 실행
 
+<!-- 2026-10-20 hoyeon.han: 공통 검사 추가 전에는 아래 세 파일이었다.
 검토한 동일 버전의 다음 세 파일을 기존 운영 디렉토리에 설치합니다. 새 빈 디렉토리·빈 DB로 교체하지 않습니다.
+-->
+검토한 동일 버전의 다음 네 파일을 기존 운영 디렉토리에 설치합니다. 새 빈 디렉토리·빈 DB로 교체하지 않습니다.
 
 - `deploy-oracle.sh`
 - `rollback-oracle.sh`
 - `scripts/release_snapshot.py`
+- `scripts/deployment_preflight.py`
 
 ```bash
 cd "$HOME/sollume-finance"

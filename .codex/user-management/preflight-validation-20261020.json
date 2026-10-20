@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-10-20T03:55:36.735204+00:00",
+  "passed": true,
+  "scope": "승인된 로컬 배포 사전 검사 보강 및 검증",
+  "python_environment": ".venv311",
+  "sources": {
+    "scripts/deployment_preflight.py": "16a3921a6a9aa5eb33e24d7676ff96f164aa92699c4a127a0f567a720ddbfeea",
+    "scripts/release_snapshot.py": "a71eb446ad3433d19a4d2119cc711b3d6aad8752aad4df538c60da0a1358717a",
+    "deploy-oracle.sh": "b2661f399f2cdf3c493376e6b742ec25e9ee3c52969e9520a0f4ba225b1a512a",
+    ".codex/tests/test_deployment_preflight.py": "7052216f817eeff13a971f4f12600f68fdb5765f71ac6627eca27f55c2c8b80a",
+    ".codex/tests/test_manual_archive.py": "b742c421df2fb82da2515509ff362fa286ae38d336092f1fc2d8ca6dfdcc4cf6",
+    ".codex/tests/test_rollback.py": "7bd7b5ca233032391a2d6dc34fb71dd300b7e04a8d48dd55cab798a15583cf41",
+    ".codex/user-management/verify_deployment_preflight.py": "3b1908026f2d12b11b8cd4254e61c33954300b94d8e92da35a7c7d73e64ece44"
+  },
+  "pytest_suites": [
+    {
+      "report": "preflight-auth-regression-20261020.xml",
+      "passed": 240,
+      "skipped": 7
+    },
+    {
+      "report": "preflight-unit-regression-20261020.xml",
+      "passed": 155,
+      "skipped": 5
+    }
+  ],
+  "pytest_passed": 395,
+  "pytest_skipped": 12,
+  "new_preflight_unit_tests": 66,
+  "actual_docker": {
+    "report": "deployment-preflight-results.json",
+    "passed_checks": 15,
+    "requests": 84,
+    "source_unchanged": true,
+    "cleanup_complete": true
+  },
+  "preservation": {
+    "local_business_files": 9,
+    "files_unchanged": true,
+    "preexisting_container_states_unchanged": true,
+    "preexisting_container_count": 17,
+    "cached_image_tags_unchanged": true,
+    "cached_image_tag_count": 4
+  },
+  "production_accessed": false,
+  "production_deployed": false,
+  "limitations": [
+    "백엔드는 캐시된 Nginx의 합성 응답이다. 실제 직원 로그인·MFA 기능은 이 시험 범위가 아니다.",
+    "실제 Docker 게시 포트는 모두 loopback 고포트다. 어댑터가 fixture metadata만 논리 8501~8503으로 대응하며 ready의 옛 wildcard는 metadata로 재현했다.",
+    "macOS에 Linux ss가 없어 실제 Docker 바인딩을 ss 형식으로 변환했다. Linux ss 파싱과 거부 조건은 단위 테스트에서 검증한다.",
+    "nginx -T는 실제 컨테이너 결과를 원본과 대조한 뒤 fixture TLS·고포트·원본 경로만 논리 경로로 대응한다.",
+    "TLS는 fixture 자체 서명 CA로 검증하며 외부 DNS·운영 서버에 접속하지 않았다.",
+    "외부 DNS·Cloud 방화벽·운영 Linux 호스트에서의 실제 도달 가능성은 운영 전환 후 별도로 확인해야 한다."
+  ],
+  "intermediate_report": "deployment-preflight-before-final-freeze-results-20261020.json"
+}

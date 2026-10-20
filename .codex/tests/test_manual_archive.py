@@ -235,6 +235,8 @@ def shell_fixture(tmp_path):
   for name,port in {'sollume-app':8501,'sollume-api':8502,'sollume-auth':8503}.items()}}))
  helper=app/'scripts/release_snapshot.py'
  helper.write_text('import json,os,pathlib,sys\nwith pathlib.Path(os.environ["MANUAL_QA_CALLS"]).open("a") as log:log.write(json.dumps(["helper",*sys.argv[1:]])+"\\n")\nprint(json.dumps({"dry_run":True,"validated":True}))\nraise SystemExit(int(os.environ.get("MANUAL_QA_HELPER_STATUS","17")))\n')
+ # 2026-10-20 hoyeon.han: 공통 검사와 백업 준비 각각의 실패 순서를 실제 wrapper로 확인한다.
+ (app/'scripts/deployment_preflight.py').write_text('import json,os,pathlib,sys\nwith pathlib.Path(os.environ["MANUAL_QA_CALLS"]).open("a") as log:log.write(json.dumps(["preflight",*sys.argv[1:]])+"\\n")\nprint(json.dumps({"runtime_transition_required":False}))\nraise SystemExit(int(os.environ.get("MANUAL_QA_PREFLIGHT_STATUS","0")))\n')
  tool='''#!PYTHON
 import json,os,pathlib,shutil,sys
 name=pathlib.Path(sys.argv[0]).name
@@ -269,6 +271,92 @@ def test_deployment_manual_prepare_failure_prevents_pull_stop_run_up(tmp_path):
  assert {str(path):helper.sha(path) for path in (app/'.env',app/'docker-compose.cloud.yml',app/'database/users.db',app/'database/customer_master.db',*sites)}==before
  assert stat.S_IMODE((app/'database/backups').stat().st_mode)==0o755
  assert '압축 백업 또는 현재 실행 상태 검증에 실패' in result.stderr
+
+
+# 2026-10-20 hoyeon.han: 자동 snapshot과 압축 백업 모두 공통 검사 실패 뒤 외부 변경을 금지한다.
+@pytest.mark.parametrize('manual_backup',[False,True])
+def test_common_ingress_preflight_failure_prevents_both_backup_branches_and_pull(tmp_path,manual_backup):
+ app,backup,sites,calls,env=shell_fixture(tmp_path);helper=qa()
+ protected=(app/'.env',app/'docker-compose.cloud.yml',app/'database/users.db',app/'database/customer_master.db',*sites)
+ before={str(path):helper.sha(path) for path in protected}
+ env['MANUAL_QA_PREFLIGHT_STATUS']='19'
+ args=['bash',str(ROOT/'deploy-oracle.sh'),'--nginx-config',str(sites[0]),'--nginx-config',str(sites[1])]
+ if manual_backup:args+=['--backup-dir',str(backup)]
+ result=subprocess.run(args,env=env,capture_output=True,text=True,timeout=30)
+ observed=[json.loads(row) for row in calls.read_text().splitlines()]
+ assert result.returncode!=0 and '직접 포트 사전 검사 실패' in result.stderr
+ preflight=[row for row in observed if row[0]=='preflight']
+ assert len(preflight)==1 and preflight[0][1]=='ready'
+ assert all(str(site) in preflight[0] for site in sites)
+ assert not any(row[0]=='helper' for row in observed)
+ assert not any(row[0]=='docker' and any(value in row for value in ('pull','up','down','stop','run','rm','load','save')) for row in observed)
+ assert not any(row[0]=='sudo' and 'reload' in row for row in observed)
+ assert {str(path):helper.sha(path) for path in protected}==before
+ assert not list(app.glob('docker-compose.cloud.yml.preflight.*'))
+
+
+# 2026-10-20 hoyeon.han: 실제 셸의 교체 직전 재검사·교체 후 검사·완료 메시지 순서를 확인한다.
+@pytest.mark.parametrize('failure_stage',['second-ready','verify',None])
+def test_deployment_rechecks_policy_and_runtime_before_reporting_success(tmp_path,failure_stage):
+ app,backup,sites,calls,env=shell_fixture(tmp_path)
+ for name in ('users.db','customer_master.db'):
+  path=app/'database'/name;path.unlink()
+  with sqlite3.connect(path) as conn:conn.execute('CREATE TABLE synthetic(value TEXT)')
+ helper=qa();protected=(app/'.env',app/'database/users.db',app/'database/customer_master.db',*sites)
+ before={str(path):helper.sha(path) for path in protected}
+ (app/'scripts/release_snapshot.py').write_text(
+  'import json,os,pathlib,sys\n'
+  'with pathlib.Path(os.environ["MANUAL_QA_CALLS"]).open("a") as log:log.write(json.dumps(["helper",*sys.argv[1:]])+"\\n")\n'
+  'print(json.dumps({"release":str(pathlib.Path(sys.argv[sys.argv.index("--backup-dir")+1]))}))\n')
+ (app/'scripts/deployment_preflight.py').write_text(
+  'import json,os,pathlib,sys\n'
+  'log=pathlib.Path(os.environ["MANUAL_QA_CALLS"])\n'
+  'previous=[json.loads(row) for row in log.read_text().splitlines()]\n'
+  'with log.open("a") as stream:stream.write(json.dumps(["preflight",*sys.argv[1:]])+"\\n")\n'
+  'phase=sys.argv[1]\n'
+  'assert pathlib.Path(sys.argv[sys.argv.index("--compose-json")+1]).is_absolute()\n'
+  'if "--baseline" in sys.argv:assert pathlib.Path(sys.argv[sys.argv.index("--baseline")+1]).is_absolute()\n'
+  'second=any(row[:2]==["preflight","ready"] for row in previous)\n'
+  'failure=os.environ.get("MANUAL_QA_FAILURE_STAGE","")\n'
+  'print(json.dumps({"runtime_transition_required":True}))\n'
+  'raise SystemExit(21 if (failure=="verify" and phase=="verify") or (failure=="second-ready" and phase=="ready" and second) else 0)\n')
+ tool='''#!PYTHON
+import json,os,pathlib,shutil,sys
+name=pathlib.Path(sys.argv[0]).name
+with pathlib.Path(os.environ['MANUAL_QA_CALLS']).open('a') as log:log.write(json.dumps([name,*sys.argv[1:]])+'\\n')
+if name=='docker' and 'config' in sys.argv:
+ print(pathlib.Path(os.environ['MANUAL_QA_RENDERED']).read_text())
+elif name=='curl':
+ if '--resolve' in sys.argv:
+  print('403' if '/media/' in sys.argv[-1] else '401')
+ elif '-o' in sys.argv:
+  shutil.copyfile(os.environ['MANUAL_QA_RENDERED'],sys.argv[sys.argv.index('-o')+1])
+'''.replace('PYTHON',sys.executable)
+ for name in ('docker','curl','sudo'):(app.parent/'bin'/name).write_text(tool)
+ env['MANUAL_QA_FAILURE_STAGE']=failure_stage or ''
+ result=subprocess.run(['bash',str(ROOT/'deploy-oracle.sh'),'--backup-dir',str(backup),
+  '--nginx-config',str(sites[0]),'--nginx-config',str(sites[1])],env=env,capture_output=True,text=True,timeout=30)
+ observed=[json.loads(row) for row in calls.read_text().splitlines()]
+ checks=[(index,row) for index,row in enumerate(observed) if row[0]=='preflight']
+ assert [row[1] for _,row in checks][:2]==['ready','ready']
+ assert '--baseline' not in checks[0][1] and '--baseline' in checks[1][1]
+ pull=next(index for index,row in enumerate(observed) if row[0]=='docker' and 'pull' in row)
+ assert checks[0][0]<pull<checks[1][0]
+ renders=[index for index,row in enumerate(observed) if row[0]=='docker' and 'config' in row]
+ assert renders[0]<checks[0][0]<pull<renders[1]<checks[1][0]
+ if failure_stage=='second-ready':
+  assert result.returncode!=0 and len(checks)==2
+  assert not any(row[0]=='docker' and 'up' in row for row in observed)
+ else:
+  up=next(index for index,row in enumerate(observed) if row[0]=='docker' and 'up' in row)
+  reload=next(index for index,row in enumerate(observed) if row[0]=='sudo' and 'reload' in row)
+  assert len(checks)==3 and checks[2][1][1]=='verify' and '--baseline' in checks[2][1]
+  assert checks[1][0]<up<reload<checks[2][0]
+  assert len(renders)==3 and reload<renders[2]<checks[2][0]
+  assert (result.returncode==0)==(failure_stage is None)
+ assert ('배포 및 기본 접근 차단 검증 완료' in result.stdout)==(failure_stage is None)
+ assert {str(path):helper.sha(path) for path in protected}==before
+ assert not list(app.glob('docker-compose.cloud.yml.preflight.*'))
 
 
 def test_real_rollback_wrapper_dispatches_manual_backup_without_implicit_apply(tmp_path):
