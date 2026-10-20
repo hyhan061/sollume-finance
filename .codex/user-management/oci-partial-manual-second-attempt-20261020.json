@@ -1,0 +1,145 @@
+{
+  "started_at": "2026-10-20T02:22:46.287565+00:00",
+  "generated_at": "2026-10-20T02:23:34.191129+00:00",
+  "scope": "complete manual archive restore rehearsal",
+  "passed": false,
+  "image_archive_format": "partial-oci",
+  "check_count": 12,
+  "checks": [
+    {
+      "name": "actual_partial_oci_roots_match_inspected_container_ids",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_initial_acme_http200_body_matches_and_other_sites_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_gnu_tar_binary_used",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_gnu_root_dot_and_dot_slash_prefix_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_nonselected_virtualenv_symlink_and_past_backups_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_zero_length_wal_entry_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_plan_validated_without_docker_mutation",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_two_distinct_original_image_ids_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_prepare_idempotent",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_inspect_cmd_entrypoint_and_image_generate_restoration_compose",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_source_three_archives_unchanged_after_prepare",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_secure_acme200_root401_download401_and_other_sites_preserved",
+      "passed": false,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    }
+  ],
+  "latest_stage": "manual_secure_acme200_root401_download401_and_other_sites_preserved",
+  "helper_source_revision": "a71eb446ad3433d19a4d2119cc711b3d6aad8752aad4df538c60da0a1358717a",
+  "source_sha256": {
+    "scripts/release_snapshot.py": "a71eb446ad3433d19a4d2119cc711b3d6aad8752aad4df538c60da0a1358717a",
+    "deploy-oracle.sh": "cc5b05e4c55af6015d9278901525e2742ced0140fe58c7e0607902ae13eb0a4b",
+    "rollback-oracle.sh": "104d65b8f46a9f3673486c06216a64b9c1aa02ab5faa4c623701a62e4143fe60",
+    ".codex/user-management/verify_manual_archive.py": "b7e98e948314965fb8963647cdaf72d4b8d651ad4d4001b5a3b561a7d121fd30",
+    ".codex/tests/test_manual_archive.py": "f2c55964779420bdc78876e8f8cb5487f5a8dce047868e2b6ba0d710f96c3751"
+  },
+  "source_unchanged_during_run": true,
+  "original_nine_files_unchanged": true,
+  "cleanup_complete": true,
+  "production_deployed": false,
+  "diagnostics": [
+    {
+      "gnu_tar": "tar (GNU tar) 1.35",
+      "https_observations": [
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "f15cb9b761230345599d8cd79f9af901a9b2dac4a4edcae2dad5ccee07f7d8db"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 200,
+          "seconds": 0.008
+        }
+      ],
+      "http_observations": [
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "7af2807215f966761bc990250c35f66504a983ac20f9cce34aa8f4c4397f5dd5"
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "f15cb9b761230345599d8cd79f9af901a9b2dac4a4edcae2dad5ccee07f7d8db"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "7af2807215f966761bc990250c35f66504a983ac20f9cce34aa8f4c4397f5dd5"
+        }
+      ],
+      "docker_failures": [],
+      "saved_image_ids": [
+        "sha256:59e6afb9be68d054724b98ca7efb5bb48f454fa55b9ec3a6e8adbdaee7bded2f",
+        "sha256:ac2bff1f6421d5ead1d7060c865df49dd5b8fba1488898a4374ff726851524d0"
+      ]
+    }
+  ],
+  "exception_chain": [
+    {
+      "type": "AssertionError",
+      "message": "manual_secure_acme200_root401_download401_and_other_sites_preserved"
+    }
+  ],
+  "historical_parent_regression_reference": {
+    "historical": true,
+    "directly_executed_here": false,
+    "note": "이전 부모 에이전트의 240개 회귀·Python 3.12.13 보고 기록이며 이번 helper/시험 결과가 아니다. 현재 회귀는 별도 실행 보고서로 확인한다."
+  },
+  "limitations": [
+    "Nginx sudo 명령은 격리 컨테이너로 연결했고 nginx-T 파일경계는 원본사이트 메타데이터를 반환한다.",
+    "실제 upstream은 host.docker.internal의 고유 loopback 게시포트로 연결한다. 운영8501/8503은 사용하지 않는다.",
+    "TLS는 임시 자체서명 fixture CA이며 외부 도메인에는 연결하지 않는다.",
+    "운영의 원본 수동 3파일은 제공되지 않아 새로 만든 합성 백업으로만 검증했다.",
+    "운영자 private 로그인은 실제 구버전 UserDB 핸들러를 network-none 컨테이너에서 검증했다. 브라우저 GUI 검증은 수행하지 않았다."
+  ]
+}

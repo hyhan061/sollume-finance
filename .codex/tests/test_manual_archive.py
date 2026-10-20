@@ -42,6 +42,136 @@ def test_saved_images_can_be_two_distinct_ids_or_one_shared_id(duplicate_images)
   assert len(set(value.images))==(1 if duplicate_images else 2)
  finally:value.close()
 
+# 2026-10-20 hoyeon.han: 실제 운영과 같은 partial OCI 자료를 Docker 없이 만들어 안전 파싱 계약을 검증한다.
+def oci_members(value):
+ with tarfile.open(value.backup/'images.tar','r') as archive:
+  return {member.name:archive.extractfile(member).read() for member in archive if member.isfile()}
+
+def write_oci_members(helper,value,members):
+ with tarfile.open(value.backup/'images.tar','w',format=tarfile.GNU_FORMAT) as archive:
+  for name,data in members.items():helper.add_member(archive,name,data)
+ (value.backup/'images.tar').chmod(0o600)
+
+def replace_oci_root(helper,value,members,change):
+ old=value.partial_oci['roots'][0]['image_id'];root=json.loads(members['blobs/sha256/'+old[7:]])
+ change(root);raw=helper.canonical(root);new='sha256:'+helper.hashlib.sha256(raw).hexdigest()
+ members['blobs/sha256/'+new[7:]]=raw;members.pop('blobs/sha256/'+old[7:],None)
+ index=json.loads(members['index.json'])
+ for descriptor in index['manifests']:
+  if descriptor['digest']==old:descriptor.update(digest=new,size=len(raw))
+ members['index.json']=helper.canonical(index)
+ for record in value.containers:
+  if record['Image']==old:record['Image']=new
+ helper.write_private(value.backup/'containers.json',json.dumps(value.containers))
+
+@pytest.mark.parametrize('shared_index',[False,True])
+def test_partial_oci_plan_prepare_preserve_three_files_without_docker(shared_index):
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True,deduplicate=shared_index)
+ try:
+  members=oci_members(value);roots=value.partial_oci['roots']
+  assert len(set(value.images))==(1 if shared_index else 2)
+  assert 'index.json' in members and 'oci-layout' in members
+  for root in roots:
+   children=root['descriptor']['manifests']
+   assert children[0]['platform']=={'os':'linux','architecture':'arm64'}
+   assert all('blobs/sha256/'+children[index]['digest'][7:] in members for index in (0,2))
+   assert all('blobs/sha256/'+children[index]['digest'][7:] not in members for index in (1,3))
+  before=value.archive_hashes();runner=helper.RecordingRunner(value);manager=helper.manager(value,runner)
+  plan=manager.plan();prepared=manager.prepare();reused=manager.prepare()
+  assert plan['validated'] and plan['dry_run'] and prepared['prepared'] and reused['reused']
+  assert set(plan['images'])==set(value.images)
+  assert value.archive_hashes()==before and not runner.calls
+ finally:value.close()
+
+@pytest.mark.parametrize('artifact',['root','manifest','config','layer'])
+@pytest.mark.parametrize('mutation',['missing','corrupted'])
+def test_partial_oci_executable_chain_missing_or_changed_is_rejected(artifact,mutation):
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  root=value.partial_oci['roots'][0];digest={'root':root['image_id'],'manifest':root['runtime_digest'],
+   'config':root['config_digest'],'layer':root['layer_digests'][0]}[artifact]
+  members=oci_members(value);name='blobs/sha256/'+digest[7:]
+  if mutation=='missing':members.pop(name)
+  else:members[name]=b'X'+members[name][1:]
+  write_oci_members(helper,value,members);assert_offline_rejected(helper,value)
+ finally:value.close()
+
+@pytest.mark.parametrize('platform',[None,{}, {'os':'linux'}, {'architecture':'amd64'},
+ {'os':'unknown','architecture':'amd64'},{'os':'linux','architecture':'unknown'},
+ {'os':'linux','architecture':'arm64'},{'os':'linux','architecture':'arm64','variant':'v7'}])
+def test_partial_oci_missing_same_or_ambiguous_platform_is_rejected(platform):
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  members=oci_members(value)
+  def change(root):
+   if platform is None:root['manifests'][1].pop('platform')
+   else:root['manifests'][1]['platform']=platform
+  replace_oci_root(helper,value,members,change);write_oci_members(helper,value,members)
+  assert_offline_rejected(helper,value)
+ finally:value.close()
+
+@pytest.mark.parametrize('mutation',['wrong-platform','missing-marker','wrong-marker','bad-annotations','bad-annotation-value'])
+def test_partial_oci_invalid_attestation_descriptor_is_rejected(mutation):
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  members=oci_members(value)
+  def change(root):
+   child=root['manifests'][2 if mutation=='wrong-platform' else 3]
+   if mutation=='wrong-platform':child['platform']={'os':'linux','architecture':'arm64'}
+   elif mutation=='missing-marker':child['annotations'].pop('vnd.docker.reference.type')
+   elif mutation=='wrong-marker':child['annotations']['vnd.docker.reference.type']='not-attestation'
+   elif mutation=='bad-annotations':child['annotations']=[]
+   else:child['annotations']['vnd.docker.reference.type']=True
+  replace_oci_root(helper,value,members,change);write_oci_members(helper,value,members)
+  assert_offline_rejected(helper,value)
+ finally:value.close()
+
+@pytest.mark.parametrize('mutation',['sha','size','boolean-size','invalid-digest'])
+def test_partial_oci_foreign_present_blob_or_descriptor_corruption_is_rejected(mutation):
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  root=value.partial_oci['roots'][0];members=oci_members(value)
+  name='blobs/sha256/'+root['foreign_descriptor']['digest'][7:];members[name]=root['foreign_raw']
+  if mutation=='sha':members[name]=b'X'+members[name][1:]
+  else:
+   def change(node):
+    child=node['manifests'][1]
+    if mutation=='size':child['size']+=1
+    elif mutation=='boolean-size':child['size']=True
+    else:child['digest']='sha256:'+'g'*64
+   replace_oci_root(helper,value,members,change)
+  write_oci_members(helper,value,members);assert_offline_rejected(helper,value)
+ finally:value.close()
+
+def test_partial_oci_present_valid_foreign_descriptor_is_hash_checked_then_excluded():
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  members=oci_members(value)
+  for root in value.partial_oci['roots']:
+   members['blobs/sha256/'+root['foreign_descriptor']['digest'][7:]]=root['foreign_raw']
+  write_oci_members(helper,value,members);before=value.archive_hashes();runner=helper.RecordingRunner(value)
+  assert helper.manager(value,runner).plan()['validated']
+  assert not runner.calls and value.archive_hashes()==before
+ finally:value.close()
+
+def test_partial_oci_duplicate_executable_selection_is_rejected():
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  members=oci_members(value)
+  replace_oci_root(helper,value,members,lambda root:root['manifests'].append(copy.deepcopy(root['manifests'][0])))
+  write_oci_members(helper,value,members);assert_offline_rejected(helper,value)
+ finally:value.close()
+
+def test_partial_oci_unused_valid_config_cannot_be_silently_excluded():
+ helper=qa();value=helper.SyntheticArchive(partial_oci=True)
+ try:
+  members=oci_members(value);records=json.loads(members['manifest.json']);extra=copy.deepcopy(records[0])
+  config=json.loads(members[extra['Config']]);config['config']['Labels']={'fixture':'unreferenced valid config'}
+  raw=helper.canonical(config);name='blobs/sha256/'+helper.hashlib.sha256(raw).hexdigest();members[name]=raw
+  extra['Config']=name;extra['RepoTags']=[];records.append(extra);members['manifest.json']=helper.canonical(records)
+  write_oci_members(helper,value,members);assert_offline_rejected(helper,value)
+ finally:value.close()
+
 @pytest.mark.parametrize('bad_name',['../outside','./../outside','/etc/outside','one/../../outside'])
 def test_tar_path_escape_is_rejected_before_any_docker_command(fixture,bad_name):
  helper,value=fixture;value.members.append((bad_name,b'x',tarfile.REGTYPE,''));value.rebuild_application()

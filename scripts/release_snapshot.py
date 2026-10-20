@@ -1206,14 +1206,41 @@ class ManualBackupManager(ReleaseManager):
     def _image_archive(self, identifiers):
         # 2026-10-19 hoyeon.han: classic config ID와 containerd OCI manifest ID를 모두 실제 해시 체인으로 검증합니다.
         metadata, configs = {}, {}
+        # 2026-10-20 hoyeon.han: 잘못된 JSON·descriptor 자료형을 비밀 원문 없는 검증 오류로 통일합니다.
+        def read_json(payload, expected):
+            try:
+                value = json.loads(payload)
+            except (ValueError, UnicodeError) as exc:
+                raise SafetyError('이미지 메타데이터의 JSON 형식이 다릅니다.') from exc
+            if not isinstance(value, expected):
+                raise SafetyError('이미지 메타데이터의 자료형이 다릅니다.')
+            return value
+
+        def reference(value):
+            if not isinstance(value, dict):
+                raise SafetyError('OCI 참조 descriptor의 자료형이 다릅니다.')
+            digest, size = value.get('digest'), value.get('size')
+            if (not isinstance(digest, str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', digest)
+                    or type(size) is not int or size < 0):
+                raise SafetyError('OCI 참조 descriptor의 식별자·크기가 다릅니다.')
+            return digest, size
+
         with _manual_tar(self.backup_dir / 'images.tar', MANUAL_MAX_IMAGES) as (archive, members):
-            records = json.loads(_manual_read(archive, members, 'manifest.json', 4 * 1024 ** 2))
+            # 2026-10-20 hoyeon.han: 목록·Config 구조를 검사한 뒤 실행 플랫폼 집합을 만듭니다.
+            # records = json.loads(_manual_read(archive, members, 'manifest.json', 4 * 1024 ** 2))
+            records = read_json(_manual_read(archive, members, 'manifest.json', 4 * 1024 ** 2), list)
             if not isinstance(records, list) or not records:
                 raise SafetyError('Docker save manifest가 없습니다.')
             for entry in records:
-                config = _manual_read(archive, members, _manual_name(entry['Config']), 8 * 1024 ** 2)
-                config_id = 'sha256:' + hashlib.sha256(config).hexdigest(); info = json.loads(config)
+                # config = _manual_read(archive, members, _manual_name(entry['Config']), 8 * 1024 ** 2)
+                # config_id = 'sha256:' + hashlib.sha256(config).hexdigest(); info = json.loads(config)
+                if not isinstance(entry, dict): raise SafetyError('Docker save 항목의 자료형이 다릅니다.')
+                config = _manual_read(archive, members, _manual_name(entry.get('Config')), 8 * 1024 ** 2)
+                config_id = 'sha256:' + hashlib.sha256(config).hexdigest(); info = read_json(config, dict)
+                if not isinstance(info.get('rootfs', {}), dict): raise SafetyError('이미지 rootfs 형식이 다릅니다.')
                 layers = entry.get('Layers', []); digests = info.get('rootfs', {}).get('diff_ids', [])
+                if not isinstance(layers, list) or not isinstance(digests, list):
+                    raise SafetyError('이미지 계층 목록의 자료형이 다릅니다.')
                 if len(layers) != len(digests): raise SafetyError('이미지 계층 목록이 다릅니다.')
                 raw_layers = []
                 for layer, expected in zip(layers, digests):
@@ -1238,31 +1265,60 @@ class ManualBackupManager(ReleaseManager):
                             digest.update(block)
                         if selected is not stream: selected.close()
                     if 'sha256:' + digest.hexdigest() != expected: raise SafetyError('이미지 계층 내용 해시가 다릅니다.')
-                if not info.get('architecture') or info.get('os') != 'linux': raise SafetyError('지원하지 않는 이미지 플랫폼입니다.')
+                # if not info.get('architecture') or info.get('os') != 'linux': raise SafetyError('지원하지 않는 이미지 플랫폼입니다.')
+                if not isinstance(info.get('architecture'), str) or not info['architecture'] or info.get('os') != 'linux':
+                    raise SafetyError('지원하지 않는 이미지 플랫폼입니다.')
                 record = {'architecture': info['architecture'], 'os': info['os'], 'size': len(config), 'layers': raw_layers}
                 if config_id in configs and configs[config_id] != record: raise SafetyError('이미지 Config가 중복되며 내용이 다릅니다.')
                 configs[config_id] = record
             used = set()
+            # 2026-10-20 hoyeon.han: variant나 태그 대신 실제 검증한 실행 Config의 OS·architecture만 기준으로 삼습니다.
+            platforms = {(value['os'], value['architecture']) for value in configs.values()}
             def resolve(identifier, seen):
                 if identifier in seen or len(seen) > 4: raise SafetyError('OCI 이미지 참조가 순환합니다.')
                 if identifier in configs: return identifier
                 if not re.fullmatch(r'sha256:[a-f0-9]{64}', identifier): raise SafetyError('OCI 이미지 식별자가 다릅니다.')
                 value = _manual_read(archive, members, 'blobs/sha256/' + identifier[7:], 8 * 1024 ** 2)
                 if 'sha256:' + hashlib.sha256(value).hexdigest() != identifier: raise SafetyError('OCI manifest 내용 해시가 다릅니다.')
-                descriptor = json.loads(value)
+                # descriptor = json.loads(value)
+                descriptor = read_json(value, dict)
                 if descriptor.get('schemaVersion') != 2: raise SafetyError('OCI manifest 형식을 지원하지 않습니다.')
                 if 'manifests' in descriptor:
                     resolved = []
+                    if not isinstance(descriptor['manifests'], list):
+                        raise SafetyError('OCI 하위 manifest 목록의 자료형이 다릅니다.')
                     for child in descriptor['manifests']:
-                        child_id = child.get('digest', '')
-                        if not re.fullmatch(r'sha256:[a-f0-9]{64}', child_id): raise SafetyError('OCI 하위 식별자가 다릅니다.')
-                        payload = _manual_read(archive, members, 'blobs/sha256/' + child_id[7:], 8 * 1024 ** 2)
-                        if child.get('size') != len(payload) or 'sha256:' + hashlib.sha256(payload).hexdigest() != child_id:
+                        # 2026-10-20 hoyeon.han: Docker save가 생략한 비실행 플랫폼은 descriptor 검증 후에만 제외합니다.
+                        # child_id = child.get('digest', '')
+                        # if not re.fullmatch(r'sha256:[a-f0-9]{64}', child_id): raise SafetyError('OCI 하위 식별자가 다릅니다.')
+                        # payload = _manual_read(archive, members, 'blobs/sha256/' + child_id[7:], 8 * 1024 ** 2)
+                        # if child.get('size') != len(payload) or 'sha256:' + hashlib.sha256(payload).hexdigest() != child_id:
+                        #     raise SafetyError('OCI 하위 manifest의 크기·해시가 다릅니다.')
+                        # platform = child.get('platform') or {}
+                        # if child.get('annotations', {}).get('vnd.docker.reference.type') == 'attestation-manifest':
+                        #     if platform.get('os') != 'unknown' or platform.get('architecture') != 'unknown':
+                        #         raise SafetyError('OCI 증명 자료의 플랫폼이 다릅니다.')
+                        #     continue
+                        child_id, child_size = reference(child)
+                        platform, annotations = child.get('platform', {}), child.get('annotations', {})
+                        if not isinstance(platform, dict) or not isinstance(annotations, dict):
+                            raise SafetyError('OCI 플랫폼·주석의 자료형이 다릅니다.')
+                        if (any(key in platform and (not isinstance(platform[key], str) or not platform[key])
+                                for key in ('os', 'architecture'))
+                                or any(not isinstance(key, str) or not isinstance(value, str) for key, value in annotations.items())):
+                            raise SafetyError('OCI 플랫폼·주석의 값이 다릅니다.')
+                        pair = (platform.get('os'), platform.get('architecture'))
+                        attestation = annotations.get('vnd.docker.reference.type') == 'attestation-manifest'
+                        if attestation and pair != ('unknown', 'unknown'):
+                            raise SafetyError('OCI 증명 자료의 플랫폼이 다릅니다.')
+                        foreign = all(pair) and 'unknown' not in pair and pair not in platforms
+                        blob_name = 'blobs/sha256/' + child_id[7:]
+                        if blob_name not in members and (foreign or attestation):
+                            continue
+                        payload = _manual_read(archive, members, blob_name, 8 * 1024 ** 2)
+                        if child_size != len(payload) or 'sha256:' + hashlib.sha256(payload).hexdigest() != child_id:
                             raise SafetyError('OCI 하위 manifest의 크기·해시가 다릅니다.')
-                        platform = child.get('platform') or {}
-                        if child.get('annotations', {}).get('vnd.docker.reference.type') == 'attestation-manifest':
-                            if platform.get('os') != 'unknown' or platform.get('architecture') != 'unknown':
-                                raise SafetyError('OCI 증명 자료의 플랫폼이 다릅니다.')
+                        if foreign or attestation:
                             continue
                         selected = resolve(child_id, seen | {identifier})
                         if platform and (platform.get('architecture') != configs[selected]['architecture'] or platform.get('os') != configs[selected]['os']):
@@ -1270,10 +1326,15 @@ class ManualBackupManager(ReleaseManager):
                         resolved.append(selected)
                     if len(resolved) != 1: raise SafetyError('단일 실행 플랫폼의 OCI 백업만 지원합니다.')
                     return resolved[0]
-                config = descriptor.get('config') or {}; config_id = config.get('digest')
-                if config_id not in configs or config.get('size') != configs[config_id]['size']:
+                # 2026-10-20 hoyeon.han: 선택된 실행 manifest의 Config·계층도 bool 크기를 포함한 잘못된 descriptor를 거절합니다.
+                # config = descriptor.get('config') or {}; config_id = config.get('digest')
+                # if config_id not in configs or config.get('size') != configs[config_id]['size']:
+                config_id, config_size = reference(descriptor.get('config'))
+                if config_id not in configs or config_size != configs[config_id]['size']:
                     raise SafetyError('OCI manifest의 Config 연결이 다릅니다.')
-                if [(layer.get('digest'), layer.get('size')) for layer in descriptor.get('layers', [])] != configs[config_id]['layers']:
+                # if [(layer.get('digest'), layer.get('size')) for layer in descriptor.get('layers', [])] != configs[config_id]['layers']:
+                if not isinstance(descriptor.get('layers', []), list): raise SafetyError('OCI manifest 계층 목록의 자료형이 다릅니다.')
+                if [reference(layer) for layer in descriptor.get('layers', [])] != configs[config_id]['layers']:
                     raise SafetyError('OCI manifest의 계층 연결이 다릅니다.')
                 return config_id
             for identifier in identifiers:

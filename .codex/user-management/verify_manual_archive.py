@@ -29,9 +29,96 @@ def add_member(archive,name,data=b'',kind=tarfile.REGTYPE,linkname=''):
  member.linkname=linkname;member.size=len(data) if kind==tarfile.REGTYPE else 0
  archive.addfile(member,io.BytesIO(data) if member.size else None)
 
+# 2026-10-20 hoyeon.han: 실행 플랫폼만 저장된 containerd 다중 아키텍처 백업을 합성·실제 fixture에서 재현한다.
+def partial_oci_archive(path,identifiers,reference_prefix,platforms=None):
+ """신뢰하는 로컬 fixture tar만 변환한다. 운영 백업·캐시 이미지·Docker에는 접근하지 않는다."""
+ path=Path(path);temporary=path.with_name('images-partial-'+secrets.token_hex(6)+'.tar')
+ media={'index':'application/vnd.oci.image.index.v1+json','manifest':'application/vnd.oci.image.manifest.v1+json',
+        'config':'application/vnd.oci.image.config.v1+json','layer':'application/vnd.oci.image.layer.v1.tar'}
+ blobs={};aliases={};roots=[];mapped={};manifest=[];tags=[]
+ def blob(data):
+  digest='sha256:'+hashlib.sha256(data).hexdigest();blobs['blobs/sha256/'+digest[7:]]=data
+  return digest
+ def descriptor(data,kind,**extra):return {'mediaType':media[kind],'digest':blob(data),'size':len(data),**extra}
+ try:
+  with tarfile.open(path,'r') as source:
+   members={member.name:member for member in source.getmembers()}
+   records=json.load(source.extractfile('manifest.json'));configs={}
+   for record in records:
+    raw=source.extractfile(record['Config']).read();identifier='sha256:'+hashlib.sha256(raw).hexdigest()
+    configs[identifier]=(record,raw,json.loads(raw))
+   def resolve(identifier,wanted,trail=()):
+    if identifier in configs:
+     info=configs[identifier][2]
+     return identifier if wanted is None or (info.get('os'),info.get('architecture'))==wanted else None
+    if identifier in trail:return None
+    name='blobs/sha256/'+identifier.removeprefix('sha256:')
+    if name not in members:return None
+    node=json.load(source.extractfile(name))
+    if 'config' in node:return resolve(node['config']['digest'],wanted,(*trail,identifier))
+    candidates={resolved for child in node.get('manifests',[])
+                if child.get('annotations',{}).get('vnd.docker.reference.type')!='attestation-manifest'
+                if (resolved:=resolve(child['digest'],wanted,(*trail,identifier))) is not None}
+    if len(candidates)!=1:raise ValueError('fixture의 실행 Config를 한 개로 정할 수 없습니다.')
+    return candidates.pop()
+   for position,identifier in enumerate(dict.fromkeys(identifiers)):
+    wanted=(platforms or {}).get(identifier);selected=resolve(identifier,wanted)
+    if selected is None:raise ValueError('fixture의 실행 이미지를 찾을 수 없습니다.')
+    record,raw,info=configs[selected];layers=[];layer_names=[]
+    for name in record.get('Layers',[]):
+     digest=hashlib.sha256();size=0
+     with source.extractfile(name) as stream:
+      head=stream.read(2);digest.update(head);size=len(head)
+      while chunk:=stream.read(1024*1024):digest.update(chunk);size+=len(chunk)
+     target='blobs/sha256/'+digest.hexdigest();aliases[target]=name;layer_names.append(target)
+     layers.append({'mediaType':media['layer']+('+gzip' if head==b'\x1f\x8b' else ''),'digest':'sha256:'+digest.hexdigest(),'size':size})
+    config=descriptor(raw,'config');config_name='blobs/sha256/'+config['digest'][7:]
+    runtime=canonical({'schemaVersion':2,'mediaType':media['manifest'],'config':config,'layers':layers})
+    platform={'os':info['os'],'architecture':info['architecture']}
+    running=descriptor(runtime,'manifest',platform=platform)
+    foreign_platform={'os':info['os'],'architecture':'amd64' if info['architecture']!='amd64' else 'arm64'}
+    foreign=canonical({'schemaVersion':2,'mediaType':media['manifest'],'config':{'digest':'sha256:'+'f'*64,'size':1},'layers':[],'fixture':selected})
+    foreign_descriptor={'mediaType':media['manifest'],'digest':'sha256:'+hashlib.sha256(foreign).hexdigest(),'size':len(foreign),'platform':foreign_platform}
+    attestation_config=descriptor(b'{}','config')
+    statement=canonical({'_type':'https://in-toto.io/Statement/v0.1','subject':[{'name':'fixture','digest':{'sha256':running['digest'][7:]}}]})
+    statement_layer={'mediaType':'application/vnd.in-toto+json','digest':blob(statement),'size':len(statement)}
+    attestation=canonical({'schemaVersion':2,'mediaType':media['manifest'],'config':attestation_config,'layers':[statement_layer]})
+    attested=descriptor(attestation,'manifest',platform={'os':'unknown','architecture':'unknown'},
+      annotations={'vnd.docker.reference.type':'attestation-manifest','vnd.docker.reference.digest':running['digest']})
+    absent_attestation=canonical({'schemaVersion':2,'fixture':'foreign-attestation','subject':foreign_descriptor['digest']})
+    absent={'mediaType':media['manifest'],'digest':'sha256:'+hashlib.sha256(absent_attestation).hexdigest(),'size':len(absent_attestation),
+      'platform':{'os':'unknown','architecture':'unknown'},'annotations':{'vnd.docker.reference.type':'attestation-manifest','vnd.docker.reference.digest':foreign_descriptor['digest']}}
+    root={'schemaVersion':2,'mediaType':media['index'],'manifests':[running,foreign_descriptor,attested,absent]}
+    root_data=canonical(root);root_id=blob(root_data);mapped[identifier]=root_id
+    # 2026-10-20 hoyeon.han: containerd에 저장한 이름과 Docker CLI가 조회·삭제하는 정규 이름을 일치시킨다.
+    # tag=reference_prefix+'-'+str(position)+':fixture';tags.append(tag)
+    tag='docker.io/'+reference_prefix+'-'+str(position)+':fixture';tags.append(tag)
+    roots.append({'source_id':identifier,'image_id':root_id,'descriptor':root,'tag':tag,
+      'runtime_digest':running['digest'],'config_digest':config['digest'],'layer_digests':[layer['digest'] for layer in layers],
+      'foreign_descriptor':foreign_descriptor,'foreign_raw':foreign,'attestation_digest':attested['digest']})
+    manifest.append({'Config':config_name,'RepoTags':[tag],'Layers':layer_names})
+   root_descriptors=[{'mediaType':media['index'],'digest':root['image_id'],'size':len(blobs['blobs/sha256/'+root['image_id'][7:]]),
+     'annotations':{'io.containerd.image.name':root['tag'],'org.opencontainers.image.ref.name':root['tag']}} for root in roots]
+   blobs['index.json']=canonical({'schemaVersion':2,'mediaType':media['index'],'manifests':root_descriptors})
+   blobs['oci-layout']=b'{"imageLayoutVersion":"1.0.0"}';blobs['manifest.json']=canonical(manifest)
+   with tarfile.open(temporary,'w',format=tarfile.GNU_FORMAT) as output:
+    for member in source.getmembers():
+     # 2026-10-20 hoyeon.han: 이전 저장소 태그 메타데이터도 로드 대상에서 제외한다.
+     # if member.name in blobs or member.name in aliases:continue
+     if member.name in blobs or member.name in aliases or member.name=='repositories':continue
+     output.addfile(member,source.extractfile(member) if member.isfile() else None)
+    for name,origin in aliases.items():
+     member=copy.copy(members[origin]);member.name=name;output.addfile(member,source.extractfile(origin))
+    for name,data in blobs.items():add_member(output,name,data)
+  temporary.chmod(0o600);temporary.replace(path)
+ finally:temporary.unlink(missing_ok=True)
+ return {'images':mapped,'roots':roots,'tags':tags}
+
 class SyntheticArchive:
  """Docker 없이 생성하는 GNU 저장 형식의 합성 3파일과 실제 SQLite 자료."""
- def __init__(self,parent=None,*,deduplicate=False,empty_customer=False):
+ # 2026-10-20 hoyeon.han: 기존 classic fixture를 유지하며 partial OCI를 명시적으로 선택한다.
+ # def __init__(self,parent=None,*,deduplicate=False,empty_customer=False):
+ def __init__(self,parent=None,*,deduplicate=False,empty_customer=False,partial_oci=False):
   self.root=Path(tempfile.mkdtemp(prefix='sollume-manual-mock-',dir=parent or '/private/tmp'))
   self.root.chmod(0o700);self.app=self.root/'app';self.app.mkdir(mode=0o700)
   self.backup=self.app/'database/backups/releases/manual-before-auth-fixture'
@@ -61,6 +148,13 @@ class SyntheticArchive:
   for role in ('sollume-app','sollume-api'):
    cmd=['streamlit','run','Home.py','--server.address=0.0.0.0','--server.port=8501'] if role=='sollume-app' else ['gunicorn','--bind','0.0.0.0:8502','--workers','1','--pythonpath','/app/Src','api_server:app']
    config={'architecture':'arm64','os':'linux','config':{'WorkingDir':'/app','Env':['PATH=/usr/local/bin:/usr/bin:/bin'],'Entrypoint':None,'Cmd':cmd if not deduplicate else ['streamlit','run','Home.py']},'rootfs':{'type':'layers','diff_ids':[]}}
+   # 2026-10-20 hoyeon.han: partial OCI의 실행 layer도 SHA와 diff_id가 맞는 실제 tar로 작성한다.
+   if partial_oci:
+    output=io.BytesIO()
+    with tarfile.open(fileobj=output,mode='w') as layer:add_member(layer,'fixture.txt',b'shared' if deduplicate else role.encode())
+    config['rootfs']['diff_ids']=['sha256:'+hashlib.sha256(output.getvalue()).hexdigest()]
+    if not hasattr(self,'fixture_layers'):self.fixture_layers={}
+    self.fixture_layers[config['rootfs']['diff_ids'][0]]=output.getvalue()
    raw=canonical(config);identifier='sha256:'+hashlib.sha256(raw).hexdigest()
    self.image_configs.append((identifier,raw,config));self.images.append(identifier)
   self.project='sollume-manual-fixture'
@@ -102,10 +196,22 @@ class SyntheticArchive:
    for identifier,raw,config in self.image_configs:
     if identifier in seen:continue
     seen.add(identifier);name=identifier.removeprefix('sha256:')+'.json'
-    add_member(archive,name,raw);manifest.append({'Config':name,'RepoTags':[],'Layers':[]})
+    # 2026-10-20 hoyeon.han: 기존 무계층 classic 형식을 보존하고 OCI 선택 시 실행 계층을 포함한다.
+    # add_member(archive,name,raw);manifest.append({'Config':name,'RepoTags':[],'Layers':[]})
+    layers=[]
+    for digest in config['rootfs']['diff_ids']:
+     layer_name=digest[7:]+'/layer.tar';add_member(archive,layer_name,self.fixture_layers[digest]);layers.append(layer_name)
+    add_member(archive,name,raw);manifest.append({'Config':name,'RepoTags':[],'Layers':layers})
    add_member(archive,'manifest.json',canonical(manifest))
   write_private(self.backup/'containers.json',json.dumps(self.containers))
   for path in self.backup.iterdir():path.chmod(0o600)
+  # 2026-10-20 hoyeon.han: 실행 Config ID 대신 다중 플랫폼 루트 index ID를 containers.json에 보존한다.
+  if partial_oci:
+   self.partial_oci=partial_oci_archive(self.backup/'images.tar',self.images,self.project+'/partial')
+   self.images=[self.partial_oci['images'][identifier] for identifier in self.images]
+   self.image_configs=[(self.images[index],raw,config) for index,(_,raw,config) in enumerate(self.image_configs)]
+   for index,record in enumerate(self.containers):record['Image']=self.images[index]
+   write_private(self.backup/'containers.json',json.dumps(self.containers))
   self.original_hashes=self.archive_hashes()
  def rebuild_application(self):
   with tarfile.open(self.backup/'application.tar.gz','w:gz',format=tarfile.GNU_FORMAT) as archive:
@@ -184,7 +290,9 @@ class ManualLocalRunner:
  def internal_status(self,*args,**kwargs):return self.base.internal_status(*args,**kwargs)
 
 
-def docker_fixture_type():
+# 2026-10-20 hoyeon.han: classic 전체 복구를 기본으로 유지하고 실제 partial OCI 복구를 별도 선택한다.
+# def docker_fixture_type():
+def docker_fixture_type(partial_oci=False):
  base=existing_qa()
  class ManualFixture(base.Fixture):
   def __init__(self):
@@ -209,6 +317,10 @@ def docker_fixture_type():
    (self.app/'nginx-runtime.site').write_text(content)
   def prepare_manual_files(self):
    super().prepare()
+   # 2026-10-20 hoyeon.han: fixture 전용 index 로드 전 원래 캐시 태그와 ID를 읽기 전용으로 기록한다.
+   if partial_oci:
+    self.cache_before={name:base.image_id(name) for name in ('sollume-finance-sollume-app:latest',
+     'sollume-finance-sollume-api:latest','sollume-finance-security:venv-test','nginx:alpine')}
    compose=json.loads((self.app/'docker-compose.cloud.yml').read_text())
    compose['services']['sollume-api']['image']=base.image_id('sollume-finance-sollume-api:latest')
    (self.app/'docker-compose.cloud.yml').write_text(json.dumps(compose))
@@ -232,6 +344,23 @@ def docker_fixture_type():
    self.saved_containers=inspect;write_private(self.backup/'containers.json',json.dumps(inspect))
    images=sorted({item['Image'] for item in inspect});self.saved_image_ids=images
    base.command(['docker','image','save','--output',str(self.backup/'images.tar'),*images])
+   # 2026-10-20 hoyeon.han: 캐시 원본을 변경하지 않고 새 index를 fixture 전용 태그로만 로드한다.
+   if partial_oci:
+    cached=json.loads(base.command(['docker','image','inspect',*images]))
+    platforms={item['Id']:(item['Os'],item['Architecture']) for item in cached}
+    self.partial_metadata=partial_oci_archive(self.backup/'images.tar',images,self.project+'/partial',platforms)
+    base.command(['docker','image','load','--input',str(self.backup/'images.tar')])
+    for item in inspect:
+     role=item['Config']['Labels']['com.docker.compose.service']
+     compose['services'][role]['image']=self.partial_metadata['images'][item['Image']]
+    (self.app/'docker-compose.cloud.yml').write_text(json.dumps(compose))
+    base.command(self.compose('up','-d','--pull','never','--no-build','--wait','--wait-timeout','90'))
+    identifiers=base.command(self.compose('ps','-aq')).split()
+    inspect=json.loads(base.command(['docker','inspect',*identifiers]))
+    self.saved_containers=inspect;write_private(self.backup/'containers.json',json.dumps(inspect))
+    self.saved_image_ids=sorted({item['Image'] for item in inspect})
+    if set(self.saved_image_ids)!=set(self.partial_metadata['images'].values()):
+     raise AssertionError('실제 Docker 컨테이너가 새 fixture OCI index ID를 유지하지 않습니다.')
    base.command(self.compose('stop'))
    try:
     secure=base.image_id('sollume-finance-security:venv-test')
@@ -248,6 +377,31 @@ def docker_fixture_type():
    return self
   def manual_manager(self,nginx_configs=None):
    return self.api.ManualBackupManager(self.app,self.backup,nginx_configs=self.nginx_configs if nginx_configs is None else nginx_configs,runner=self.runner)
+  # 2026-10-20 hoyeon.han: root index 로드와 복구 뒤에도 기존 캐시 태그가 원래 ID를 가리켜야 한다.
+  def cache_unchanged(self):
+   return all(base.image_id(name)==identifier for name,identifier in getattr(self,'cache_before',{}).items())
+  # 2026-10-20 hoyeon.han: 새로 만든 index 태그만 정리하고 원래 캐시 태그·이미지는 보존한다.
+  def cleanup(self):
+   # 2026-10-20 hoyeon.han: 공통 정리나 한 태그의 삭제 실패가 나머지 시험 태그 정리를 건너뛰지 않도록 한다.
+   # complete=super().cleanup()
+   # for tag in getattr(self,'partial_metadata',{}).get('tags',[]):
+   #  base.command(['docker','image','rm',tag],check=False)
+   #  complete=not base.command(['docker','image','ls','--format','{{.ID}}',tag]).strip() and complete
+   complete=False
+   try:
+    complete=super().cleanup()
+   except BaseException:
+    complete=False
+   finally:
+    for tag in getattr(self,'partial_metadata',{}).get('tags',[]):
+     try:
+      base.command(['docker','image','rm',tag],check=False)
+      complete=not base.command(['docker','image','ls','--format','{{.ID}}',tag]).strip() and complete
+     except BaseException:
+      complete=False
+   # 2026-10-20 hoyeon.han: 태그 정리도 기존 cache image ID를 변경하면 실패로 기록한다.
+   # return complete
+   return self.cache_unchanged() and complete
   def upgrade_current_to_security(self):
    from cryptography.fernet import Fernet
    base.command(self.compose('down'))
@@ -287,13 +441,22 @@ def docker_fixture_type():
    self.nginx_configs[0].write_text(primary)
    base.command(self.compose('up','-d','--pull','never','--no-build','--wait','--wait-timeout','90'))
    self.runner.run(['sudo','nginx','-t']);self.runner.run(['sudo','systemctl','reload','nginx'])
+   # 2026-10-20 hoyeon.han: 비동기 reload가 새 worker로 전환된 뒤 보안 상태를 검사하며 기한 내 401이 아니면 실패한다.
+   deadline=time.monotonic()+10
+   while not (self.runner.https_status('https://office1.sollumeesthe.com','/')==401
+              and self.runner.https_status('https://office1.sollumeesthe.com','/downloads/blocked-test')==401):
+    if time.monotonic()>=deadline:raise AssertionError('fixture 보안 Nginx 적용 상태가 기한 내 확인되지 않았습니다.')
+    time.sleep(.1)
    return self
  return ManualFixture
 
 
 class Verification:
- def __init__(self,output):
+ # 2026-10-20 hoyeon.han: 선택한 이미지 저장 형식을 실제 검증 결과에 명시한다.
+ # def __init__(self,output):
+ def __init__(self,output,partial_oci=False):
   self.output=Path(output);self.fixtures=[];self.checks=[];self.failure=None;self.cleanup_complete=True
+  self.partial_oci=partial_oci
   self.started=datetime.now(timezone.utc).isoformat();self.scope='manual archive prepare vertical'
   names=('scripts/release_snapshot.py','deploy-oracle.sh','rollback-oracle.sh','.codex/user-management/verify_manual_archive.py','.codex/tests/test_manual_archive.py')
   self.sources={name:sha(ROOT/name) for name in names}
@@ -303,7 +466,11 @@ class Verification:
   self.checks.append({'name':name,'passed':bool(passed),'evidence':evidence});print(('PASS ' if passed else 'FAIL ')+name,flush=True)
   if not passed:raise AssertionError(name)
  def prepare(self):
-  fixture=docker_fixture_type()();self.fixtures.append(fixture);fixture.prepare_manual_files()
+  # 2026-10-20 hoyeon.han: 기존 classic fixture 실행을 유지하면서 partial OCI 선택을 전달한다.
+  # fixture=docker_fixture_type()();self.fixtures.append(fixture);fixture.prepare_manual_files()
+  fixture=docker_fixture_type(self.partial_oci)();self.fixtures.append(fixture);fixture.prepare_manual_files()
+  if self.partial_oci:
+   self.check('actual_partial_oci_roots_match_inspected_container_ids',set(fixture.saved_image_ids)==set(fixture.partial_metadata['images'].values()))
   # 2026-10-19 hoyeon.han: 압축 전후 legacy 실행 상태에서 공개 ACME 파일과 다른 사이트가 살아 있다.
   self.check('manual_initial_acme_http200_body_matches_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
   self.check('actual_gnu_tar_binary_used','GNU tar' in fixture.gnu_tar_version)
@@ -427,6 +594,8 @@ class Verification:
   self.check('actual_changed_admin_authenticates_privately_after_tty_reset',self.old_image_login(fixture,'qa_changed',fixture.next_password))
   self.check('manual_password_and_private_login_never_reopen_any_ingress',self.blocked(fixture) and self.canaries_running(fixture) and self.original_archives(fixture))
   self.check('manual_password_restore_keeps_acme200_and_other_sites_preserved',fixture.acme_available() and fixture.unrelated_preserved())
+  # 2026-10-20 hoyeon.han: 실제 partial OCI 전체 복구가 캐시 원본 태그를 바꾸지 않았는지 확인한다.
+  if self.partial_oci:self.check('original_cache_image_tags_and_ids_preserved',fixture.cache_unchanged())
  def password_tty(self,fixture):
   import pty,select,subprocess
   state={'app':str(fixture.app),'backup':str(fixture.backup),'project':fixture.project,'nginx_name':fixture.nginx_name,
@@ -474,23 +643,33 @@ class Verification:
    exception_chain.append({'type':type(error).__name__,'message':message});error=error.__cause__
   passed=self.failure is None and all(row['passed'] for row in self.checks) and self.cleanup_complete and originals and sources
   report={'started_at':self.started,'generated_at':datetime.now(timezone.utc).isoformat(),'scope':self.scope,'passed':passed,
+   'image_archive_format':'partial-oci' if self.partial_oci else 'classic-or-original-docker-save',
    'check_count':len(self.checks),'checks':self.checks,'latest_stage':('completed' if passed else (self.checks[-1]['name'] if self.checks else 'fixture_setup')),'helper_source_revision':self.sources['scripts/release_snapshot.py'],'source_sha256':self.sources,'source_unchanged_during_run':sources,
    'original_nine_files_unchanged':originals,'cleanup_complete':self.cleanup_complete,'production_deployed':False,
    'diagnostics':diagnostics,'exception_chain':exception_chain,
-   'parent_regression':{'reported_by':'parent agent','directly_executed_here':False,'business_and_security_passed':240,'seconds':32.58,'python_312_stdlib_plan':{'reported_by':'parent agent','directly_executed_here':False,'version':'3.12.13','passed':True,'source_hash':'cb6384c94588019ab051e2364aa4c8e5934fb7ded82154803aa7d0926cf97130'}},
+   # 2026-10-20 hoyeon.han: 이전 부모 보고값을 현재 실행의 검증 결과로 재사용하지 않는다.
+   # 'parent_regression':{'reported_by':'parent agent','directly_executed_here':False,'business_and_security_passed':240,'seconds':32.58,'python_312_stdlib_plan':{'reported_by':'parent agent','directly_executed_here':False,'version':'3.12.13','passed':True,'source_hash':'cb6384c94588019ab051e2364aa4c8e5934fb7ded82154803aa7d0926cf97130'}},
+   'historical_parent_regression_reference':{'historical':True,'directly_executed_here':False,
+     'note':'이전 부모 에이전트의 240개 회귀·Python 3.12.13 보고 기록이며 이번 helper/시험 결과가 아니다. 현재 회귀는 별도 실행 보고서로 확인한다.'},
    'limitations':['Nginx sudo 명령은 격리 컨테이너로 연결했고 nginx-T 파일경계는 원본사이트 메타데이터를 반환한다.',
                   '실제 upstream은 host.docker.internal의 고유 loopback 게시포트로 연결한다. 운영8501/8503은 사용하지 않는다.',
                   'TLS는 임시 자체서명 fixture CA이며 외부 도메인에는 연결하지 않는다.', '운영의 원본 수동 3파일은 제공되지 않아 새로 만든 합성 백업으로만 검증했다.', '운영자 private 로그인은 실제 구버전 UserDB 핸들러를 network-none 컨테이너에서 검증했다. 브라우저 GUI 검증은 수행하지 않았다.']}
   serialized=json.dumps(report,ensure_ascii=False,indent=2)+'\n'
   if any(secret in serialized for fixture in self.fixtures for secret in fixture.secrets):raise AssertionError('보고서 비밀값 검사 실패')
   self.output.parent.mkdir(parents=True,exist_ok=True);write_private(self.output,serialized)
-  write_private(self.output.with_suffix('.md'),'# 수동 백업 검증\n\n2026-10-19 hoyeon.han\n\n'+f'결과: {passed}, 검증 {len(self.checks)}개, 원본 불변: {originals}, 정리: {self.cleanup_complete}.\n\n'+'| 검증 | 결과 | 증거 |\n|---|---|---|\n'+'\n'.join('| '+row['name']+' | '+str(row['passed'])+' | '+row['evidence']+' |' for row in self.checks)+'\n')
+  # 2026-10-20 hoyeon.han: 고정된 과거 날짜 대신 실제 UTC 검증 시각과 저장 형식을 기록한다.
+  # write_private(self.output.with_suffix('.md'),'# 수동 백업 검증\n\n2026-10-19 hoyeon.han\n\n'+f'결과: {passed}, 검증 {len(self.checks)}개, 원본 불변: {originals}, 정리: {self.cleanup_complete}.\n\n'+'| 검증 | 결과 | 증거 |\n|---|---|---|\n'+'\n'.join('| '+row['name']+' | '+str(row['passed'])+' | '+row['evidence']+' |' for row in self.checks)+'\n')
+  write_private(self.output.with_suffix('.md'),'# 수동 백업 검증\n\nhoyeon.han · 검증 시각(UTC): '+report['generated_at']+'\n\n'
+   +'이미지 저장 형식: '+report['image_archive_format']+'\n\n'+f'결과: {passed}, 검증 {len(self.checks)}개, 원본 불변: {originals}, 정리: {self.cleanup_complete}.\n\n'
+   +'| 검증 | 결과 | 증거 |\n|---|---|---|\n'+'\n'.join('| '+row['name']+' | '+str(row['passed'])+' | '+row['evidence']+' |' for row in self.checks)+'\n')
   print(json.dumps({key:report[key] for key in ('passed','check_count','source_unchanged_during_run','original_nine_files_unchanged','cleanup_complete')},ensure_ascii=False),flush=True)
   return passed
 
 
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('--prepare-smoke',action='store_true');parser.add_argument('--docker',action='store_true');parser.add_argument('--password-worker')
+ # 2026-10-20 hoyeon.han: 운영 원본이 아닌 격리 fixture에서만 partial OCI 실제 로드를 선택한다.
+ parser.add_argument('--partial-oci',action='store_true',help='fixture 전용 새 OCI index를 로드하여 부분 다중 플랫폼 백업의 복구를 검증')
  parser.add_argument('--output',default=str(ROOT/'.codex/user-management/manual-archive-results.json'))
  args=parser.parse_args()
  if args.password_worker:
@@ -502,7 +681,9 @@ def main():
   fixture.api.EXPECTED_PUBLISHED_PORTS={name:fixture.ports[target] for name,target in fixture.api.SERVICES.items()};fixture.runner=ManualLocalRunner(fixture)
   result=fixture.manual_manager().password('qa_changed',apply=True);print(json.dumps({'completed':result['completed']}));return 0
  if not (args.docker or args.prepare_smoke):parser.error('실제 Docker는 --docker 또는 --prepare-smoke로 명시하세요.')
- verify=Verification(args.output)
+ # 2026-10-20 hoyeon.han: 기존 기본 실행을 보존하고 명시한 저장 형식만 전달한다.
+ # verify=Verification(args.output)
+ verify=Verification(args.output,partial_oci=args.partial_oci)
  try:
   fixture=verify.prepare()
   if args.docker:verify.full(fixture)
