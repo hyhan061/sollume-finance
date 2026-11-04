@@ -27,6 +27,11 @@ spec = importlib.util.spec_from_file_location(
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('order-compare')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='order-compare', admin_only=False)
 
 # 커스텀 사이드바 (발주내역 파일 선택 컴포넌트는 사용하지 않음 — 덮어쓰기 방지)
 from ui_components import render_custom_sidebar
@@ -116,6 +121,8 @@ def _read_new(file_bytes: bytes, sheet: str) -> pd.DataFrame:
 
 def _on_toggle_month(month_key: str):
     """월 체크박스 토글 → 해당 월의 모든 일자 선택/해제 동기화."""
+    # 2026-10-14 hoyeon.han: 콜백의 선행 실행에서도 권한 회수 반영.
+    auth.require_permission('order-compare')
     days = st.session_state["cmp_month_to_days"][month_key]
     checked = st.session_state[f"cmp_month_{month_key}"]
     sel = st.session_state["cmp_selected_dates"]
@@ -129,6 +136,8 @@ def _on_toggle_month(month_key: str):
 
 def _on_toggle_day(day_iso: str):
     """일자 체크박스 토글 → 선택집합 갱신 + 상위 월 체크박스 동기화."""
+    # 2026-10-14 hoyeon.han: 콜백의 선행 실행에서도 권한 회수 반영.
+    auth.require_permission('order-compare')
     checked = st.session_state[f"cmp_day_{day_iso}"]
     sel = st.session_state["cmp_selected_dates"]
     ts = pd.Timestamp(day_iso)
@@ -470,7 +479,9 @@ if st.session_state.get("cmp_ran"):
     # 엑셀 다운로드
     try:
         excel_bytes = _to_excel_bytes(diff_sales, diff_purchase)
-        st.download_button(
+        # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+        # st.download_button(
+        protected_download(
             "📥 비교 결과 엑셀 다운로드 (매출·매입)",
             data=excel_bytes,
             file_name="발주내역_비교결과.xlsx",

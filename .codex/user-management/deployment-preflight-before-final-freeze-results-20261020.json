@@ -1,0 +1,1189 @@
+{
+  "generated_at": "2026-10-20T03:53:11.203686+00:00",
+  "passed": false,
+  "checks": [
+    {
+      "name": "actual_nginx_inventory_and_readiness_accept_exact_legacy_transition",
+      "passed": true
+    },
+    {
+      "name": "other_virtual_hosts_and_canary_containers_preserved_before_transition",
+      "passed": true
+    },
+    {
+      "name": "verification_rejects_modeled_old_wildcard_and_missing_auth_container",
+      "passed": true
+    },
+    {
+      "name": "actual_tls_domain_paths_and_readonly_port_inventory_verify",
+      "passed": true
+    },
+    {
+      "name": "legacy_https_and_http_destinations_checked_without_following_redirects",
+      "passed": true
+    },
+    {
+      "name": "other_virtual_hosts_and_canary_containers_preserved_after_transition",
+      "passed": true
+    },
+    {
+      "name": "actual_global_satisfy_any_allow_all_bypasses_auth_with_root200",
+      "passed": true
+    },
+    {
+      "name": "preflight_rejects_inherited_satisfy_any_before_false_success",
+      "passed": true
+    },
+    {
+      "name": "restored_original_policy_reinstates_auth401_and_keeps_canaries",
+      "passed": true
+    },
+    {
+      "name": "policy_change_is_rejected_before_false_success",
+      "passed": true
+    },
+    {
+      "name": "original_nine_business_files_unchanged",
+      "passed": true
+    },
+    {
+      "name": "all_preexisting_container_ids_images_startedat_restartcount_state_unchanged",
+      "passed": true
+    },
+    {
+      "name": "four_cached_image_tags_and_ids_unchanged",
+      "passed": true
+    },
+    {
+      "name": "preflight_source_unchanged_during_execution",
+      "passed": false
+    },
+    {
+      "name": "all_fixture_resources_cleaned",
+      "passed": true
+    }
+  ],
+  "check_count": 15,
+  "failure": null,
+  "cleanup_complete": true,
+  "business_before": {
+    "database/customer_master.db.old": "6a756e8015bc94fcf565a5a0580766eaec347700c6c85a5cf64358ff18a143cc",
+    "database/customer_master.db": "c0207e781c288bd5561ca6b1fb0c551719ef836d3d6b025931779f07a54a1731",
+    "database/users.db": "95433672c79e04d5289efc51dad3d639630ee14c89e2c9c0e07a0eb4ef540ec5",
+    "database/customer_master_backup_20260409_142430.db": "a16813d2fd5ac1de1675111475ee7099272dd9e2e5fe9a25838da9dba8488114",
+    "database/test_customer_master.db": "506d217453ef07446ad780c3ad497e15143bdd409fa4d1827f82a1711dac73e4",
+    "database/backups/customer_master_backup_20251216_154458.db": "e103f4207642de13af4e53f64860b1cbf7760a0d6fa013345463569bef36d952",
+    "database/backups/customer_master_backup_20251216_162945.db": "bc83a287a2fbb0e37800e8fef65e3495cf493473752253708832ee548cd6654f",
+    "order_data/current.xlsm": "a230f7f39cb39b66a8e61939e2d5b356cd18f049c90ea1d2f0c999acb3a705a7",
+    "order_data/current.meta.json": "75fc299040fe6ae9a5f0734aee8248102144da32a713cb807e952eb33900e8c5"
+  },
+  "business_after": {
+    "database/customer_master.db.old": "6a756e8015bc94fcf565a5a0580766eaec347700c6c85a5cf64358ff18a143cc",
+    "database/customer_master.db": "c0207e781c288bd5561ca6b1fb0c551719ef836d3d6b025931779f07a54a1731",
+    "database/users.db": "95433672c79e04d5289efc51dad3d639630ee14c89e2c9c0e07a0eb4ef540ec5",
+    "database/customer_master_backup_20260409_142430.db": "a16813d2fd5ac1de1675111475ee7099272dd9e2e5fe9a25838da9dba8488114",
+    "database/test_customer_master.db": "506d217453ef07446ad780c3ad497e15143bdd409fa4d1827f82a1711dac73e4",
+    "database/backups/customer_master_backup_20251216_154458.db": "e103f4207642de13af4e53f64860b1cbf7760a0d6fa013345463569bef36d952",
+    "database/backups/customer_master_backup_20251216_162945.db": "bc83a287a2fbb0e37800e8fef65e3495cf493473752253708832ee548cd6654f",
+    "order_data/current.xlsm": "a230f7f39cb39b66a8e61939e2d5b356cd18f049c90ea1d2f0c999acb3a705a7",
+    "order_data/current.meta.json": "75fc299040fe6ae9a5f0734aee8248102144da32a713cb807e952eb33900e8c5"
+  },
+  "containers_before": {
+    "50864375de3dbefd49930f4c6dd28e04b6e08ef0a16b6a84aceaff9c41f6558e": {
+      "image": "sha256:bf80da0938d68d0bb8b418715471735e9a2ff8c82a62303da8ca311959428e8f",
+      "name": "/kr-dashboard",
+      "started_at": "2026-07-21T05:07:45.912381963Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "c3599dd696f4aa420e275f3bb4f259db8c67d53378a76b59f6260053bd923928": {
+      "image": "sha256:859d049594b932c59d989569254b560e447c8d3dfac2f9e00546f91d3f4ba294",
+      "name": "/cuttysark-api-1",
+      "started_at": "2026-07-20T08:21:59.533912594Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "f8b1105c492dd909be4a1f11d69cc23670675d84831335d427a9df84a7f43031": {
+      "image": "sha256:859d049594b932c59d989569254b560e447c8d3dfac2f9e00546f91d3f4ba294",
+      "name": "/cuttysark-poller-1",
+      "started_at": "2026-07-20T08:21:59.535005344Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "42c858c35bfcaf7c3f8a261eff4a616b74043c2811e0f64f6b379e2d55fbb6fd": {
+      "image": "sha256:18f3bde6ff684caac4975658b61c48875460c9de60f36928fca92d553f536247",
+      "name": "/kr-api",
+      "started_at": "2026-07-20T04:41:36.212172459Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "120c409f6fc892af2c2c29c03b11f9e6f21a9626ec020c7006f9447193c3e11f": {
+      "image": "sha256:f82bccdf6020d27373fdf0e93046b63eb3f777a0289e329d9839feebaf4555de",
+      "name": "/cuttysark-oracle-1",
+      "started_at": "2026-07-20T04:31:14.367255755Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "f5325d659fa248956d2d4be4f74ef9b5d5814b96bcf561aa778b1e689045c1dd": {
+      "image": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "name": "/cuttysark-redis-1",
+      "started_at": "2026-07-20T03:33:45.869118464Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "9c0a3dcc7ade26ef111d81128c7e7c084d5e29029e4412b22b7940be4c32d956": {
+      "image": "sha256:5a49a77c5bdbe7c5474450b4f46348d09949df3695257729c93a30369382d4f6",
+      "name": "/cuttysark-mailpit-1",
+      "started_at": "2026-07-20T03:33:45.867397423Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "317bf29d8e733b48ce6880a49707a0a98ace3bd372d7caf0ce27bf30394a2bd1": {
+      "image": "sha256:8b1e78743a03dbb2c95171cc58639fef29abc8816598e27fb910ed2e621e589a",
+      "name": "/sollume-nginx",
+      "started_at": "2026-06-11T04:15:50.217440006Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "bcb3e2a1bcb20291baf443cae9c24de9c345e230b6e4f4abd6efb4d320843633": {
+      "image": "sha256:f27241a6718e31ee7d6ff5655092e1acc66896cd4fa92caa217d8748793438f0",
+      "name": "/sollume-finance-api",
+      "started_at": "2026-06-11T04:15:50.116379839Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "adaa758b083b392f1e6aaa8ae24096cfd0d909e16921b324871d054d4ba87733": {
+      "image": "sha256:7a71e8e2a1426520e156c59cd94073b357409f70d459f300897fc48493aec4e8",
+      "name": "/sollume-finance-app",
+      "started_at": "2026-06-11T04:15:50.121198673Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "49530a58d32ae5ded5d9f974435ff1ff0da77056e8e2b67fdc0dae817f99e76c": {
+      "image": "sha256:93d55776e04376e19adb2733e3ccebb4392ee7dd86d8ff238503b30fe719c84f",
+      "name": "/sns-payment-postgres",
+      "started_at": "2026-05-24T09:09:03.076034876Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "9a1088c31ab304df4bee6bd12718c830782c891c3de2cbe37f4b14ee220d19ae": {
+      "image": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "name": "/sns-payment-redis",
+      "started_at": "2026-05-24T09:09:03.074958626Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "e0bb377f57a7c7471c74623959045de391922ff3f6c2dce574c6a813e15f42d1": {
+      "image": "sha256:64c7de8cc67f8ea754894050b6f79acd7e11cea633e517951b0b8d1207913f70",
+      "name": "/goodsfoundry-app",
+      "started_at": "2026-04-04T17:44:30.292735878Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "34daa975ae8421038cb67a78a56764caf8f443d476da43bba5e8ae5a613df743": {
+      "image": "sha256:85a6d379fa935e0d0373565998cc8462f4b1a6e329fe64d0616caefe3b5ed342",
+      "name": "/goodsfoundry-prisma",
+      "started_at": "2026-04-04T17:44:30.285839628Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "1d5da326f05756a4f23b3e98086d3021862930899da5e1c1c8d2831a065b9dd9": {
+      "image": "sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416",
+      "name": "/goodsfoundry-db",
+      "started_at": "2026-04-04T17:44:30.147699003Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "483ac35d1347d233b92c1a0547339f4a91c1c09f65b92ed8c5283f1d320945c6": {
+      "image": "sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065",
+      "name": "/goodsfoundry-redis",
+      "started_at": "2026-04-04T17:44:30.139433545Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "97fef02976afee80935eda148460603bdd3d2ae05dcac821a8bdfa554b991a5e": {
+      "image": "sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa",
+      "name": "/buildx_buildkit_sollume-builder0",
+      "started_at": "2026-04-03T14:14:41.707031042Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    }
+  },
+  "containers_after": {
+    "50864375de3dbefd49930f4c6dd28e04b6e08ef0a16b6a84aceaff9c41f6558e": {
+      "image": "sha256:bf80da0938d68d0bb8b418715471735e9a2ff8c82a62303da8ca311959428e8f",
+      "name": "/kr-dashboard",
+      "started_at": "2026-07-21T05:07:45.912381963Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "c3599dd696f4aa420e275f3bb4f259db8c67d53378a76b59f6260053bd923928": {
+      "image": "sha256:859d049594b932c59d989569254b560e447c8d3dfac2f9e00546f91d3f4ba294",
+      "name": "/cuttysark-api-1",
+      "started_at": "2026-07-20T08:21:59.533912594Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "f8b1105c492dd909be4a1f11d69cc23670675d84831335d427a9df84a7f43031": {
+      "image": "sha256:859d049594b932c59d989569254b560e447c8d3dfac2f9e00546f91d3f4ba294",
+      "name": "/cuttysark-poller-1",
+      "started_at": "2026-07-20T08:21:59.535005344Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "42c858c35bfcaf7c3f8a261eff4a616b74043c2811e0f64f6b379e2d55fbb6fd": {
+      "image": "sha256:18f3bde6ff684caac4975658b61c48875460c9de60f36928fca92d553f536247",
+      "name": "/kr-api",
+      "started_at": "2026-07-20T04:41:36.212172459Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "120c409f6fc892af2c2c29c03b11f9e6f21a9626ec020c7006f9447193c3e11f": {
+      "image": "sha256:f82bccdf6020d27373fdf0e93046b63eb3f777a0289e329d9839feebaf4555de",
+      "name": "/cuttysark-oracle-1",
+      "started_at": "2026-07-20T04:31:14.367255755Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "f5325d659fa248956d2d4be4f74ef9b5d5814b96bcf561aa778b1e689045c1dd": {
+      "image": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "name": "/cuttysark-redis-1",
+      "started_at": "2026-07-20T03:33:45.869118464Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "9c0a3dcc7ade26ef111d81128c7e7c084d5e29029e4412b22b7940be4c32d956": {
+      "image": "sha256:5a49a77c5bdbe7c5474450b4f46348d09949df3695257729c93a30369382d4f6",
+      "name": "/cuttysark-mailpit-1",
+      "started_at": "2026-07-20T03:33:45.867397423Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "317bf29d8e733b48ce6880a49707a0a98ace3bd372d7caf0ce27bf30394a2bd1": {
+      "image": "sha256:8b1e78743a03dbb2c95171cc58639fef29abc8816598e27fb910ed2e621e589a",
+      "name": "/sollume-nginx",
+      "started_at": "2026-06-11T04:15:50.217440006Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "bcb3e2a1bcb20291baf443cae9c24de9c345e230b6e4f4abd6efb4d320843633": {
+      "image": "sha256:f27241a6718e31ee7d6ff5655092e1acc66896cd4fa92caa217d8748793438f0",
+      "name": "/sollume-finance-api",
+      "started_at": "2026-06-11T04:15:50.116379839Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "adaa758b083b392f1e6aaa8ae24096cfd0d909e16921b324871d054d4ba87733": {
+      "image": "sha256:7a71e8e2a1426520e156c59cd94073b357409f70d459f300897fc48493aec4e8",
+      "name": "/sollume-finance-app",
+      "started_at": "2026-06-11T04:15:50.121198673Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "49530a58d32ae5ded5d9f974435ff1ff0da77056e8e2b67fdc0dae817f99e76c": {
+      "image": "sha256:93d55776e04376e19adb2733e3ccebb4392ee7dd86d8ff238503b30fe719c84f",
+      "name": "/sns-payment-postgres",
+      "started_at": "2026-05-24T09:09:03.076034876Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "9a1088c31ab304df4bee6bd12718c830782c891c3de2cbe37f4b14ee220d19ae": {
+      "image": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "name": "/sns-payment-redis",
+      "started_at": "2026-05-24T09:09:03.074958626Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": "unhealthy"
+    },
+    "e0bb377f57a7c7471c74623959045de391922ff3f6c2dce574c6a813e15f42d1": {
+      "image": "sha256:64c7de8cc67f8ea754894050b6f79acd7e11cea633e517951b0b8d1207913f70",
+      "name": "/goodsfoundry-app",
+      "started_at": "2026-04-04T17:44:30.292735878Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "34daa975ae8421038cb67a78a56764caf8f443d476da43bba5e8ae5a613df743": {
+      "image": "sha256:85a6d379fa935e0d0373565998cc8462f4b1a6e329fe64d0616caefe3b5ed342",
+      "name": "/goodsfoundry-prisma",
+      "started_at": "2026-04-04T17:44:30.285839628Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "1d5da326f05756a4f23b3e98086d3021862930899da5e1c1c8d2831a065b9dd9": {
+      "image": "sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416",
+      "name": "/goodsfoundry-db",
+      "started_at": "2026-04-04T17:44:30.147699003Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "483ac35d1347d233b92c1a0547339f4a91c1c09f65b92ed8c5283f1d320945c6": {
+      "image": "sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065",
+      "name": "/goodsfoundry-redis",
+      "started_at": "2026-04-04T17:44:30.139433545Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    },
+    "97fef02976afee80935eda148460603bdd3d2ae05dcac821a8bdfa554b991a5e": {
+      "image": "sha256:de10faf919fc71ba4eb1dd7bd6449566d012b0c9436b1c61bfee21d621b009aa",
+      "name": "/buildx_buildkit_sollume-builder0",
+      "started_at": "2026-04-03T14:14:41.707031042Z",
+      "restart_count": 0,
+      "state": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "Dead": false
+      },
+      "health": null
+    }
+  },
+  "cache_before": {
+    "sollume-finance-sollume-app:latest": "sha256:7a71e8e2a1426520e156c59cd94073b357409f70d459f300897fc48493aec4e8",
+    "sollume-finance-sollume-api:latest": "sha256:f27241a6718e31ee7d6ff5655092e1acc66896cd4fa92caa217d8748793438f0",
+    "sollume-finance-security:venv-test": "sha256:ab32568096996aa932dd47c49d24a8b932d0e2177713637e97e66c7cf721304a",
+    "nginx:alpine": "sha256:8b1e78743a03dbb2c95171cc58639fef29abc8816598e27fb910ed2e621e589a"
+  },
+  "cache_after": {
+    "sollume-finance-sollume-app:latest": "sha256:7a71e8e2a1426520e156c59cd94073b357409f70d459f300897fc48493aec4e8",
+    "sollume-finance-sollume-api:latest": "sha256:f27241a6718e31ee7d6ff5655092e1acc66896cd4fa92caa217d8748793438f0",
+    "sollume-finance-security:venv-test": "sha256:ab32568096996aa932dd47c49d24a8b932d0e2177713637e97e66c7cf721304a",
+    "nginx:alpine": "sha256:8b1e78743a03dbb2c95171cc58639fef29abc8816598e27fb910ed2e621e589a"
+  },
+  "probes": [
+    {
+      "origin": "http://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    },
+    {
+      "origin": "https://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/media/preflight",
+      "status": 403,
+      "location": null,
+      "body_sha256": "dca0cfe610b8517e7f779e489249a6620f17ad79a6f07d3407bc13d9d1aa0342"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/_stcore/stream",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/auth/check",
+      "status": 404,
+      "location": null,
+      "body_sha256": "814830ec88cff614e3accb03a754434503aaded091c8ea3a1c8a7babf3f5fc14"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/_stcore/health",
+      "status": 404,
+      "location": null,
+      "body_sha256": "814830ec88cff614e3accb03a754434503aaded091c8ea3a1c8a7babf3f5fc14"
+    },
+    {
+      "origin": "http://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    },
+    {
+      "origin": "https://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "9f70f0dc0fc1c7fc0e8cdba2a3068ecc8cc5f8be7c8ea8df8e47c80ad93e42d8"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "9f70f0dc0fc1c7fc0e8cdba2a3068ecc8cc5f8be7c8ea8df8e47c80ad93e42d8"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "9f70f0dc0fc1c7fc0e8cdba2a3068ecc8cc5f8be7c8ea8df8e47c80ad93e42d8"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sol-fin.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sol-fin.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "http://sollume-finance.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/api/order-file/meta",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/api/order-file/meta",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/media/preflight",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/media/preflight",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/downloads/00000000000000000000000000000000",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://sollume-finance.duckdns.org",
+      "path": "/_stcore/stream",
+      "status": 301,
+      "location": "https://office1.sollumeesthe.com/_stcore/stream",
+      "body_sha256": "1b93a673595940a0515eba95f194bc293090abf12921e37adb4516e0b3afa551"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/media/preflight",
+      "status": 403,
+      "location": null,
+      "body_sha256": "dca0cfe610b8517e7f779e489249a6620f17ad79a6f07d3407bc13d9d1aa0342"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/downloads/00000000000000000000000000000000",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/_stcore/stream",
+      "status": 401,
+      "location": null,
+      "body_sha256": "83b58bd9e42a8483c81c765d249cb5f9d2a001d22936d226cbc17ad90b702f1d"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/auth/check",
+      "status": 404,
+      "location": null,
+      "body_sha256": "814830ec88cff614e3accb03a754434503aaded091c8ea3a1c8a7babf3f5fc14"
+    },
+    {
+      "origin": "https://office1.sollumeesthe.com",
+      "path": "/_stcore/health",
+      "status": 404,
+      "location": null,
+      "body_sha256": "814830ec88cff614e3accb03a754434503aaded091c8ea3a1c8a7babf3f5fc14"
+    },
+    {
+      "origin": "http://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    },
+    {
+      "origin": "https://unrelated.example.invalid",
+      "path": "/",
+      "status": 200,
+      "location": null,
+      "body_sha256": "694f4171cec99ddd81fc4ff80d35f46d90d843693fc36de3a844b6509039461e"
+    }
+  ],
+  "source_sha256": "b8af781d14940502d750c2c9aa6944e02d324a1bca06536199954554cf4b1b65",
+  "production_accessed": false,
+  "limitations": [
+    "백엔드는 캐시된 Nginx의 합성 응답이다. 실제 직원 로그인·MFA 기능은 이 시험 범위가 아니다.",
+    "실제 Docker 게시 포트는 모두 loopback 고포트다. 어댑터가 fixture metadata만 논리 8501~8503으로 대응하며 ready의 옛 wildcard는 metadata로 재현했다.",
+    "macOS에 Linux ss가 없어 실제 Docker 바인딩을 ss 형식으로 변환했다. Linux ss 파싱과 거부 조건은 단위 테스트에서 검증한다.",
+    "nginx -T는 실제 컨테이너 결과를 원본과 대조한 뒤 fixture TLS·고포트·원본 경로만 논리 경로로 대응한다.",
+    "TLS는 fixture 자체 서명 CA로 검증하며 외부 DNS·운영 서버에 접속하지 않았다."
+  ]
+}

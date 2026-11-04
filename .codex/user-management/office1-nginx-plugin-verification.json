@@ -1,0 +1,103 @@
+{
+  "recorded_utc": "2026-10-19T08:29:36Z",
+  "backup_dir": "/home/ubuntu/sollume-finance/database/backups/nginx-plugin-office1-20261019T082514Z",
+  "certbot_version": "2.9.0",
+  "plugins": {
+    "authenticator": "nginx",
+    "installer": "nginx"
+  },
+  "checks": {
+    "only_expected_files_changed": true,
+    "no_extra_config_files": true,
+    "nginx_symlinks_unchanged": true,
+    "plugins_both_nginx": true,
+    "hook_disabled_content_preserved": true,
+    "all_nginx_config_bytes_unchanged": true,
+    "certificate_files_unchanged": true,
+    "legacy_renewal_configs_unchanged": true,
+    "timer_units_unchanged": true,
+    "all_four_containers_unchanged_running": true,
+    "all_http_tls_responses_unchanged": true,
+    "served_certificate_matches_current_valid_certificate": true,
+    "nginx_and_existing_timer_active": true
+  },
+  "changed_files": [
+    {
+      "file": "/etc/letsencrypt/renewal/office1.sollumeesthe.com.conf",
+      "content_changed": true,
+      "mode_before": 420,
+      "mode_after": 420
+    },
+    {
+      "file": "/etc/letsencrypt/renewal-hooks/deploy/50-office1-reload-nginx.sh",
+      "content_changed": false,
+      "mode_before": 493,
+      "mode_after": 420
+    }
+  ],
+  "extra_files": [],
+  "changed_symlinks": [],
+  "http": {
+    "http://office1.sollumeesthe.com/": {
+      "exit": 0,
+      "result": "301 0 https://office1.sollumeesthe.com/",
+      "error": ""
+    },
+    "https://office1.sollumeesthe.com/": {
+      "exit": 0,
+      "result": "503 0 ",
+      "error": ""
+    },
+    "https://sol-fin.duckdns.org/": {
+      "exit": 0,
+      "result": "200 0 ",
+      "error": ""
+    },
+    "https://sollume-finance.duckdns.org/": {
+      "exit": 0,
+      "result": "200 0 ",
+      "error": ""
+    },
+    "https://sollume-n8n.duckdns.org/": {
+      "exit": 0,
+      "result": "200 0 ",
+      "error": ""
+    }
+  },
+  "served_certificate": {
+    "sha256": "a6692e334578494e729c0361bb8544efe7d7a67e744f4cdc245e4d9c84b7634e",
+    "notAfter": "Jan 17 06:39:24 2027 GMT"
+  },
+  "all_passed": true,
+  "external_https_checks": [
+    {
+      "url": "https://office1.sollumeesthe.com/",
+      "status": 503,
+      "tls_verified": true
+    },
+    {
+      "url": "https://sol-fin.duckdns.org/",
+      "status": 200,
+      "tls_verified": true
+    },
+    {
+      "url": "https://sollume-finance.duckdns.org/",
+      "status": 200,
+      "tls_verified": true
+    },
+    {
+      "url": "https://sollume-n8n.duckdns.org/",
+      "status": 200,
+      "tls_verified": true
+    }
+  ],
+  "executed_commands": [
+    "certbot reconfigure --cert-name office1.sollumeesthe.com --nginx --non-interactive",
+    "chmod 644 /etc/letsencrypt/renewal-hooks/deploy/50-office1-reload-nginx.sh",
+    "certbot renew --cert-name office1.sollumeesthe.com --dry-run --run-deploy-hooks --non-interactive --no-random-sleep-on-renew -v",
+    "nginx -t",
+    "systemctl reload nginx"
+  ],
+  "dry_run_succeeded": true,
+  "production_application_deployed": false
+}

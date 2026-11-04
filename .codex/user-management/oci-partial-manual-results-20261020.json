@@ -1,0 +1,899 @@
+{
+  "started_at": "2026-10-20T02:24:38.522071+00:00",
+  "generated_at": "2026-10-20T02:26:26.981617+00:00",
+  "scope": "complete manual archive restore rehearsal",
+  "passed": true,
+  "image_archive_format": "partial-oci",
+  "check_count": 39,
+  "checks": [
+    {
+      "name": "actual_partial_oci_roots_match_inspected_container_ids",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_initial_acme_http200_body_matches_and_other_sites_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_gnu_tar_binary_used",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_gnu_root_dot_and_dot_slash_prefix_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_nonselected_virtualenv_symlink_and_past_backups_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_zero_length_wal_entry_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_plan_validated_without_docker_mutation",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_two_distinct_original_image_ids_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_prepare_idempotent",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_inspect_cmd_entrypoint_and_image_generate_restoration_compose",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_source_three_archives_unchanged_after_prepare",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_secure_acme200_root401_download401_and_other_sites_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_rollback_defaults_readonly_and_never_public_resume",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "legacy_apply_requires_both_explicit_flags_0False",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "legacy_apply_requires_both_explicit_flags_1False",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "legacy_apply_requires_both_explicit_flags_1True",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "unlisted_actual_legacy_site_rejected_before_any_source_or_runtime_mutation",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "injected_image_failure_preserves_current_backup_and_all_http_https_ingress503",
+      "passed": true,
+      "evidence": "actual Docker/SQLite/HTTP/HTTPS; image load failure injected"
+    },
+    {
+      "name": "manual_failure_acme200_body_matches_and_other_sites_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "failure_stops_only_accounting_containers_and_preserves_other_canaries",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "failure_keeps_original_manual_archives_and_current_business_files",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_restore_from_partially_removed_state_completes_private",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_restore_acme200_body_matches_and_other_sites_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_inspect_config_resources_logs_bind_rw_and_loopback_ports_match_original",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "current_rotated_api_key_overrides_archived_key",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_legacy_service_health_checks_pass",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "latest_added_stopped_deleted_password_changed_accounts_and_demotion_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "latest_full_security_state_and_added_account_are_preserved_in_private_rescue",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "current_business_files_original_archives_and_other_canaries_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_old_image_private_login_accepts_unchanged_user",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_old_image_private_login_denies_discarded_password",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_cannot_revive_qa_stopped",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_cannot_revive_qa_deleted",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_changed_admin_and_added_account_default_to_plan",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_password_tty_reset_succeeds_without_echo",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_changed_admin_authenticates_privately_after_tty_reset",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_and_private_login_never_reopen_any_ingress",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_restore_keeps_acme200_and_other_sites_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "original_cache_image_tags_and_ids_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    }
+  ],
+  "latest_stage": "completed",
+  "helper_source_revision": "a71eb446ad3433d19a4d2119cc711b3d6aad8752aad4df538c60da0a1358717a",
+  "source_sha256": {
+    "scripts/release_snapshot.py": "a71eb446ad3433d19a4d2119cc711b3d6aad8752aad4df538c60da0a1358717a",
+    "deploy-oracle.sh": "cc5b05e4c55af6015d9278901525e2742ced0140fe58c7e0607902ae13eb0a4b",
+    "rollback-oracle.sh": "104d65b8f46a9f3673486c06216a64b9c1aa02ab5faa4c623701a62e4143fe60",
+    ".codex/user-management/verify_manual_archive.py": "bf11f5bfec53715c706476261c7aba41267d834684376c63cc7d36ab4c4b7572",
+    ".codex/tests/test_manual_archive.py": "f2c55964779420bdc78876e8f8cb5487f5a8dce047868e2b6ba0d710f96c3751"
+  },
+  "source_unchanged_during_run": true,
+  "original_nine_files_unchanged": true,
+  "cleanup_complete": true,
+  "production_deployed": false,
+  "diagnostics": [
+    {
+      "gnu_tar": "tar (GNU tar) 1.35",
+      "https_observations": [
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 200,
+          "seconds": 0.01
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 401,
+          "seconds": 0.011
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/downloads/blocked-test",
+          "status": 401,
+          "seconds": 0.005
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 401,
+          "seconds": 0.006
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/downloads/blocked-test",
+          "status": 401,
+          "seconds": 0.005
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.009
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.01
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.009
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.009
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.01
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.002
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.002
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.002
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.01
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.009
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.01
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.009
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.012
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.012
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        }
+      ],
+      "http_observations": [
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "a539cdcdfa02f1b21f9f76f6a56f3cdf5e9d2bcc3493833b9d87404b4148d45c"
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "a539cdcdfa02f1b21f9f76f6a56f3cdf5e9d2bcc3493833b9d87404b4148d45c"
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "a539cdcdfa02f1b21f9f76f6a56f3cdf5e9d2bcc3493833b9d87404b4148d45c"
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "a539cdcdfa02f1b21f9f76f6a56f3cdf5e9d2bcc3493833b9d87404b4148d45c"
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "office1.sollumeesthe.com",
+          "path": "/.well-known/acme-challenge/office1-rehearsal.txt",
+          "status": 200,
+          "body_sha256": "a539cdcdfa02f1b21f9f76f6a56f3cdf5e9d2bcc3493833b9d87404b4148d45c"
+        },
+        {
+          "host": "canary.sollume.invalid",
+          "path": "/",
+          "status": 200,
+          "body_sha256": "8b598b021e7a4bab45a6c66be03edd6d7861bc3bbd2b8f0bdd1a074f5730529f"
+        }
+      ],
+      "docker_failures": [],
+      "saved_image_ids": [
+        "sha256:59e6afb9be68d054724b98ca7efb5bb48f454fa55b9ec3a6e8adbdaee7bded2f",
+        "sha256:ac2bff1f6421d5ead1d7060c865df49dd5b8fba1488898a4374ff726851524d0"
+      ]
+    }
+  ],
+  "exception_chain": [],
+  "historical_parent_regression_reference": {
+    "historical": true,
+    "directly_executed_here": false,
+    "note": "이전 부모 에이전트의 240개 회귀·Python 3.12.13 보고 기록이며 이번 helper/시험 결과가 아니다. 현재 회귀는 별도 실행 보고서로 확인한다."
+  },
+  "limitations": [
+    "Nginx sudo 명령은 격리 컨테이너로 연결했고 nginx-T 파일경계는 원본사이트 메타데이터를 반환한다.",
+    "실제 upstream은 host.docker.internal의 고유 loopback 게시포트로 연결한다. 운영8501/8503은 사용하지 않는다.",
+    "TLS는 임시 자체서명 fixture CA이며 외부 도메인에는 연결하지 않는다.",
+    "운영의 원본 수동 3파일은 제공되지 않아 새로 만든 합성 백업으로만 검증했다.",
+    "운영자 private 로그인은 실제 구버전 UserDB 핸들러를 network-none 컨테이너에서 검증했다. 브라우저 GUI 검증은 수행하지 않았다."
+  ]
+}

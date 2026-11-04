@@ -1,0 +1,23 @@
+{
+  "validated": true,
+  "dry_run": true,
+  "backup_dir": "/home/ubuntu/sollume-finance/database/backups/releases/manual-before-auth-20261019_141607",
+  "project": "sollume-finance",
+  "public_resume": false,
+  "source_hashes": {
+    "application.tar.gz": "183003d1710b3704835a1e22e903e933db4307b6d788edf5731633782b8108b9",
+    "images.tar": "abb9158e875a84a435159e1a1ea792ecfb67986853549be3902789d58ed85346",
+    "containers.json": "d24a25902ec2997b0298c4aef35427259a4f9da168c365e48202c925e0edd4da"
+  },
+  "images": {
+    "sha256:d5346807f4ebb9c97002b7397ee2accfbb3205f9d8a7683f771de668135ac1be": {
+      "architecture": "arm64",
+      "os": "linux"
+    }
+  },
+  "external_command_count": 0,
+  "python_version": "3.12.3",
+  "helper_source_sha256": "a71eb446ad3433d19a4d2119cc711b3d6aad8752aad4df538c60da0a1358717a",
+  "server_source_installed": false,
+  "production_deployed": false
+}

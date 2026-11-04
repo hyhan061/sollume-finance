@@ -33,6 +33,11 @@ if spec is None or spec.loader is None:
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('settlement-ecount')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='settlement-ecount', admin_only=False)
 
 # 커스텀 사이드바 / 전역 CSS 는 Home.py 라우터가 처리
 from ui_components import render_custom_sidebar  # noqa: E402,F401
@@ -232,7 +237,9 @@ def _show_download_manual() -> None:
         "시트명·머리글·데이터 행을 임의로 변경하지 마세요."
     )
     if _MANUAL_IMAGE_PATH.is_file():
-        st.image(
+        # 2026-10-14 hoyeon.han: 원본 매뉴얼 PNG를 보존하며 /media 없이 표시.
+        # st.image(
+        __import__("ui_components").render_static_asset_image(
             str(_MANUAL_IMAGE_PATH),
             caption="하단 '정산서' 보고서 유형과 검색(F8) 오른쪽 ▼ 위치를 확인하세요.",
             width="stretch",
@@ -939,7 +946,10 @@ if (
     start_date = st.session_state.settle_ecount_start_date
     end_date = st.session_state.settle_ecount_end_date
     out_filename = st_mod.build_output_filename(doc_type, vendor, start_date, end_date)
-    out_path = os.path.join("processed", out_filename)
+    # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+    # out_path = os.path.join("processed", out_filename)
+    # 2026-10-14 hoyeon.han: 미리보기에는 폴더를 만들지 않고 생성 시에만 경로를 할당.
+    # out_path = auth.unique_output_path(out_filename, 'settlement-ecount')
     period_line = ss.build_period_line(vendor, start_date=start_date, end_date=end_date)
 
     st.markdown("#### ⚙️ 생성 옵션")
@@ -965,6 +975,8 @@ if (
                 detail_mode=detail_mode,
                 include_overall=include_overall,
             )
+            # 2026-10-14 hoyeon.han: 실제 생성 요청에서만 세션별 출력 폴더를 생성.
+            out_path = auth.unique_output_path(out_filename, 'settlement-ecount')
             ss.write_seller_settlement_xlsx(
                 out_path=out_path,
                 title=ss.TITLE_SALE,
@@ -1008,7 +1020,9 @@ if (
         st.session_state.settle_ecount_output_path
     ):
         with open(st.session_state.settle_ecount_output_path, "rb") as f:
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label=f"⬇️ {st.session_state.settle_ecount_output_filename} 다운로드",
                 data=f.read(),
                 file_name=st.session_state.settle_ecount_output_filename,

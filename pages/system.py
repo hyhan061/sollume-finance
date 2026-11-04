@@ -27,6 +27,11 @@ spec = importlib.util.spec_from_file_location(
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('system')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='system', admin_only=True)
 
 # 커스텀 사이드바
 from ui_components import render_custom_sidebar
@@ -198,7 +203,10 @@ with tab2:
     )
 
     processed_files = (
-        sorted(os.listdir("processed"), reverse=True)
+        # 2026-10-14 hoyeon.han: 기존 루트 파일과 생성 건별 출력 모두 관리자 목록에 유지.
+        # sorted((name for name in os.listdir("processed") if Path("processed", name).is_file()), reverse=True)
+        sorted((str(path.relative_to("processed")) for path in Path("processed").rglob("*")
+                if path.is_file() and "secure_downloads" not in path.relative_to("processed").parts), reverse=True)
         if os.path.exists("processed")
         else []
     )
@@ -208,7 +216,9 @@ with tab2:
         files_by_date = {}
         for filename in processed_files:
             try:
-                date_part = filename.split("_")[1].replace(".xls", "")
+                # 2026-10-14 hoyeon.han: 보관 경로와 무관하게 실제 파일명으로 그룹 구성.
+                # date_part = filename.split("_")[1].replace(".xls", "")
+                date_part = os.path.basename(filename).split("_")[1].replace(".xls", "")
                 if date_part not in files_by_date:
                     files_by_date[date_part] = []
                 files_by_date[date_part].append(filename)
@@ -217,8 +227,8 @@ with tab2:
 
         # 통계
         total_files = len(processed_files)
-        sales_files = len([f for f in processed_files if f.startswith("매출_")])
-        purchase_files = len([f for f in processed_files if f.startswith("매입_")])
+        sales_files = len([f for f in processed_files if os.path.basename(f).startswith("매출_")])
+        purchase_files = len([f for f in processed_files if os.path.basename(f).startswith("매입_")])
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -242,17 +252,19 @@ with tab2:
 
                     with col1:
                         file_type = "💰 매출" if "매출" in filename else "🛒 매입"
-                        st.write(f"**{file_type}**: {filename}")
+                        st.write(f"**{file_type}**: {os.path.basename(filename)}")
                         st.caption(
                             f"{file_size:.1f} KB | {file_time.strftime('%Y-%m-%d %H:%M:%S')}"
                         )
 
                     with col2:
                         with open(filepath, "rb") as f:
-                            st.download_button(
+                            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                            # st.download_button(
+                            protected_download(
                                 label="⬇️ 다운로드",
                                 data=f.read(),
-                                file_name=filename,
+                                file_name=os.path.basename(filename),
                                 mime="application/vnd.ms-excel",
                                 key=f"dl_{filename}_{date}",
                             )
@@ -283,7 +295,9 @@ with tab2:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label=f"📦 최근 {len(recent_files)}개 파일 일괄 다운로드",
                 data=zip_buffer,
                 file_name=f"전표파일_일괄_{datetime.now().strftime('%Y%m%d')}.zip",
@@ -340,7 +354,9 @@ with tab3:
         col_dl, col_del = st.columns(2)
         with col_dl:
             # .xlsm 정확한 MIME 타입 사용
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label="⬇️ 발주내역 파일 다운로드",
                 data=order_store.get_file_bytes(),
                 file_name=order_stats["original_name"],
@@ -425,7 +441,9 @@ with tab4:
 
         with col1:
             with open(log_file, "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                # st.download_button(
+                protected_download(
                     label="📥 전체 로그 다운로드",
                     data=f.read(),
                     file_name=f"app_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
@@ -444,7 +462,9 @@ with tab4:
                 latest_json = sorted(json_logs)[-1]
                 json_path = os.path.join("logs", latest_json)
                 with open(json_path, "rb") as f:
-                    st.download_button(
+                    # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                    # st.download_button(
+                    protected_download(
                         label=f"📊 JSON 로그 다운로드",
                         data=f.read(),
                         file_name=latest_json,
@@ -497,6 +517,8 @@ with tab5:
             deleted_count = 0
             for file in upload_files:
                 try:
+                    # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                    auth.require_permission('system')
                     os.remove(os.path.join("uploads", file))
                     deleted_count += 1
                 except FileNotFoundError:
@@ -525,6 +547,8 @@ with tab5:
             deleted_count = 0
             for file in processed_files:
                 try:
+                    # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                    auth.require_permission('system')
                     os.remove(os.path.join("processed", file))
                     deleted_count += 1
                 except FileNotFoundError:
@@ -554,6 +578,8 @@ with tab5:
             deleted_count = 0
             for file in log_files:
                 try:
+                    # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                    auth.require_permission('system')
                     os.remove(os.path.join("logs", file))
                     deleted_count += 1
                 except FileNotFoundError:
@@ -586,6 +612,8 @@ with tab5:
             if os.path.exists("uploads"):
                 for file in os.listdir("uploads"):
                     try:
+                        # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                        auth.require_permission('system')
                         os.remove(os.path.join("uploads", file))
                         total_deleted += 1
                     except:
@@ -595,6 +623,8 @@ with tab5:
             if os.path.exists("processed"):
                 for file in os.listdir("processed"):
                     try:
+                        # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                        auth.require_permission('system')
                         os.remove(os.path.join("processed", file))
                         total_deleted += 1
                     except:
@@ -604,6 +634,8 @@ with tab5:
             if os.path.exists("logs"):
                 for file in os.listdir("logs"):
                     try:
+                        # 2026-10-14 hoyeon.han: 변경 작업 직전 최신 DB 권한 검사.
+                        auth.require_permission('system')
                         os.remove(os.path.join("logs", file))
                         total_deleted += 1
                     except:

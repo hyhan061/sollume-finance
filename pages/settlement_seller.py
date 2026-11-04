@@ -31,6 +31,11 @@ if spec is None or spec.loader is None:
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('settlement-seller')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='settlement-seller', admin_only=False)
 
 # 커스텀 사이드바
 from ui_components import render_custom_sidebar  # noqa: E402
@@ -647,7 +652,10 @@ if plan is not None:
     out_filename = ss.build_output_filename(
         selected_vendor, list(plan["seller_sheets"].keys()), doc_type=doc_type
     )
-    out_path = os.path.join("processed", out_filename)
+    # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+    # out_path = os.path.join("processed", out_filename)
+    # 2026-10-14 hoyeon.han: 미리보기에는 폴더를 만들지 않고 생성 시에만 경로를 할당.
+    # out_path = auth.unique_output_path(out_filename, 'settlement-seller')
 
     if st.button("📥 정산서 생성", key="sseller_generate_btn", type="primary"):
         try:
@@ -665,7 +673,9 @@ if plan is not None:
                 list(plan_final["seller_sheets"].keys()),
                 doc_type=doc_type,  # 2026-07-23 hoyeon.han: 매입 지원
             )
-            out_path = os.path.join("processed", out_filename)
+            # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+            # out_path = os.path.join("processed", out_filename)
+            out_path = auth.unique_output_path(out_filename, 'settlement-seller')
             period_line = ss.build_period_line(selected_vendor, **date_kwargs)
             ss.write_seller_settlement_xlsx(
                 out_path=out_path,
@@ -706,7 +716,9 @@ if plan is not None:
         st.session_state.sseller_output_path
     ):
         with open(st.session_state.sseller_output_path, "rb") as f:
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label=f"⬇️ {st.session_state.sseller_output_filename} 다운로드",
                 data=f.read(),
                 file_name=st.session_state.sseller_output_filename,

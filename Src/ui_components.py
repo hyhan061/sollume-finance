@@ -8,6 +8,23 @@ UI 공통 컴포넌트 모듈
 import streamlit as st
 from datetime import datetime
 import os
+# 2026-10-14 hoyeon.han: 공용 로그 다운로드도 인증 검사 적용.
+from secure_downloads import secure_download_button
+
+
+def render_static_asset_image(image_path, caption=None, width=None):
+    """2026-10-14 hoyeon.han: 업무자료 경로를 열지 않고 고정 매뉴얼 이미지를 본문에 삽입."""
+    from pathlib import Path
+    from html import escape
+    import base64
+    path = Path(image_path).resolve()
+    assets = Path(__file__).resolve().parent.parent / 'assets'
+    if not path.is_relative_to(assets.resolve()) or path.suffix.lower() != '.png':
+        raise ValueError('허용된 매뉴얼 이미지 경로가 아닙니다.')
+    uri = 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode('ascii')
+    st.markdown(f'<img src="{uri}" alt="{escape(caption or path.name, quote=True)}" style="width:100%;height:auto;"/>', unsafe_allow_html=True)
+    if caption:
+        st.caption(caption)
 
 
 def _logo_data_uri():
@@ -74,55 +91,97 @@ def render_home_logo():
         st.title("SollumeLab 회계 시스템")
 
 
+# 2026-10-14 hoyeon.han: 이전 구현은 주석으로 보존.
+# def render_login_screen(auth):
+#     """심플 로그인 화면 — 중앙 로고 + 최소 폼 (홈처럼 심플).
+#     2026-07-13 hoyeon.han: 기존 auth.show_login_page(제목/도움말/경고박스 등)를 대체.
+#       로그인 로직은 auth.login() 재사용.
+#     """
+#     uri = _logo_data_uri()
+#     _, mid, _ = st.columns([1, 1.3, 1])
+#     with mid:
+#         if uri:
+#             st.markdown(
+#                 '<div style="text-align:center;padding:7vh 0 3vh;">'
+#                 '<img src="' + uri + '" alt="SOLLUME ESTHÉ" style="width:75%;max-width:320px;"/></div>',
+#                 unsafe_allow_html=True,
+#             )
+#         with st.form("sollume_login", border=False):
+#             uid = st.text_input("아이디", placeholder="아이디를 입력하세요")
+#             pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
+#             if st.form_submit_button("로그인", type="primary", use_container_width=True):
+#                 if auth.login(uid, pw):
+#                     st.rerun()
+#                 else:
+#                     st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
+#
+#
 def render_login_screen(auth):
-    """심플 로그인 화면 — 중앙 로고 + 최소 폼 (홈처럼 심플).
-    2026-07-13 hoyeon.han: 기존 auth.show_login_page(제목/도움말/경고박스 등)를 대체.
-      로그인 로직은 auth.login() 재사용.
-    """
+    """2026-10-14 hoyeon.han: 비밀번호 단독 폼 대신 전용 인증 서버로 이동."""
+    from html import escape
     uri = _logo_data_uri()
-    _, mid, _ = st.columns([1, 1.3, 1])
-    with mid:
+    _, middle, _ = st.columns([1, 1.3, 1])
+    with middle:
         if uri:
-            st.markdown(
-                '<div style="text-align:center;padding:7vh 0 3vh;">'
-                '<img src="' + uri + '" alt="SOLLUME ESTHÉ" style="width:75%;max-width:320px;"/></div>',
-                unsafe_allow_html=True,
-            )
-        with st.form("sollume_login", border=False):
-            uid = st.text_input("아이디", placeholder="아이디를 입력하세요")
-            pw = st.text_input("비밀번호", type="password", placeholder="비밀번호를 입력하세요")
-            if st.form_submit_button("로그인", type="primary", use_container_width=True):
-                if auth.login(uid, pw):
-                    st.rerun()
-                else:
-                    st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
+            st.markdown('<div style="text-align:center;padding:7vh 0 3vh;">'
+                        '<img src="' + uri + '" alt="SOLLUME ESTHÉ" style="width:75%;max-width:320px;"/></div>',
+                        unsafe_allow_html=True)
+        st.caption('직원 전용 회계 시스템 · 비밀번호와 인증 앱 번호로 로그인합니다.')
+        try:
+            url = escape(auth.authentication_url(), quote=True)
+            st.markdown(f'<a href="{url}" target="_self">🔒 로그인 화면으로 이동</a>', unsafe_allow_html=True)
+        except ValueError as error:
+            st.error(str(error))
+            st.info('인증 서버 설정을 확인해 주세요. 서버 관리자에게 문의하세요.')
 
 
+# 2026-10-14 hoyeon.han: 이전 구현은 주석으로 보존.
+# def render_sidebar_user_simple():
+#     """사이드바 간소화 사용자 블록 — 아바타 + 이름/역할 + 로그아웃.
+#     2026-07-10 hoyeon.han: 디자인 개선 - 기존 auth.show_user_info_sidebar()의
+#       제목/로그인시각/세션만료를 덜어낸 심플 버전. 세션·로그아웃 로직은 auth 재사용.
+#     """
+#     import auth  # 로컬 import (세션 기반)
+#
+#     with st.sidebar:
+#         if not auth.is_session_valid():
+#             return
+#         user = auth.get_current_user() or {}
+#         name = user.get("full_name") or user.get("username") or "사용자"
+#         role = "관리자" if user.get("is_admin") else "사용자"
+#         initial = name.strip()[0] if name.strip() else "·"
+#
+#         st.divider()
+#         st.markdown(
+#             f'<div class="sl-user"><div class="sl-avatar">{initial}</div>'
+#             f'<div><div class="sl-uname">{name}</div>'
+#             f'<div class="sl-urole">{role}</div></div></div>',
+#             unsafe_allow_html=True,
+#         )
+#         if st.button("⏻ 로그아웃", use_container_width=True, key="sidebar_logout_btn"):
+#             auth.logout()
+#             st.rerun()
+#
+#
 def render_sidebar_user_simple():
-    """사이드바 간소화 사용자 블록 — 아바타 + 이름/역할 + 로그아웃.
-    2026-07-10 hoyeon.han: 디자인 개선 - 기존 auth.show_user_info_sidebar()의
-      제목/로그인시각/세션만료를 덜어낸 심플 버전. 세션·로그아웃 로직은 auth 재사용.
-    """
-    import auth  # 로컬 import (세션 기반)
-
+    """2026-10-14 hoyeon.han: 최신 역할 표시·이름 이스케이프·안전한 계정 관리."""
+    from html import escape
+    import auth
+    user = auth.get_current_user()
+    if not user:
+        return
+    name = str(user.get('full_name') or user.get('username') or '사용자')
+    initial = name.strip()[0] if name.strip() else '·'
+    role = '관리자' if user.get('is_admin') else '직원'
     with st.sidebar:
-        if not auth.is_session_valid():
-            return
-        user = auth.get_current_user() or {}
-        name = user.get("full_name") or user.get("username") or "사용자"
-        role = "관리자" if user.get("is_admin") else "사용자"
-        initial = name.strip()[0] if name.strip() else "·"
-
         st.divider()
-        st.markdown(
-            f'<div class="sl-user"><div class="sl-avatar">{initial}</div>'
-            f'<div><div class="sl-uname">{name}</div>'
-            f'<div class="sl-urole">{role}</div></div></div>',
-            unsafe_allow_html=True,
-        )
-        if st.button("⏻ 로그아웃", use_container_width=True, key="sidebar_logout_btn"):
-            auth.logout()
-            st.rerun()
+        st.markdown(f'<div class="sl-user"><div class="sl-avatar">{escape(initial)}</div>'
+                    f'<div><div class="sl-uname">{escape(name)}</div>'
+                    f'<div class="sl-urole">{role}</div></div></div>', unsafe_allow_html=True)
+        account = escape(auth.authentication_url('/auth/account'), quote=True)
+        logout = escape(auth.authentication_url('/auth/logout'), quote=True)
+        st.markdown(f'<a href="{account}" target="_self">비밀번호 변경</a> · '
+                    f'<a href="{logout}" target="_self">로그아웃</a>', unsafe_allow_html=True)
 
 
 def render_sidebar_user_info():
@@ -289,9 +348,12 @@ def render_sidebar_system_status():
         st.divider()
 
         # 로그 다운로드 버튼 (2025-04-13 hoyeon.han: 신규 추가)
-        if os.path.exists("logs/app.log"):
+        if os.path.exists("logs/app.log") and __import__("auth").is_admin():
             with open("logs/app.log", "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 공개 파일 제공 대신 관리자 전용 다운로드.
+                # st.download_button(
+                secure_download_button(
+                    page_id='system', admin_only=True,
                     label="🐛 로그 다운로드",
                     data=f.read(),
                     file_name=f"app_log_{datetime.now().strftime('%Y%m%d')}.log",
