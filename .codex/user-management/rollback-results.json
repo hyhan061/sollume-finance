@@ -1,0 +1,1041 @@
+{
+  "started_at": "2026-10-15T08:34:51.338124+00:00",
+  "generated_at": "2026-10-15T08:37:45.182179+00:00",
+  "scope": "complete rollback rehearsal",
+  "passed": true,
+  "check_count": 55,
+  "checks": [
+    {
+      "name": "initial_real_https_requires_auth",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "plan_rejects_uncheckpointed_current_wal_without_mutation",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "capture_includes_committed_wal_data",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "offline_image_archive_exists_and_manifest_checksum_matches",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "release_secret_files_owner_only",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "public_release_metadata_contains_no_plaintext_secrets",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "default_rollback_is_readonly_plan",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "real_shell_wrapper_keeps_production_port_checks_and_exposes_explicit_apply",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "production_default_rejects_fixture_high_published_ports",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "manifest_project_tampering_rejected_before_mutation",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "offline_archive_corruption_rejected_before_mutation",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "release_path_outside_allowed_directory_rejected",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "unsafe_environment_key_rejected_before_mutation",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "current_database_mount_path_mismatch_rejected_before_mutation",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "secure_restore_completed_with_public_auth_guards",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "secure_restore_keeps_latest_password_role_grants_and_mfa",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "secure_restore_clears_sessions_pending_enrollment_and_downloads",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "secure_restore_keeps_latest_customer_and_order_files",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "tag_movement_does_not_change_restored_image_ids",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_cpu_memory_and_bind_mounts_preserved",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_readonly_root_and_tmpfs_preserved",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "shell_export_contamination_cannot_replace_saved_dotenv_auth_keys",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "revoked_pre_rollback_session_cookie_is_denied",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_https_mfa_login_with_preserved_encrypted_secret_succeeds",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "nginx_failure_keeps_actual_https503_and_current_state_backup",
+      "passed": true,
+      "evidence": "actual Docker/HTTPS with one injected failing operation"
+    },
+    {
+      "name": "nginx_failure_can_retry_from_partially_stopped_services",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "image_failure_keeps_actual_https503_and_current_state_backup",
+      "passed": true,
+      "evidence": "actual Docker/HTTPS with one injected failing operation"
+    },
+    {
+      "name": "image_failure_can_retry_from_partially_stopped_services",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "start_failure_keeps_actual_https503_and_current_state_backup",
+      "passed": true,
+      "evidence": "actual Docker/HTTPS with one injected failing operation"
+    },
+    {
+      "name": "start_failure_can_retry_from_partially_stopped_services",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "health_failure_keeps_actual_https503_and_current_state_backup",
+      "passed": true,
+      "evidence": "actual Docker/HTTPS with one injected failing operation"
+    },
+    {
+      "name": "health_failure_can_retry_from_partially_stopped_services",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "interrupt_failure_keeps_actual_https503_and_current_state_backup",
+      "passed": true,
+      "evidence": "actual Docker/HTTPS with one injected failing operation"
+    },
+    {
+      "name": "interrupt_failure_can_retry_from_partially_stopped_services",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "missing_service_recovery_metadata_contains_no_plaintext_secrets",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "missing_auth_service_after_failed_deployment_can_restore",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_snapshot_contains_unmodified_original_user_db",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_missing_required_flags_denied_0_False",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_missing_required_flags_denied_1_False",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_missing_required_flags_denied_1_True",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "explicit_legacy_restore_still_defaults_readonly",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_restore_keeps_real_https503",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_restore_does_not_revive_changed_deleted_stopped_or_reassigned_accounts",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_capture_user_db_stays_unchanged",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "unchanged_legacy_bcrypt_password_still_matches",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_old_image_auth_qa_stable_success",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_old_image_auth_qa_changed_denied",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_password_recovery_denies_qa_stopped",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_password_recovery_denies_qa_deleted",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_password_recovery_denies_qa_renamed",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_password_recovery_defaults_to_plan",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_password_apply_requires_hidden_input_tty",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_tty_legacy_password_reset_succeeds_without_password_echo",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "actual_old_image_auth_qa_changed_success",
+      "passed": true,
+      "evidence": "actual"
+    },
+    {
+      "name": "legacy_password_reset_never_reopens_public_https",
+      "passed": true,
+      "evidence": "actual"
+    }
+  ],
+  "scenarios": {
+    "preflight_guards": {
+      "passed": true,
+      "evidence": "actual validator + tampered synthetic artifacts"
+    },
+    "secure_restore": {
+      "passed": true,
+      "evidence": "actual Docker/Compose/SQLite/HTTPS"
+    },
+    "failure_paths": {
+      "nginx": {
+        "passed": true,
+        "evidence": "actual Docker/HTTPS; failing operation injected"
+      },
+      "image": {
+        "passed": true,
+        "evidence": "actual Docker/HTTPS; failing operation injected"
+      },
+      "start": {
+        "passed": true,
+        "evidence": "actual Docker/HTTPS; failing operation injected"
+      },
+      "health": {
+        "passed": true,
+        "evidence": "actual Docker/HTTPS; failing operation injected"
+      },
+      "interrupt": {
+        "passed": true,
+        "evidence": "actual Docker/HTTPS; failing operation injected"
+      }
+    },
+    "legacy_restore": {
+      "passed": true,
+      "evidence": "actual legacy/current images, SQLite, Docker/Compose, HTTPS, PTY"
+    }
+  },
+  "cleanup_complete": true,
+  "original_nine_files_unchanged": true,
+  "source_unchanged_during_run": true,
+  "source_sha256": {
+    "scripts/release_snapshot.py": "3fb19175b909759c8e6ce6d2c99b3a934a03e4d1dc8983e1c249295135e9b11a",
+    "rollback-oracle.sh": "ed5f5971a6c6822bcb92e6e785fb6da721717ffeddbf13617e82cfe99eb0f964",
+    "deploy-oracle.sh": "7b6a12a28f5d5e28ecf2bf8a5a6719aa27373ac06c728b5503df2fa5d43fb38d",
+    ".codex/user-management/verify_rollback.py": "996e12bd0b5641ec4125907ec6bf5632a79dea645e9b767e37c57b095d8f3a43",
+    ".codex/tests/test_rollback.py": "25e715ebe22f42687a525d6c7d85068c41aaf5766afc1aecec743d9b6012042f"
+  },
+  "production_deployed": false,
+  "error_type": null,
+  "diagnostics": [
+    {
+      "https_observations": [
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.013
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.016
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.013
+        },
+        {
+          "path": "/media/qa",
+          "status": 403,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.027
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.015
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.015
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.016
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.038
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.014
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.018
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.015
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.012
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.015
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.015
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.013
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.021
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.02
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.012
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 500,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.017
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.014
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/media/rollback-check",
+          "status": 403,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 401,
+          "elapsed_seconds": 0.013
+        }
+      ],
+      "docker_failures": [],
+      "receipts": [
+        {
+          "stage": "completed",
+          "completed": true,
+          "failed": null,
+          "maintenance_confirmed": null
+        }
+      ]
+    },
+    {
+      "https_observations": [
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.006
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/auth/login",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        },
+        {
+          "path": "/media/test",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/downloads/test",
+          "status": 503,
+          "elapsed_seconds": 0.002
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.014
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.011
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.009
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.005
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.007
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.003
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.008
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.01
+        },
+        {
+          "path": "/",
+          "status": 503,
+          "elapsed_seconds": 0.004
+        }
+      ],
+      "docker_failures": [],
+      "receipts": [
+        {
+          "stage": "completed",
+          "completed": true,
+          "failed": null,
+          "maintenance_confirmed": null
+        }
+      ]
+    }
+  ],
+  "exception_chain": [],
+  "limitations": [
+    "Nginx sudo 명령은 fixture 컨테이너에 연결하고 upstream만 host.docker.internal의 임시 published 포트로 변환했다. 실제 운영 서버에는 연결하지 않았다.",
+    "TLS는 임시 자체 서명 인증서이며 fixture CA로 검증했다.",
+    "테스트 프로세스의 EXPECTED_PUBLISHED_PORTS만 격리 고포트로 대체했다. 운영 기본 고정포트 정책의 고포트 거부는 별도로 확인했다."
+  ]
+}

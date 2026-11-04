@@ -1,0 +1,778 @@
+{
+  "started_at": "2026-10-19T06:04:51.794149+00:00",
+  "generated_at": "2026-10-19T06:06:24.229112+00:00",
+  "scope": "complete manual archive restore rehearsal",
+  "passed": true,
+  "check_count": 32,
+  "checks": [
+    {
+      "name": "actual_gnu_tar_binary_used",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_gnu_root_dot_and_dot_slash_prefix_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_nonselected_virtualenv_symlink_and_past_backups_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_zero_length_wal_entry_present",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_plan_validated_without_docker_mutation",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_two_distinct_original_image_ids_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_prepare_idempotent",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_inspect_cmd_entrypoint_and_image_generate_restoration_compose",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_source_three_archives_unchanged_after_prepare",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_rollback_defaults_readonly_and_never_public_resume",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "legacy_apply_requires_both_explicit_flags_0False",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "legacy_apply_requires_both_explicit_flags_1False",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "legacy_apply_requires_both_explicit_flags_1True",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "unlisted_actual_legacy_site_rejected_before_any_source_or_runtime_mutation",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "injected_image_failure_preserves_current_backup_and_all_http_https_ingress503",
+      "passed": true,
+      "evidence": "actual Docker/SQLite/HTTP/HTTPS; image load failure injected"
+    },
+    {
+      "name": "failure_stops_only_accounting_containers_and_preserves_other_canaries",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "failure_keeps_original_manual_archives_and_current_business_files",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_restore_from_partially_removed_state_completes_private",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_inspect_config_resources_logs_bind_rw_and_loopback_ports_match_original",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "current_rotated_api_key_overrides_archived_key",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_legacy_service_health_checks_pass",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "latest_added_stopped_deleted_password_changed_accounts_and_demotion_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "latest_full_security_state_and_added_account_are_preserved_in_private_rescue",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "current_business_files_original_archives_and_other_canaries_preserved",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_old_image_private_login_accepts_unchanged_user",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_old_image_private_login_denies_discarded_password",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_cannot_revive_qa_stopped",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_cannot_revive_qa_deleted",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_changed_admin_and_added_account_default_to_plan",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_manual_password_tty_reset_succeeds_without_echo",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "actual_changed_admin_authenticates_privately_after_tty_reset",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    },
+    {
+      "name": "manual_password_and_private_login_never_reopen_any_ingress",
+      "passed": true,
+      "evidence": "actual Docker/GNU tar/SQLite"
+    }
+  ],
+  "latest_stage": "completed",
+  "helper_source_revision": "1808955db18e8c292cdf3c1f27b937a1256df2591a27e7b3927dc7f74dc1a853",
+  "source_sha256": {
+    "scripts/release_snapshot.py": "1808955db18e8c292cdf3c1f27b937a1256df2591a27e7b3927dc7f74dc1a853",
+    "deploy-oracle.sh": "861a1bf52d3969713e1c4eea96e812e5d6beca613034143e1df1dff26fe3bcd6",
+    "rollback-oracle.sh": "104d65b8f46a9f3673486c06216a64b9c1aa02ab5faa4c623701a62e4143fe60",
+    ".codex/user-management/verify_manual_archive.py": "ae2147063a5212031f050ee1e3edd694b142ec2d36fc16af99fd876e2343a079",
+    ".codex/tests/test_manual_archive.py": "c379cf4784943a5c5157185c5183dda692b4b7b0e58bddd06a4ff79d22194158"
+  },
+  "source_unchanged_during_run": true,
+  "original_nine_files_unchanged": true,
+  "cleanup_complete": true,
+  "production_deployed": false,
+  "diagnostics": [
+    {
+      "gnu_tar": "tar (GNU tar) 1.35",
+      "https_observations": [
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.011
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.009
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.012
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.01
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.015
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.006
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.007
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.011
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.011
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.008
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.004
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503,
+          "seconds": 0.005
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/auth/login",
+          "status": 503,
+          "seconds": 0.003
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/downloads/test",
+          "status": 503,
+          "seconds": 0.011
+        }
+      ],
+      "http_observations": [
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sollumeesthe.com",
+          "path": "/",
+          "status": 503
+        },
+        {
+          "host": "sol-fin.duckdns.org",
+          "path": "/",
+          "status": 503
+        }
+      ],
+      "docker_failures": [],
+      "saved_image_ids": [
+        "sha256:7a71e8e2a1426520e156c59cd94073b357409f70d459f300897fc48493aec4e8",
+        "sha256:f27241a6718e31ee7d6ff5655092e1acc66896cd4fa92caa217d8748793438f0"
+      ]
+    }
+  ],
+  "exception_chain": [],
+  "parent_regression": {
+    "reported_by": "parent agent",
+    "directly_executed_here": false,
+    "business_and_security_passed": 240,
+    "seconds": 32.58,
+    "python_312_stdlib_plan": {
+      "python": "3.12.13",
+      "passed": true,
+      "returncode": 0,
+      "source_hash": "1808955db18e8c292cdf3c1f27b937a1256df2591a27e7b3927dc7f74dc1a853",
+      "original_archive_unchanged": true,
+      "temporary_fixture_and_venv_cleaned": true,
+      "reported_by": "parent agent",
+      "directly_executed_here": false,
+      "scope": "Synthetic classic manual-plan CLI in a new stdlib-only Python3.12 virtual environment"
+    }
+  },
+  "limitations": [
+    "Nginx sudo 명령은 격리 컨테이너로 연결했고 nginx-T 파일경계는 원본사이트 메타데이터를 반환한다.",
+    "실제 upstream은 host.docker.internal의 고유 loopback 게시포트로 연결한다. 운영8501/8503은 사용하지 않는다.",
+    "TLS는 임시 자체서명 fixture CA이며 외부 도메인에는 연결하지 않는다.",
+    "운영의 원본 수동 3파일은 제공되지 않아 새로 만든 합성 백업으로만 검증했다.",
+    "운영자 private 로그인은 실제 구버전 UserDB 핸들러를 network-none 컨테이너에서 검증했다. 브라우저 GUI 검증은 수행하지 않았다."
+  ],
+  "post_run_cleanup": {
+    "generated_at": "2026-10-19T06:07:41.744462+00:00",
+    "remaining_owned_containers": 0,
+    "remaining_owned_networks": 0,
+    "remaining_owned_image_tags": 0,
+    "remaining_owned_temp_directories": 0,
+    "source_five_files_match_final_report": true,
+    "original_nine_files_unchanged_during_run": true,
+    "original_nine_hashes_match_repository_baseline": true,
+    "original_file_sha256": {
+      "database/customer_master.db.old": "6a756e8015bc94fcf565a5a0580766eaec347700c6c85a5cf64358ff18a143cc",
+      "database/customer_master.db": "c0207e781c288bd5561ca6b1fb0c551719ef836d3d6b025931779f07a54a1731",
+      "database/users.db": "95433672c79e04d5289efc51dad3d639630ee14c89e2c9c0e07a0eb4ef540ec5",
+      "database/customer_master_backup_20260409_142430.db": "a16813d2fd5ac1de1675111475ee7099272dd9e2e5fe9a25838da9dba8488114",
+      "database/test_customer_master.db": "506d217453ef07446ad780c3ad497e15143bdd409fa4d1827f82a1711dac73e4",
+      "database/backups/customer_master_backup_20251216_154458.db": "e103f4207642de13af4e53f64860b1cbf7760a0d6fa013345463569bef36d952",
+      "database/backups/customer_master_backup_20251216_162945.db": "bc83a287a2fbb0e37800e8fef65e3495cf493473752253708832ee548cd6654f",
+      "order_data/current.xlsm": "a230f7f39cb39b66a8e61939e2d5b356cd18f049c90ea1d2f0c999acb3a705a7",
+      "order_data/current.meta.json": "75fc299040fe6ae9a5f0734aee8248102144da32a713cb807e952eb33900e8c5"
+    },
+    "production_deployed": false,
+    "passed": true
+  }
+}

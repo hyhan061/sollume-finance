@@ -27,6 +27,11 @@ if spec is None or spec.loader is None:
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('period-voucher')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='period-voucher', admin_only=False)
 
 # 2026-04-09 hoyeon.han: 커스텀 사이드바
 # 2026-06-03 hoyeon.han: 발주내역 서버 저장/재사용 공통 컴포넌트 추가
@@ -395,8 +400,12 @@ def process_period_vouchers(
             vendor_part = f"_업체{len(vendor_names)}개" if vendor_names else ""
             sales_filename = f"매출_{date_part}{vendor_part}.xls"
             purchase_filename = f"매입_{date_part}{vendor_part}.xls"
-            sales_filepath = os.path.join("processed", sales_filename)
-            purchase_filepath = os.path.join("processed", purchase_filename)
+            # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+            # sales_filepath = os.path.join("processed", sales_filename)
+            sales_filepath = auth.unique_output_path(sales_filename, 'period-voucher')
+            # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+            # purchase_filepath = os.path.join("processed", purchase_filename)
+            purchase_filepath = auth.unique_output_path(purchase_filename, 'period-voucher')
 
             save_dataframe_to_xls(df_sales, sales_filepath)
             save_dataframe_to_xls(df_purchase, purchase_filepath)
@@ -530,7 +539,9 @@ if result:
                 result["df_sales"].head(20), use_container_width=True, height=300
             )
             with open(result["sales_filepath"], "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                # st.download_button(
+                protected_download(
                     label="📥 매출 파일 다운로드",
                     data=f.read(),
                     file_name=result["sales_filename"],
@@ -552,7 +563,9 @@ if result:
                 result["df_purchase"].head(20), use_container_width=True, height=300
             )
             with open(result["purchase_filepath"], "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                # st.download_button(
+                protected_download(
                     label="📥 매입 파일 다운로드",
                     data=f.read(),
                     file_name=result["purchase_filename"],

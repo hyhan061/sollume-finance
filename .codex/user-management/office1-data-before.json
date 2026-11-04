@@ -1,0 +1,11 @@
+{
+  "database/customer_master.db.old": "6a756e8015bc94fcf565a5a0580766eaec347700c6c85a5cf64358ff18a143cc",
+  "database/customer_master.db": "c0207e781c288bd5561ca6b1fb0c551719ef836d3d6b025931779f07a54a1731",
+  "database/users.db": "95433672c79e04d5289efc51dad3d639630ee14c89e2c9c0e07a0eb4ef540ec5",
+  "database/customer_master_backup_20260409_142430.db": "a16813d2fd5ac1de1675111475ee7099272dd9e2e5fe9a25838da9dba8488114",
+  "database/test_customer_master.db": "506d217453ef07446ad780c3ad497e15143bdd409fa4d1827f82a1711dac73e4",
+  "database/backups/customer_master_backup_20251216_154458.db": "e103f4207642de13af4e53f64860b1cbf7760a0d6fa013345463569bef36d952",
+  "database/backups/customer_master_backup_20251216_162945.db": "bc83a287a2fbb0e37800e8fef65e3495cf493473752253708832ee548cd6654f",
+  "order_data/current.xlsm": "a230f7f39cb39b66a8e61939e2d5b356cd18f049c90ea1d2f0c999acb3a705a7",
+  "order_data/current.meta.json": "75fc299040fe6ae9a5f0734aee8248102144da32a713cb807e952eb33900e8c5"
+}

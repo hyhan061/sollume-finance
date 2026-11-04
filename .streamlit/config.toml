@@ -8,10 +8,14 @@ port = 8501
 address = "0.0.0.0"
 
 # 파일 변경 감지 (개발 모드)
-runOnSave = true
+# 2026-10-14 hoyeon.han: 공개 운영 중 파일 변경 자동 실행 금지
+# runOnSave = true
+runOnSave = false
 
 # CORS 설정
-enableCORS = false
+# 2026-10-14 hoyeon.han: CORS·XSRF 보호 유지
+# enableCORS = false
+enableCORS = true
 enableXsrfProtection = true
 
 # 최대 업로드 크기 (MB)
@@ -64,5 +68,7 @@ level = "info"
 
 [client]
 # 클라이언트 설정
-showErrorDetails = true
+# 2026-10-14 hoyeon.han: 사용자 화면에 내부 경로·예외 상세정보 노출 금지
+# showErrorDetails = true
+showErrorDetails = false
 toolbarMode = "auto"

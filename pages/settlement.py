@@ -29,6 +29,11 @@ if spec is None or spec.loader is None:
 auth = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(auth)
 # auth.require_auth()
+# 2026-10-14 hoyeon.han: 메뉴 숨김과 별개로 페이지 실행 및 다운로드 권한 검사.
+auth.require_permission('settlement')
+from functools import partial
+from secure_downloads import secure_download_button
+protected_download = partial(secure_download_button, page_id='settlement', admin_only=False)
 
 # 커스텀 사이드바
 from ui_components import render_custom_sidebar  # noqa: E402
@@ -716,7 +721,9 @@ def _render_order_based_flow() -> None:
                     list(plan_final["seller_sheets"].keys()),
                     doc_type=doc_type,
                 )
-                out_path = os.path.join("processed", out_filename)
+                # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+                # out_path = os.path.join("processed", out_filename)
+                out_path = auth.unique_output_path(out_filename, 'settlement')
                 period_line = ss.build_period_line(selected_vendor, **date_kwargs)
                 ss.write_seller_settlement_xlsx(
                     out_path=out_path,
@@ -759,7 +766,9 @@ def _render_order_based_flow() -> None:
             st.session_state.settle_order_output_path
         ):
             with open(st.session_state.settle_order_output_path, "rb") as f:
-                st.download_button(
+                # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+                # st.download_button(
+                protected_download(
                     label=f"⬇️ {st.session_state.settle_order_output_filename} 다운로드",
                     data=f.read(),
                     file_name=st.session_state.settle_order_output_filename,
@@ -1151,7 +1160,10 @@ if (
     out_filename = st_mod.build_output_filename(
         doc_type, vendor, start_date, end_date
     )
-    out_path = os.path.join("processed", out_filename)
+    # 2026-10-14 hoyeon.han: 공유 경로 대신 세션·생성 건별 파일 보관.
+    # out_path = os.path.join("processed", out_filename)
+    # 2026-10-14 hoyeon.han: 미리보기에는 폴더를 만들지 않고 생성 시에만 경로를 할당.
+    # out_path = auth.unique_output_path(out_filename, 'settlement')
     period_line = st_mod.build_period_line(start_date, end_date, vendor)
 
     # 2026-05-31 hoyeon.han: 생성 옵션 (일반 시트 제외 / 전체 시트 금액 합계 강조)
@@ -1232,6 +1244,8 @@ if (
             #     period_line=period_line,
             #     sheets=sheets,
             # )
+            # 2026-10-14 hoyeon.han: 실제 생성 요청에서만 세션별 출력 폴더를 생성.
+            out_path = auth.unique_output_path(out_filename, 'settlement')
             st_mod.write_settlement_xlsx(
                 out_path=out_path,
                 title=parsed["title"],
@@ -1262,7 +1276,9 @@ if (
         st.session_state.settlement_output_path
     ):
         with open(st.session_state.settlement_output_path, "rb") as f:
-            st.download_button(
+            # 2026-10-14 hoyeon.han: 기존 공개 /media 다운로드 호출 보존.
+            # st.download_button(
+            protected_download(
                 label=f"⬇️ {st.session_state.settlement_output_filename} 다운로드",
                 data=f.read(),
                 file_name=st.session_state.settlement_output_filename,

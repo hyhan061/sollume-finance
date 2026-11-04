@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-10-14T18:17:14.704117+09:00",
+  "duration_seconds": 30.081,
+  "exit_code": 0,
+  "command": ".venv311/bin/python -m pytest .codex/tests/test_security_service.py .codex/tests/test_auth_gateway.py .codex/tests/test_auth_ui.py .codex/tests/test_security_config.py .codex/tests/test_protected_assets.py tests/test_ecount_settlement.py tests/test_seller_settlement.py tests/test_period_summary.py -q -p no:cacheprovider --tb=short",
+  "branch": "codex/strict-user-management",
+  "head": "21a10e35f8009984e912830801d362abd53ec18c",
+  "scope": "보안 핵심·Flask HTTP·Streamlit AppTest·운영 구성과 이카운트·셀러 정산서·기간 요약 회귀. 실제 Nginx84 및 Docker CLI opt-in 검증은 별도 보고서.",
+  "data": "합성 임시 인증 DB와 MFA 세션만 사용. 실제 계정/업무 DB·운영 키·운영 서버 변경 없음.",
+  "verified_change": "Docker /opt/venv 및 운영CLI 사전검사·운영 안내 변경이 반영된 소스 기준",
+  "verified_sources": {
+    "Dockerfile": "c7532952f293f0544d7a222d66c6c4a56db5876a6b78c1abce779586dde382a3",
+    "deploy-oracle.sh": "1934e52d2ce9bf4356ae593b1415200a21a93b45d81e2b0b3d2b265e149febab",
+    ".Codex/user-management/OPERATIONS.md": "453acb3c02cfa1a3a9347622c6069b853ffccb4fbcf05c3e2b00059d353957d8"
+  },
+  "sources_unchanged_during_run": true,
+  "selected_test_files": [
+    ".codex/tests/test_security_service.py",
+    ".codex/tests/test_auth_gateway.py",
+    ".codex/tests/test_auth_ui.py",
+    ".codex/tests/test_security_config.py",
+    ".codex/tests/test_protected_assets.py",
+    "tests/test_ecount_settlement.py",
+    "tests/test_seller_settlement.py",
+    "tests/test_period_summary.py"
+  ],
+  "docker_cli_opt_in_included": false,
+  "expected_count": 240,
+  "passed": 240,
+  "result_tail": "........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n........................                                                 [100%]\n240 passed in 29.80s",
+  "log_file": "/Users/hoyeonhan/dev/python/v3.11/sollume-finance/.Codex/user-management/regression-docker-venv-20261014.txt"
+}

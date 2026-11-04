@@ -1,0 +1,248 @@
+{
+  "started_at": "2026-10-19T08:12:22.796926+00:00",
+  "generated_at": "2026-10-19T08:12:32.274905+00:00",
+  "passed": true,
+  "check_count": 35,
+  "checks": [
+    {
+      "name": "host_verifier_runs_inside_python_venv",
+      "passed": true
+    },
+    {
+      "name": "original_nine_files_match_preserved_baseline",
+      "passed": true
+    },
+    {
+      "name": "isolated_compose_manifest_parses",
+      "passed": true
+    },
+    {
+      "name": "compose_network_none_no_ports_only_temporary_fixture_mount",
+      "passed": true
+    },
+    {
+      "name": "docker_entrypoint_python_uses_opt_venv",
+      "passed": true
+    },
+    {
+      "name": "docker_python_pip_streamlit_gunicorn_paths_share_venv",
+      "passed": true
+    },
+    {
+      "name": "built_image_cli_auth_source_matches_current_repository",
+      "passed": true
+    },
+    {
+      "name": "compose_entrypoint_python_exit_zero",
+      "passed": true
+    },
+    {
+      "name": "compose_entrypoint_python_uses_same_venv",
+      "passed": true
+    },
+    {
+      "name": "operational_cli_module_imports_do_not_create_db",
+      "passed": true
+    },
+    {
+      "name": "active_deployment_preflight_payload_extracted_unambiguously",
+      "passed": true
+    },
+    {
+      "name": "actual_deployment_preflight_in_venv_passes_without_creating_db",
+      "passed": true
+    },
+    {
+      "name": "actual_deployment_preflight_preserves_existing_db_exact_bytes",
+      "passed": true
+    },
+    {
+      "name": "actual_deployment_preflight_rejects_system_python_before_imports",
+      "passed": true
+    },
+    {
+      "name": "documented_compose_manage_users_list_exit_zero",
+      "passed": true
+    },
+    {
+      "name": "list_shows_three_legacy_accounts_roles_status_without_sensitive_values",
+      "passed": true
+    },
+    {
+      "name": "first_cli_migration_preserves_legacy_ids_hashes_history_permissions",
+      "passed": true
+    },
+    {
+      "name": "existing_admin_init_repeated_exit_zero_no_duplicate_accounts",
+      "passed": true
+    },
+    {
+      "name": "init_repeated_preserves_hashes_ids_history_roles_and_grants",
+      "passed": true
+    },
+    {
+      "name": "enrollment_confirmation_no_preserves_existing_account",
+      "passed": true
+    },
+    {
+      "name": "documented_enrollment_confirmation_yes_exit_zero",
+      "passed": true
+    },
+    {
+      "name": "cli_enrollment_code_stored_as_hash_not_plaintext",
+      "passed": true
+    },
+    {
+      "name": "enrollment_preserves_legacy_passwords_history_ids_and_permissions",
+      "passed": true
+    },
+    {
+      "name": "missing_encryption_key_cli_fails_closed_without_creating_db",
+      "passed": true
+    },
+    {
+      "name": "missing_encryption_key_init_fails_closed_without_creating_db",
+      "passed": true
+    },
+    {
+      "name": "non_tty_new_admin_rejected_without_reading_or_storing_password",
+      "passed": true
+    },
+    {
+      "name": "legacy-users.db_actual_http_mfa_probe_exit_zero",
+      "passed": true
+    },
+    {
+      "name": "legacy-users.db_issued_cli_code_completes_actual_http_mfa_registration",
+      "passed": true
+    },
+    {
+      "name": "after_intended_mfa_change_legacy_staff_and_inactive_accounts_unchanged",
+      "passed": true
+    },
+    {
+      "name": "list_after_mfa_reports_enrollment_completed",
+      "passed": true
+    },
+    {
+      "name": "actual_tty_new_admin_creation_exit_zero",
+      "passed": true
+    },
+    {
+      "name": "actual_tty_getpass_password_not_echoed",
+      "passed": true
+    },
+    {
+      "name": "actual_tty_created_only_one_admin_with_mandatory_mfa_and_password_change",
+      "passed": true
+    },
+    {
+      "name": "tty-admin.db_actual_http_mfa_probe_exit_zero",
+      "passed": true
+    },
+    {
+      "name": "tty-admin.db_issued_cli_code_completes_actual_http_mfa_registration",
+      "passed": true
+    }
+  ],
+  "observations": {
+    "image_architecture": "arm64",
+    "image_id": "sha256:ab32568096996aa932dd47c49d24a8b932d0e2177713637e97e66c7cf721304a",
+    "legacy_user_count_before": 3,
+    "legacy_history_rows_before": 2,
+    "docker_python": {
+      "prefix": "/opt/venv",
+      "base_prefix": "/usr/local",
+      "executable": "/opt/venv/bin/python",
+      "virtual_env": "/opt/venv",
+      "paths": {
+        "python": "/opt/venv/bin/python",
+        "python3": "/opt/venv/bin/python3",
+        "pip": "/opt/venv/bin/pip",
+        "streamlit": "/opt/venv/bin/streamlit",
+        "gunicorn": "/opt/venv/bin/gunicorn"
+      },
+      "shebangs": {
+        "pip": "#!/opt/venv/bin/python",
+        "streamlit": "#!/opt/venv/bin/python",
+        "gunicorn": "#!/opt/venv/bin/python"
+      },
+      "source_sha256": {
+        "requirements.txt": "b3f81bfdd2ecc31c4cce119a143ebfecf24c04e27ccf4e74d9ca37c7faecd661",
+        "scripts/manage_users.py": "3af67827a93e5f0ace6b2a1b6949760fce0028a2be77e7327fe586a59b9a3488",
+        "scripts/init_users_db.py": "29da6401ae6f3d1aa24af6f973025d5339d8a9cf685e6c790b7b103adfdac0b5",
+        "scripts/run_local.py": "30a6357340556dbe9332f0d5f7a1efa44c01aee36d2c453864cf4e6575fc0d40",
+        "Src/auth_gateway.py": "a32e612bd6802446bbb09345eeace62f870b2fdaacb09d3874df99103d7ff834",
+        "Src/security_service.py": "12905ff4dbde1d3cb35f8b8f41f275151a75a8391ff85fbd5c9c524f31c98402",
+        "Src/templates/auth.html": "d5fcb00766777d8eff84be29a594d040d38b0e8e9694830624c213309249da51"
+      }
+    },
+    "compose_python": {
+      "prefix": "/opt/venv",
+      "base_prefix": "/usr/local",
+      "executable": "/opt/venv/bin/python"
+    },
+    "deployment_preflight": {
+      "venv_returncode": 0,
+      "existing_db_returncode": 0,
+      "system_python_returncode": 1,
+      "payload_sha256": "671ca6c820b6b679605034a81122519da4a742e5bd3273a3f86a48141decddec"
+    },
+    "init_returncodes": [
+      0,
+      0
+    ],
+    "legacy_user_count_after_init": 3,
+    "legacy_history_rows_after_init": 2,
+    "legacy_identity_hash_grants_preserved_before_mfa": true,
+    "missing_key_cli_returncode": 1,
+    "non_tty_new_admin_returncode": 1,
+    "non_tty_new_admin_account_count": 0,
+    "legacy_admin_http_mfa": {
+      "authenticated": true,
+      "mfa_enrolled": true,
+      "password_changed": true,
+      "cookie_secure": true,
+      "code_consumed": true,
+      "secret_encrypted": true,
+      "code_reuse_denied": true,
+      "user_id": 42
+    },
+    "tty_new_admin_returncode": 0,
+    "tty_new_admin_account_count": 1,
+    "new_admin_http_mfa": {
+      "authenticated": true,
+      "mfa_enrolled": true,
+      "password_changed": true,
+      "cookie_secure": true,
+      "code_consumed": true,
+      "secret_encrypted": true,
+      "code_reuse_denied": true,
+      "user_id": 1
+    }
+  },
+  "source_sha256": {
+    "Dockerfile": "c7532952f293f0544d7a222d66c6c4a56db5876a6b78c1abce779586dde382a3",
+    "requirements.txt": "b3f81bfdd2ecc31c4cce119a143ebfecf24c04e27ccf4e74d9ca37c7faecd661",
+    "scripts/manage_users.py": "3af67827a93e5f0ace6b2a1b6949760fce0028a2be77e7327fe586a59b9a3488",
+    "scripts/init_users_db.py": "29da6401ae6f3d1aa24af6f973025d5339d8a9cf685e6c790b7b103adfdac0b5",
+    "scripts/run_local.py": "30a6357340556dbe9332f0d5f7a1efa44c01aee36d2c453864cf4e6575fc0d40",
+    "Src/auth_gateway.py": "a32e612bd6802446bbb09345eeace62f870b2fdaacb09d3874df99103d7ff834",
+    "Src/security_service.py": "12905ff4dbde1d3cb35f8b8f41f275151a75a8391ff85fbd5c9c524f31c98402",
+    "Src/templates/auth.html": "d5fcb00766777d8eff84be29a594d040d38b0e8e9694830624c213309249da51",
+    "deploy-oracle.sh": "cc5b05e4c55af6015d9278901525e2742ced0140fe58c7e0607902ae13eb0a4b"
+  },
+  "source_unchanged_during_run": true,
+  "original_data_file_count": 9,
+  "original_nine_files_unchanged": true,
+  "cleanup_complete": true,
+  "error_type": null,
+  "scope": "Local Docker image + generated isolated Compose only; no operational Compose, deployment or real account changes.",
+  "mfa_http_transport": "Actual production-mode auth_gateway routes in Flask test_client inside the container; no listening ports.",
+  "commands": [
+    "docker run --rm --network none --entrypoint python IMAGE ...",
+    "docker compose -f TEMP_COMPOSE run --rm --no-deps --entrypoint python sollume-auth scripts/manage_users.py --list",
+    "docker compose -f TEMP_COMPOSE run --rm --no-deps --entrypoint python sollume-auth scripts/init_users_db.py",
+    "docker compose -f TEMP_COMPOSE run --rm --no-deps --entrypoint python sollume-auth scripts/manage_users.py --enroll SYNTHETIC_ADMIN"
+  ]
+}

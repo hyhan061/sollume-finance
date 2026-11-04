@@ -1,0 +1,126 @@
+<!-- 2026-10-14 hoyeon.han: 직원 전용 비밀번호·인증 앱 등록·로그인 화면 -->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>솔루미랩 회계 — 직원 인증</title>
+  <style nonce="{{ nonce }}">
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "맑은 고딕", sans-serif; color: #19323c; background: #f3f6f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 20px; }
+    main { width: min(100%, 440px); margin: 4vh auto; background: white; padding: 30px; border: 1px solid #dce5e7; border-radius: 18px; box-shadow: 0 12px 36px #19323c0c; }
+    .brand { color: #26716e; font-weight: 750; letter-spacing: .025em; margin: 0 0 26px; }
+    h1 { font-size: 24px; line-height: 1.4; margin: 0 0 10px; }
+    p { line-height: 1.7; margin: 8px 0 18px; }
+    .help { color: #536c75; font-size: 14px; }
+    .message { padding: 12px 14px; background: #fff4df; border-left: 3px solid #d79826; border-radius: 4px; font-size: 14px; line-height: 1.6; }
+    label { display: block; font-weight: 600; font-size: 14px; margin: 20px 0 7px; }
+    input { width: 100%; padding: 12px; border: 1px solid #bbcbd0; border-radius: 8px; color: #19323c; background: white; font-size: 16px; }
+    input:focus { outline: 3px solid #b7dfda; border-color: #26716e; }
+    button { display: block; width: 100%; margin: 25px 0 15px; padding: 13px; border: 0; border-radius: 9px; background: #256c67; color: white; font-size: 16px; font-weight: 650; cursor: pointer; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #99c7c1; outline-offset: 3px; }
+    a { color: #256c67; text-underline-offset: 3px; }
+    .qr { width: min(100%, 270px); display: block; margin: 15px auto; }
+    code { display: block; padding: 10px; border-radius: 6px; background: #f2f6f6; overflow-wrap: anywhere; }
+    details { font-size: 14px; line-height: 1.6; }
+    footer { margin-top: 25px; padding-top: 16px; border-top: 1px solid #e4ecee; color: #647a81; font-size: 12px; line-height: 1.6; }
+    @media (max-width: 480px) { body { padding: 20px 14px; } main { padding: 24px 20px; margin: 0 auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">SOLLUME LAB · 회계</div>
+  {% for message in messages %}<p class="message" role="alert">{{ message }}</p>{% endfor %}
+  {% if mode == 'login' %}
+    <h1>직원 로그인</h1>
+    <p class="help">사내 직원 전용입니다. 비밀번호 확인 후 인증 앱의 6자리 번호를 입력합니다.</p>
+    <form method="post" action="{{ url_for('login_page') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="username">사용자 ID</label>
+      <input id="username" name="username" autocomplete="username" maxlength="100" required autofocus>
+      <label for="password">비밀번호</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required>
+      <button type="submit">다음: 2단계 인증</button>
+    </form>
+    <p class="help">계정 생성·잠금 해제·휴대전화 변경은 관리자에게 요청해 주세요.</p>
+  {% elif mode == 'mfa' %}
+    <h1>2단계 인증</h1>
+    <p class="help">등록한 인증 앱을 열고 현재 표시된 6자리 번호를 입력해 주세요.</p>
+    <form method="post" action="{{ url_for('mfa_page') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if must_change_password %}
+        <p class="message">비밀번호를 변경해야 합니다. 12자 이상의 새 비밀번호를 설정해 주세요.</p>
+        <label for="new_password">새 비밀번호</label>
+        <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+        <label for="confirm_password">새 비밀번호 확인</label>
+        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+      {% endif %}
+      <label for="otp">인증 앱 번호</label>
+      <input id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" required autofocus>
+      <button type="submit">인증하고 로그인</button>
+    </form>
+    <a href="{{ url_for('login_page') }}">로그인부터 다시 진행</a>
+  {% elif mode == 'enroll' %}
+    {% if not secret %}
+      <h1>인증 앱 최초 등록</h1>
+      <p class="help">관리자가 본인 확인 후 전달한 일회용 등록 코드를 입력해 주세요. 코드가 없으면 관리자에게 요청하세요.</p>
+      <form method="post" action="{{ url_for('enroll_page') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="stage" value="prepare">
+        <label for="enrollment_code">일회용 등록 코드</label>
+        <input id="enrollment_code" name="enrollment_code" autocomplete="off" maxlength="200" required autofocus>
+        <button type="submit">등록 코드 확인</button>
+      </form>
+    {% else %}
+      <h1>인증 앱 연결</h1>
+      <p class="help">Google Authenticator 또는 Microsoft Authenticator에서 계정을 추가하고 아래 QR 코드를 스캔해 주세요.</p>
+      <img class="qr" src="{{ qr_uri }}" alt="이 계정의 인증 앱 등록 QR 코드">
+      <details><summary>QR 스캔이 어려우면 수동 등록</summary><p>인증 앱에서 시간 기반 계정을 선택하고 아래 설정 키를 입력하세요. 설정 키와 QR 코드를 다른 사람에게 전달하지 마세요.</p><code>{{ secret }}</code></details>
+      <form method="post" action="{{ url_for('enroll_page') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="stage" value="complete">
+        {% if must_change_password %}
+          <label for="new_password">새 비밀번호 — 12자 이상</label>
+          <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+          <label for="confirm_password">새 비밀번호 확인</label>
+          <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+        {% endif %}
+        <label for="otp">연결한 인증 앱의 6자리 번호</label>
+        <input id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" required>
+        <button type="submit">등록 완료하고 로그인</button>
+      </form>
+    {% endif %}
+    <a href="{{ url_for('login_page') }}">로그인부터 다시 진행</a>
+  {% elif mode == 'logout' %}
+    <h1>로그아웃</h1>
+    <p>현재 로그인 세션을 종료합니다. 다시 사용하려면 비밀번호와 인증 앱 번호가 필요합니다.</p>
+    <form method="post" action="{{ url_for('logout_page') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">로그아웃</button>
+    </form>
+  {% elif mode == 'account' %}
+    <h1>내 비밀번호 변경</h1>
+    <p class="help">변경하면 기존 로그인 세션이 해제됩니다. 새 비밀번호와 인증 앱으로 다시 로그인하세요.</p>
+    <form method="post" action="{{ url_for('account_page') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="current_password">현재 비밀번호</label>
+      <input id="current_password" name="current_password" type="password" autocomplete="current-password" maxlength="1024" required>
+      <label for="new_password">새 비밀번호 — 12자 이상</label>
+      <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+      <label for="confirm_password">새 비밀번호 확인</label>
+      <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
+      <label for="otp">인증 앱 번호</label>
+      <input id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" required>
+      <button type="submit">비밀번호 변경</button>
+    </form>
+    <a href="{{ app_url }}">업무 화면으로 돌아가기</a>
+  {% else %}
+    <h1>접근 확인</h1>
+    <p role="alert">{{ error_message }}</p>
+    <a href="{{ url_for('login_page') }}">로그인 화면 열기</a>
+  {% endif %}
+  <footer>계정과 인증 앱을 함께 공유하지 마세요.<br>{% if development %}현재 로컬 개발 환경입니다.{% else %}솔루미랩 사내 직원 전용 시스템{% endif %}</footer>
+</main>
+</body>
+</html>

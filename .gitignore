@@ -107,3 +107,10 @@ CLAUDE.md
 
 .playwright-mcp/
 .sisyphus/
+
+# 2026-10-14 hoyeon.han: 인증 키·이전 DB 백업·보호된 파일은 버전 관리 제외.
+database/auth-development.key
+database/*.pre-security.bak
+database/*.pre-security.bak.*
+processed/secure_downloads/
+processed/_session_outputs/

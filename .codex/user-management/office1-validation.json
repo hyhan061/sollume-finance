@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-10-19T08:10:42.816205+00:00",
+  "author": "2026-10-19 hoyeon.han",
+  "branch": "codex/strict-user-management",
+  "public_origin": "https://office1.sollumeesthe.com",
+  "pytest": {
+    "tests": 306,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 12,
+    "passed": 294,
+    "seconds": 33.239
+  },
+  "docker_rehearsals": {
+    "manual_archive": {
+      "passed": true,
+      "check_count": 37,
+      "source_unchanged_during_run": true,
+      "original_nine_files_unchanged": true,
+      "cleanup_complete": true,
+      "production_deployed": false
+    },
+    "snapshot": {
+      "passed": true,
+      "check_count": 68,
+      "source_unchanged_during_run": true,
+      "original_nine_files_unchanged": true,
+      "cleanup_complete": true,
+      "production_deployed": false
+    },
+    "account_cli": {
+      "passed": true,
+      "check_count": 35,
+      "source_unchanged_during_run": true,
+      "original_nine_files_unchanged": true,
+      "cleanup_complete": true,
+      "production_deployed": false
+    }
+  },
+  "original_data_file_count": 9,
+  "original_data_files_unchanged": true,
+  "helper_sha256": "a36ae404cbdeac743e3dd88eecfd4f0b2b66717aea3396b0c8b6a9297c50b5f5",
+  "production_deployed": false,
+  "production_connection_performed": false,
+  "remote_push_performed": false,
+  "syntax_checks": {
+    "python_ast_files": 11,
+    "bash_files": 2,
+    "crlf_preserved_files": 3
+  },
+  "known_predeployment_requirement": "현재 deploy의 manual-prepare --check-current는 백업·런타임 대조이며 전체 Nginx 진입점 안전을 검사하지 않는다. 운영 배포 전에 기존 DuckDNS의 무인증 프록시 차단·외부 검증과 배포 공통 진입점 사전검사 보강이 필요하다.",
+  "limitations": [
+    "운영 수동 압축 백업 원본은 제공받지 않았으며 합성 자료만 사용했다.",
+    "실제 systemd·Certbot 갱신은 운영자 제공 조회·정상 완료 보고를 근거로 문서화했다.",
+    "하위 리허설 JSON의 parent_regression 참고값보다 이 파일의 직접 실행한 pytest 결과를 본 실행 근거로 사용한다."
+  ]
+}

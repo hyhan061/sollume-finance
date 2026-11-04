@@ -1,121 +1,133 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# 2026-10-14 hoyeon.han: 기존 배포 스크립트 보존(실행되지 않음)
+# #!/bin/bash
+#
+# # Synology NAS 배포 스크립트
+#
+# echo "======================================"
+# echo "  Synology NAS 배포"
+# echo "======================================"
+# echo ""
+#
+# # 설정
+# read -p "NAS IP 주소 또는 도메인 입력 (예: 192.168.1.100): " NAS_HOST
+# read -p "NAS 사용자명 입력 (기본: admin): " NAS_USER
+# NAS_USER=${NAS_USER:-admin}
+# NAS_PATH="/volume1/docker/sollume-finance"
+#
+# echo ""
+# echo "📋 배포 정보:"
+# echo "   NAS 주소: $NAS_HOST"
+# echo "   사용자명: $NAS_USER"
+# echo "   배포 경로: $NAS_PATH"
+# echo ""
+#
+# read -p "계속하시겠습니까? (y/N): " -n 1 -r
+# echo
+# if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+#     echo "배포를 취소했습니다."
+#     exit 0
+# fi
+#
+# # 1. NAS에 디렉토리 생성
+# echo ""
+# echo "📁 NAS에 디렉토리 생성 중..."
+# # 2025-12-16 hoyeon.han: database, pages 디렉토리 추가
+# ssh ${NAS_USER}@${NAS_HOST} "mkdir -p ${NAS_PATH}/{logs,processed,uploads,database,Src,pages,.streamlit}"
+#
+# if [ $? -ne 0 ]; then
+#     echo "❌ SSH 연결 실패. NAS 주소와 사용자명을 확인하세요."
+#     exit 1
+# fi
+#
+# # 2. 필수 파일 복사
+# echo ""
+# echo "📤 파일을 NAS로 전송 중..."
+#
+# # 애플리케이션 파일
+# # 2025-12-16 hoyeon.han: app.py → Home.py, Multi-Page App 구조로 변경
+# scp Home.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
+# scp Dockerfile ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
+# scp docker-compose.yml ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
+# scp requirements.txt ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
+# scp .dockerignore ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
+#
+# # Pages 디렉토리 (Multi-Page App)
+# scp pages/*.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/pages/
+#
+# # Src 디렉토리
+# scp Src/processing.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
+# scp Src/customer_master_db.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
+#
+# # Database 디렉토리
+# # 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 전송
+# scp database/customer_master.db ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/database/
+#
+# # Streamlit 설정
+# scp .streamlit/config.toml ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/.streamlit/
+#
+# if [ $? -ne 0 ]; then
+#     echo "❌ 파일 전송 실패!"
+#     exit 1
+# fi
+#
+# echo "✅ 파일 전송 완료!"
+#
+# # 3. NAS에서 Docker 컨테이너 실행
+# echo ""
+# echo "🚀 NAS에서 Docker 컨테이너를 시작합니다..."
+#
+# ssh ${NAS_USER}@${NAS_HOST} << 'EOF'
+# cd /volume1/docker/sollume-finance
+#
+# # 기존 컨테이너 중지 및 삭제
+# docker-compose down
+#
+# # 새 이미지 빌드
+# docker-compose build
+#
+# # 컨테이너 시작
+# docker-compose up -d
+#
+# # 상태 확인
+# echo ""
+# echo "📊 컨테이너 상태:"
+# docker-compose ps
+#
+# echo ""
+# echo "📋 최근 로그:"
+# docker-compose logs --tail=20
+# EOF
+#
+# if [ $? -eq 0 ]; then
+#     echo ""
+#     echo "✅ 배포 완료!"
+#     echo ""
+#     echo "🌐 다음 주소로 접속할 수 있습니다:"
+#     echo "   http://${NAS_HOST}:8501"
+#     echo ""
+#     echo "📋 유용한 명령어 (NAS에서 실행):"
+#     echo "   ssh ${NAS_USER}@${NAS_HOST}"
+#     echo "   cd ${NAS_PATH}"
+#     echo "   docker-compose logs -f          # 로그 확인"
+#     echo "   docker-compose restart          # 재시작"
+#     echo "   docker-compose down             # 종료"
+# else
+#     echo ""
+#     echo "❌ 배포 실패!"
+#     echo "NAS에 SSH 접속해서 로그를 확인하세요:"
+#     echo "   ssh ${NAS_USER}@${NAS_HOST}"
+#     echo "   cd ${NAS_PATH}"
+#     echo "   docker-compose logs"
+#     exit 1
+# fi
 
-# Synology NAS 배포 스크립트
-
-echo "======================================"
-echo "  Synology NAS 배포"
-echo "======================================"
-echo ""
-
-# 설정
-read -p "NAS IP 주소 또는 도메인 입력 (예: 192.168.1.100): " NAS_HOST
-read -p "NAS 사용자명 입력 (기본: admin): " NAS_USER
-NAS_USER=${NAS_USER:-admin}
-NAS_PATH="/volume1/docker/sollume-finance"
-
-echo ""
-echo "📋 배포 정보:"
-echo "   NAS 주소: $NAS_HOST"
-echo "   사용자명: $NAS_USER"
-echo "   배포 경로: $NAS_PATH"
-echo ""
-
-read -p "계속하시겠습니까? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "배포를 취소했습니다."
-    exit 0
-fi
-
-# 1. NAS에 디렉토리 생성
-echo ""
-echo "📁 NAS에 디렉토리 생성 중..."
-# 2025-12-16 hoyeon.han: database, pages 디렉토리 추가
-ssh ${NAS_USER}@${NAS_HOST} "mkdir -p ${NAS_PATH}/{logs,processed,uploads,database,Src,pages,.streamlit}"
-
-if [ $? -ne 0 ]; then
-    echo "❌ SSH 연결 실패. NAS 주소와 사용자명을 확인하세요."
-    exit 1
-fi
-
-# 2. 필수 파일 복사
-echo ""
-echo "📤 파일을 NAS로 전송 중..."
-
-# 애플리케이션 파일
-# 2025-12-16 hoyeon.han: app.py → Home.py, Multi-Page App 구조로 변경
-scp Home.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
-scp Dockerfile ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
-scp docker-compose.yml ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
-scp requirements.txt ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
-scp .dockerignore ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/
-
-# Pages 디렉토리 (Multi-Page App)
-scp pages/*.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/pages/
-
-# Src 디렉토리
-scp Src/processing.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
-scp Src/customer_master_db.py ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/Src/
-
-# Database 디렉토리
-# 2025-12-16 hoyeon.han: 엑셀 파일 대신 DB 전송
-scp database/customer_master.db ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/database/
-
-# Streamlit 설정
-scp .streamlit/config.toml ${NAS_USER}@${NAS_HOST}:${NAS_PATH}/.streamlit/
-
-if [ $? -ne 0 ]; then
-    echo "❌ 파일 전송 실패!"
-    exit 1
-fi
-
-echo "✅ 파일 전송 완료!"
-
-# 3. NAS에서 Docker 컨테이너 실행
-echo ""
-echo "🚀 NAS에서 Docker 컨테이너를 시작합니다..."
-
-ssh ${NAS_USER}@${NAS_HOST} << 'EOF'
-cd /volume1/docker/sollume-finance
-
-# 기존 컨테이너 중지 및 삭제
-docker-compose down
-
-# 새 이미지 빌드
-docker-compose build
-
-# 컨테이너 시작
-docker-compose up -d
-
-# 상태 확인
-echo ""
-echo "📊 컨테이너 상태:"
-docker-compose ps
-
-echo ""
-echo "📋 최근 로그:"
-docker-compose logs --tail=20
-EOF
-
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ 배포 완료!"
-    echo ""
-    echo "🌐 다음 주소로 접속할 수 있습니다:"
-    echo "   http://${NAS_HOST}:8501"
-    echo ""
-    echo "📋 유용한 명령어 (NAS에서 실행):"
-    echo "   ssh ${NAS_USER}@${NAS_HOST}"
-    echo "   cd ${NAS_PATH}"
-    echo "   docker-compose logs -f          # 로그 확인"
-    echo "   docker-compose restart          # 재시작"
-    echo "   docker-compose down             # 종료"
-else
-    echo ""
-    echo "❌ 배포 실패!"
-    echo "NAS에 SSH 접속해서 로그를 확인하세요:"
-    echo "   ssh ${NAS_USER}@${NAS_HOST}"
-    echo "   cd ${NAS_PATH}"
-    echo "   docker-compose logs"
-    exit 1
-fi
+# 2026-10-14 hoyeon.han: 기존 DB 덮어쓰기와 불완전한 인증 모듈 배포를 차단한다.
+set -euo pipefail
+echo "이전 NAS 자동 복사 배포는 사용자·거래처 데이터 보호를 위해 중단했습니다."
+echo "기존 database·order_data·processed 폴더를 보존하고 별도 SQLite 백업을 준비하세요."
+echo "전체 인증 코드를 포함한 Docker 이미지, 실제 TLS 인증서와 .env를 준비하세요."
+echo "Docker Nginx용 docker-compose.yml/nginx.conf를 기존 데이터 경로에 적용하세요."
+echo "상세 운영 안내: .Codex/user-management/OPERATIONS.md"
+echo "이 스크립트는 SSH·파일 전송·DB 교체·서비스 중지를 실행하지 않습니다."
+exit 1

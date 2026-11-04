@@ -1,0 +1,15 @@
+{
+  "command": ".venv311/bin/python -m pytest .codex/tests/test_manual_archive.py -q --tb=short",
+  "returncode": 0,
+  "passed_cases": 37,
+  "seconds": 1.3,
+  "source_sha256": {
+    "scripts/release_snapshot.py": "1808955db18e8c292cdf3c1f27b937a1256df2591a27e7b3927dc7f74dc1a853",
+    "deploy-oracle.sh": "861a1bf52d3969713e1c4eea96e812e5d6beca613034143e1df1dff26fe3bcd6",
+    "rollback-oracle.sh": "104d65b8f46a9f3673486c06216a64b9c1aa02ab5faa4c623701a62e4143fe60",
+    ".codex/user-management/verify_manual_archive.py": "ae2147063a5212031f050ee1e3edd694b142ec2d36fc16af99fd876e2343a079",
+    ".codex/tests/test_manual_archive.py": "c379cf4784943a5c5157185c5183dda692b4b7b0e58bddd06a4ff79d22194158"
+  },
+  "scope": "offline/fake runtime, real shell wrappers and readonly local Compose schema parser",
+  "stdout": ".....................................                                    [100%]\n37 passed in 1.30s\n"
+}

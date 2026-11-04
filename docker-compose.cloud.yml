@@ -1,43 +1,185 @@
-# Oracle Cloud용 Docker Compose 설정
-# 작성일: 2025-11-30
-# 작성자: hoyeon.han
+# 2026-10-14 hoyeon.han: 이전 구성 보존(실행되지 않음)
+# # Oracle Cloud용 Docker Compose 설정
+# # 작성일: 2025-11-30
+# # 작성자: hoyeon.han
+# #
+# # 사용법:
+# #   docker compose -f docker-compose.cloud.yml up -d
 #
-# 사용법:
-#   docker compose -f docker-compose.cloud.yml up -d
+# services:
+#   sollume-app:
+#     image: hoyeonhan/sollume-lab:latest
+#     container_name: sollume-finance-app
+#     ports:
+#       - "8501:8501"
+#     volumes:
+#       # 데이터 영속성을 위한 볼륨 마운트
+#       - ./logs:/app/logs
+#       - ./processed:/app/processed
+#       - ./uploads:/app/uploads
+#       # 2026-06-11 hoyeon.han: 2025-12-16 DB 전환(9c75f89) 때 이 파일만 누락된 마운트 복원
+#       # read_only 환경에서 database/backups 생성 오류(Errno 30) 및 재배포 시 DB 유실 방지
+#       - ./database:/app/database
+#       # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
+#       - ./order_data:/app/order_data
+#       # 거래처마스터 파일 (로컬에 준비 필요)
+#       - ./거래처마스터.xlsx:/app/Src/거래처마스터.xlsx:ro
+#     environment:
+#       - TZ=Asia/Seoul
+#       - PYTHONUNBUFFERED=1
+#       # 프로덕션 환경 설정
+#       - STREAMLIT_SERVER_HEADLESS=true
+#       - STREAMLIT_SERVER_FILE_WATCHER_TYPE=none
+#       - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+#     restart: unless-stopped
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
+#     # 리소스 제한 (Oracle Cloud 스펙에 맞춤)
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '4'
+#           memory: 20G
+#         reservations:
+#           cpus: '2'
+#           memory: 4G
+#     # 로깅 설정 (디스크 공간 관리)
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "50m"
+#         max-file: "5"
+#     networks:
+#       - sollume-network
+#     # 보안 설정
+#     security_opt:
+#       - no-new-privileges:true
+#     # 읽기 전용 루트 파일시스템 (데이터 디렉토리 제외)
+#     read_only: true
+#     tmpfs:
+#       - /tmp:size=1G
+#
+#   # 2026-06-11 hoyeon.han: 발주내역 API 서버 (OpenClaw 등 외부 에이전트 연동용, 신규)
+#   # 주의: requirements.txt 에 gunicorn 이 추가되었으므로 이 서비스를 띄우기 전에
+#   #       이미지를 다시 빌드/푸시해야 한다 (docker build -t hoyeonhan/sollume-lab:latest . && docker push ...)
+#   sollume-api:
+#     image: hoyeonhan/sollume-lab:latest
+#     container_name: sollume-finance-api
+#     command: gunicorn --bind 0.0.0.0:8502 --workers 2 --timeout 120 --pythonpath /app/Src api_server:app
+#     # 2026-06-11 hoyeon.han: 호스트에 직접 설치된 nginx 가 프록시하므로 루프백(127.0.0.1)으로만 발행
+#     # 호스트 nginx → 127.0.0.1:8502 로 전달. 외부 인터넷에서는 8502 직접 접근 불가.
+#     # expose:
+#     #   - "8502"  # (docker nginx 컨테이너 사용 시) - 호스트 nginx 방식으로 변경되어 미사용
+#     ports:
+#       - "127.0.0.1:8502:8502"
+#     volumes:
+#       - ./logs:/app/logs
+#       # 읽기 전용(:ro) 마운트 - API 는 파일을 내어주기만 하므로 수정/삭제 차단
+#       - ./order_data:/app/order_data:ro
+#     environment:
+#       - TZ=Asia/Seoul
+#       - PYTHONUNBUFFERED=1
+#       # 같은 폴더의 .env 파일에서 주입 (.env.example 참고)
+#       - ORDER_API_KEY=${ORDER_API_KEY}
+#     restart: unless-stopped
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '1'
+#           memory: 2G
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "20m"
+#         max-file: "3"
+#     networks:
+#       - sollume-network
+#     security_opt:
+#       - no-new-privileges:true
+#     read_only: true
+#     tmpfs:
+#       - /tmp:size=256M
+#
+#   # Nginx 리버스 프록시 (선택사항 - HTTPS용)
+#   # 2026-06-11 hoyeon.han: nginx 컨테이너 미사용 - Oracle 서버에는 호스트에 nginx 가
+#   # 직접 설치되어 있어 80 포트가 충돌한다. 호스트 nginx 에 /api/ location 을 추가해
+#   # 127.0.0.1:8502 로 프록시한다 (설정 예시: nginx-host-api.conf.example 참고).
+#   # nginx:
+#   #   image: nginx:alpine
+#   #   container_name: sollume-nginx
+#   #   ports:
+#   #     - "80:80"
+#   #     # - "443:443"  # HTTPS 인증서 준비 후 활성화 (nginx.conf 의 443 블록 참고)
+#   #   volumes:
+#   #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+#   #     # - ./ssl:/etc/nginx/ssl:ro  # HTTPS 인증서 준비 후 활성화
+#   #   depends_on:
+#   #     - sollume-app
+#   #     - sollume-api
+#   #   restart: unless-stopped
+#   #   networks:
+#   #     - sollume-network
+#
+# networks:
+#   sollume-network:
+#     driver: bridge
+#
+# # 명명된 볼륨 사용 (선택사항)
+# # volumes:
+# #   sollume-logs:
+# #     driver: local
+# #   sollume-processed:
+# #     driver: local
+# #   sollume-uploads:
+# #     driver: local
 
+# 2026-10-14 hoyeon.han: 필수 인증·내부 포트 제한 구성
 services:
   sollume-app:
     image: hoyeonhan/sollume-lab:latest
     container_name: sollume-finance-app
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
-      # 데이터 영속성을 위한 볼륨 마운트
       - ./logs:/app/logs
       - ./processed:/app/processed
       - ./uploads:/app/uploads
-      # 2026-06-11 hoyeon.han: 2025-12-16 DB 전환(9c75f89) 때 이 파일만 누락된 마운트 복원
-      # read_only 환경에서 database/backups 생성 오류(Errno 30) 및 재배포 시 DB 유실 방지
       - ./database:/app/database
-      # 2026-06-03 hoyeon.han: 발주내역 영속 저장소
       - ./order_data:/app/order_data
-      # 거래처마스터 파일 (로컬에 준비 필요)
+      # 2026-10-14 hoyeon.han: 기존 Excel fallback 마운트를 읽기 전용으로 유지한다.
       - ./거래처마스터.xlsx:/app/Src/거래처마스터.xlsx:ro
     environment:
-      - TZ=Asia/Seoul
-      - PYTHONUNBUFFERED=1
-      # 프로덕션 환경 설정
-      - STREAMLIT_SERVER_HEADLESS=true
-      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=none
-      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      AUTH_ENV: production
+      AUTH_PUBLIC_ORIGIN: ${AUTH_PUBLIC_ORIGIN:?HTTPS 공개 도메인 설정이 필요합니다}
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?인증 암호화 키 설정이 필요합니다}
+      AUTH_DB_PATH: /app/database/users.db
+      AUTH_DOWNLOAD_DIR: /app/processed/secure_downloads
+      STREAMLIT_SERVER_ENABLE_CORS: "true"
+      STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION: "true"
+      STREAMLIT_SERVER_RUN_ON_SAVE: "false"
+      STREAMLIT_SERVER_HEADLESS: "true"
+      STREAMLIT_SERVER_FILE_WATCHER_TYPE: none
+      STREAMLIT_CLIENT_SHOW_ERROR_DETAILS: "false"
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      # 2026-10-19 hoyeon.han: 확정한 office1 공개 도메인으로 통일한다.
+      # STREAMLIT_BROWSER_SERVER_ADDRESS: sollumeesthe.com
+      STREAMLIT_BROWSER_SERVER_ADDRESS: office1.sollumeesthe.com
+      STREAMLIT_BROWSER_SERVER_PORT: "443"
+      TRUSTED_PROXY_NETWORKS: 172.30.0.1/32,127.0.0.1/32
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    # 리소스 제한 (Oracle Cloud 스펙에 맞춤)
+    # 2026-10-14 hoyeon.han: main의 기존 CPU·메모리 상한과 예약 정책을 복원한다.
     deploy:
       resources:
         limits:
@@ -46,98 +188,111 @@ services:
         reservations:
           cpus: '2'
           memory: 4G
-    # 로깅 설정 (디스크 공간 관리)
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "50m"
         max-file: "5"
     networks:
       - sollume-network
-    # 보안 설정
+
+  # 인증 서버는 회계앱과 사용자 DB 및 비공개 다운로드 저장소를 공유한다.
+  sollume-auth:
+    image: hoyeonhan/sollume-lab:latest
+    container_name: sollume-finance-auth
+    command: ["gunicorn", "--bind", "0.0.0.0:8503", "--workers", "2", "--timeout", "60", "--pythonpath", "/app/Src", "auth_gateway:create_app()"]
+    ports:
+      - "127.0.0.1:8503:8503"
+    volumes:
+      - ./database:/app/database
+      - ./processed:/app/processed
+      - ./logs:/app/logs
+    environment:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      AUTH_ENV: production
+      AUTH_PUBLIC_ORIGIN: ${AUTH_PUBLIC_ORIGIN:?HTTPS 공개 도메인 설정이 필요합니다}
+      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:?인증 암호화 키 설정이 필요합니다}
+      AUTH_DB_PATH: /app/database/users.db
+      AUTH_DOWNLOAD_DIR: /app/processed/secure_downloads
+      TRUSTED_PROXY_NETWORKS: 172.30.0.1/32,127.0.0.1/32
+    restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    # 읽기 전용 루트 파일시스템 (데이터 디렉토리 제외)
     read_only: true
     tmpfs:
-      - /tmp:size=1G
-
-  # 2026-06-11 hoyeon.han: 발주내역 API 서버 (OpenClaw 등 외부 에이전트 연동용, 신규)
-  # 주의: requirements.txt 에 gunicorn 이 추가되었으므로 이 서비스를 띄우기 전에
-  #       이미지를 다시 빌드/푸시해야 한다 (docker build -t hoyeonhan/sollume-lab:latest . && docker push ...)
-  sollume-api:
-    image: hoyeonhan/sollume-lab:latest
-    container_name: sollume-finance-api
-    command: gunicorn --bind 0.0.0.0:8502 --workers 2 --timeout 120 --pythonpath /app/Src api_server:app
-    # 2026-06-11 hoyeon.han: 호스트에 직접 설치된 nginx 가 프록시하므로 루프백(127.0.0.1)으로만 발행
-    # 호스트 nginx → 127.0.0.1:8502 로 전달. 외부 인터넷에서는 8502 직접 접근 불가.
-    # expose:
-    #   - "8502"  # (docker nginx 컨테이너 사용 시) - 호스트 nginx 방식으로 변경되어 미사용
-    ports:
-      - "127.0.0.1:8502:8502"
-    volumes:
-      - ./logs:/app/logs
-      # 읽기 전용(:ro) 마운트 - API 는 파일을 내어주기만 하므로 수정/삭제 차단
-      - ./order_data:/app/order_data:ro
-    environment:
-      - TZ=Asia/Seoul
-      - PYTHONUNBUFFERED=1
-      # 같은 폴더의 .env 파일에서 주입 (.env.example 참고)
-      - ORDER_API_KEY=${ORDER_API_KEY}
-    restart: unless-stopped
+      - /tmp:size=128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+      # 2026-10-19 hoyeon.han: 확정한 office1 공개 도메인으로 통일한다.
+      # test: ["CMD", "curl", "-f", "-H", "Host: sollumeesthe.com", "http://localhost:8503/auth/health"]
+      test: ["CMD", "curl", "-f", "-H", "Host: office1.sollumeesthe.com", "http://localhost:8503/auth/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
+      start_period: 30s
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "20m"
         max-file: "3"
     networks:
       - sollume-network
+
+  # 기존 자동화 API는 브라우저 로그인과 별개의 X-API-Key 인증을 유지한다.
+  sollume-api:
+    image: hoyeonhan/sollume-lab:latest
+    container_name: sollume-finance-api
+    command: ["gunicorn", "--bind", "0.0.0.0:8502", "--workers", "2", "--timeout", "120", "--pythonpath", "/app/Src", "api_server:app"]
+    ports:
+      - "127.0.0.1:8502:8502"
+    volumes:
+      - ./logs:/app/logs
+      - ./order_data:/app/order_data:ro
+    environment:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: "1"
+      ORDER_API_KEY: ${ORDER_API_KEY:?기존 자동화 API 키 설정이 필요합니다}
+    restart: unless-stopped
+    # 2026-10-14 hoyeon.han: main의 기존 API CPU·메모리 상한을 복원한다.
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
     security_opt:
       - no-new-privileges:true
     read_only: true
     tmpfs:
       - /tmp:size=256M
-
-  # Nginx 리버스 프록시 (선택사항 - HTTPS용)
-  # 2026-06-11 hoyeon.han: nginx 컨테이너 미사용 - Oracle 서버에는 호스트에 nginx 가
-  # 직접 설치되어 있어 80 포트가 충돌한다. 호스트 nginx 에 /api/ location 을 추가해
-  # 127.0.0.1:8502 로 프록시한다 (설정 예시: nginx-host-api.conf.example 참고).
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: sollume-nginx
-  #   ports:
-  #     - "80:80"
-  #     # - "443:443"  # HTTPS 인증서 준비 후 활성화 (nginx.conf 의 443 블록 참고)
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
-  #     # - ./ssl:/etc/nginx/ssl:ro  # HTTPS 인증서 준비 후 활성화
-  #   depends_on:
-  #     - sollume-app
-  #     - sollume-api
-  #   restart: unless-stopped
-  #   networks:
-  #     - sollume-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - sollume-network
 
 networks:
   sollume-network:
     driver: bridge
-
-# 명명된 볼륨 사용 (선택사항)
-# volumes:
-#   sollume-logs:
-#     driver: local
-#   sollume-processed:
-#     driver: local
-#   sollume-uploads:
-#     driver: local
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
