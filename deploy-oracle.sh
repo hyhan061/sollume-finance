@@ -263,6 +263,10 @@ umask 077
 APP_DIR="${SOLLUME_APP_DIR:-$HOME/sollume-finance}"
 RAW_BASE="https://raw.githubusercontent.com/hyhan061/sollume-finance/main"
 COMPOSE_FILE="docker-compose.cloud.yml"
+# 2026-11-04 hoyeon.han: 기본 배포는 서버의 기존 인증 구성을 유지하며 이 이미지만 갱신한다.
+LATEST_IMAGE_REF="hoyeonhan/sollume-lab:latest"
+PULLED_IMAGE_ID=""
+SOURCE_FINGERPRINT=""
 # 2026-10-19 hoyeon.han: 서버에 준비한 office1 전용 Nginx 활성화 링크를 기본값으로 사용한다.
 # NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/sollume-finance}"
 NGINX_SITE_CONFIG="${SOLLUME_NGINX_SITE_CONFIG:-/etc/nginx/sites-enabled/zz-office1.sollumeesthe.com}"
@@ -307,6 +311,8 @@ while test "$#" -gt 0; do
             # echo "사용법: deploy-oracle.sh [--backup-dir 절대백업경로] [--nginx-config 인증사이트] [--nginx-config 기존회계사이트 ...]"
             echo "사용법: deploy-oracle.sh [--backup-dir 절대백업경로] [--nginx-config 인증사이트] [--nginx-config 기존회계사이트 ...] [--compose-file 절대경로 --local-image-id sha256:이미지ID]"
             echo "오프라인 준비본은 --compose-file과 --local-image-id를 반드시 함께 지정합니다. 다운로드·pull·build 없이 정확한 로컬 Linux ARM64 이미지만 사용합니다."
+            # 2026-11-04 hoyeon.han: 옵션 없는 기존 명령도 인증판의 기존 Compose로 실행한다.
+            echo "기본 실행은 현재 Compose의 인증·포트·데이터 설정을 보존하고 latest 이미지만 갱신합니다."
             echo "실제 배포 명령입니다. 수동 백업 점검만 할 때는 rollback-oracle.sh --backup-dir 경로를 사용하세요."
             exit 0
             ;;
@@ -321,7 +327,14 @@ if test -n "$LOCAL_COMPOSE_SOURCE" || test -n "$LOCAL_IMAGE_ID"; then
     test -f "$LOCAL_COMPOSE_SOURCE" && test -r "$LOCAL_COMPOSE_SOURCE" || fail "준비한 Compose 파일을 읽을 수 없습니다."
     [[ "$LOCAL_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "로컬 이미지 ID는 sha256: 다음에 소문자 16진수 64자리여야 합니다."
 fi
-if test "${#NGINX_CONFIG_ARGS[@]}" -eq 0; then NGINX_CONFIG_ARGS=(--nginx-config "$NGINX_SITE_CONFIG"); fi
+# if test "${#NGINX_CONFIG_ARGS[@]}" -eq 0; then NGINX_CONFIG_ARGS=(--nginx-config "$NGINX_SITE_CONFIG"); fi
+# 2026-11-04 hoyeon.han: 무인자 배포도 현재 인증 주소와 기존 두 회계 주소를 모두 검사한다.
+# 명시한 --nginx-config 목록은 그대로 사용하며 운영 Nginx 내용은 변경하지 않는다.
+if test "${#NGINX_CONFIG_ARGS[@]}" -eq 0; then
+    NGINX_CONFIG_ARGS=(--nginx-config "$NGINX_SITE_CONFIG"
+                      --nginx-config /etc/nginx/sites-enabled/sollume-finance
+                      --nginx-config /etc/nginx/sites-enabled/sol-fin)
+fi
 if test -n "$MANUAL_BACKUP_DIR"; then
     case "$MANUAL_BACKUP_DIR" in /*) ;; *) fail "압축 백업은 절대 경로로 지정하세요." ;; esac
 fi
@@ -347,6 +360,34 @@ test -x "$OPS_PYTHON" || fail ".venv-ops 가상환경이 필요합니다. python
 # 2026-10-19 hoyeon.han: 상위 backups 소유권을 바꾸지 않고 기존 releases 쓰기 가능 여부를 먼저 검사한다.
 test -d database/backups/releases && test -w database/backups/releases \
     || fail "Ubuntu 소유·0700인 database/backups/releases를 먼저 준비하세요. 상위 backups는 변경하지 않습니다."
+
+# 2026-11-04 hoyeon.han: 현재 운영 Compose·.env가 준비 도중 바뀌면 기존 변경을 덮어쓰지 않는다.
+source_fingerprint() {
+    "$OPS_PYTHON" - "$APP_DIR/$COMPOSE_FILE" "$APP_DIR/.env" <<'PY'
+import hashlib, pathlib, sys
+try:
+    print(':'.join(hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in sys.argv[1:]))
+except OSError:
+    raise SystemExit('현재 Compose 또는 환경 파일을 읽을 수 없습니다.')
+PY
+}
+assert_source_unchanged() {
+    if test -n "$SOURCE_FINGERPRINT"; then
+        local current
+        current=$(source_fingerprint) || fail "현재 Compose·.env를 다시 확인할 수 없습니다."
+        test "$current" = "$SOURCE_FINGERPRINT" \
+            || fail "배포 준비 중 현재 Compose·.env가 변경됐습니다. 원본을 유지하고 중단합니다."
+    fi
+}
+assert_latest_unchanged() {
+    if test -n "$PULLED_IMAGE_ID"; then
+        local current
+        current=$(docker image inspect --format '{{.Id}}' "$LATEST_IMAGE_REF") \
+            || fail "다운로드한 latest 이미지 ID를 다시 확인할 수 없습니다."
+        test "$current" = "$PULLED_IMAGE_ID" \
+            || fail "검증 중 latest 이미지 ID가 변경됐습니다. 서비스 교체 전에 중단합니다."
+    fi
+}
 
 # 기존 설정이나 내장 무인증 Compose로 폴백하면 접근 차단을 우회하므로 즉시 중단한다.
 # COMPOSE_STAGED=$(mktemp "${COMPOSE_FILE}.tmp.XXXXXX")
@@ -396,8 +437,29 @@ if len(host) != 2 or host[0] != 'linux' or host[1] not in ('arm64', 'aarch64'):
 print('준비한 로컬 이미지 확인: ' + expected + ' / linux/arm64')
 PY
 else
-    curl -fsSL --proto '=https' --tlsv1.2 "$RAW_BASE/$COMPOSE_FILE" -o "$COMPOSE_STAGED" \
-        || fail "최신 인증 Compose 다운로드에 실패했습니다. 실행 중인 구성은 변경하지 않았습니다."
+    # curl -fsSL --proto '=https' --tlsv1.2 "$RAW_BASE/$COMPOSE_FILE" -o "$COMPOSE_STAGED" \
+    #     || fail "최신 인증 Compose 다운로드에 실패했습니다. 실행 중인 구성은 변경하지 않았습니다."
+    # 2026-11-04 hoyeon.han: main의 Compose로 운영 설정을 교체하지 않고 이미지 참조만 바꾼다.
+    test -f "$COMPOSE_FILE" || fail "기존 인증 Compose가 없습니다. 자동 생성하거나 main에서 내려받지 않습니다."
+    SOURCE_FINGERPRINT=$(source_fingerprint) || fail "현재 Compose·.env를 읽을 수 없습니다."
+    docker compose --env-file .env -f "$COMPOSE_FILE" config --no-interpolate --format json > "$COMPOSE_STAGED" \
+        || fail "현재 인증 Compose를 해석할 수 없습니다. 기존 구성을 유지합니다."
+    "$OPS_PYTHON" - "$COMPOSE_STAGED" "$LATEST_IMAGE_REF" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+config = json.loads(path.read_text())
+services = config.get('services', {})
+required = {'sollume-app', 'sollume-api', 'sollume-auth'}
+if not isinstance(services, dict) or set(services) != required:
+    raise SystemExit('기존 인증 Compose에 회계앱·API·인증 서비스 3개가 정확히 있어야 합니다.')
+for service in services.values():
+    if not isinstance(service, dict) or 'build' in service:
+        raise SystemExit('기존 인증 Compose에 build 항목을 사용할 수 없습니다.')
+    service['image'] = sys.argv[2]
+    service['pull_policy'] = 'never'
+path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n')
+PY
+    assert_source_unchanged
 fi
 docker compose --env-file .env -f "$COMPOSE_STAGED" config --format json > "$COMPOSE_RENDERED" \
     || fail "인증 환경변수 또는 Compose 검증 실패. 실행 중인 구성은 변경하지 않았습니다."
@@ -496,8 +558,28 @@ echo "배포 전 복구 지점 준비 완료: $ROLLBACK_RELEASE"
 #     || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
 # 2026-10-20 hoyeon.han: 로컬 ID 모드는 기존 검증한 이미지만 사용하고 레지스트리에 접근하지 않는다.
 if test -z "$LOCAL_IMAGE_ID"; then
-    docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
-        || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+    # docker compose --env-file .env -f "$COMPOSE_STAGED" pull \
+    #     || fail "이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+    # 2026-11-04 hoyeon.han: 기존 상태 백업 후 latest를 한 번만 명시적으로 받는다.
+    assert_source_unchanged
+    docker pull "$LATEST_IMAGE_REF" || fail "latest 이미지 다운로드 실패. 기존 컨테이너를 유지합니다."
+    LATEST_METADATA=$(docker image inspect --format '{{.Id}} {{.Os}} {{.Architecture}}' "$LATEST_IMAGE_REF") \
+        || fail "다운로드한 latest 이미지 정보를 확인할 수 없습니다."
+    LATEST_HOST=$(docker info --format '{{.OSType}} {{.Architecture}}') \
+        || fail "현재 Docker 실행 플랫폼을 확인할 수 없습니다."
+    PULLED_IMAGE_ID=$("$OPS_PYTHON" - "$LATEST_METADATA" "$LATEST_HOST" <<'PY'
+import re, sys
+image, host = sys.argv[1].split(), sys.argv[2].split()
+if (len(image) != 3 or not re.fullmatch(r'sha256:[a-f0-9]{64}', image[0])
+        or image[1:] != ['linux', 'arm64'] or len(host) != 2
+        or host[0] != 'linux' or host[1] not in ('arm64', 'aarch64')):
+    raise SystemExit('latest 이미지와 현재 Docker의 Linux ARM64 플랫폼을 확인하세요.')
+print(image[0])
+PY
+    ) || fail "latest 이미지 ID·플랫폼 검증 실패. 기존 컨테이너를 유지합니다."
+    echo "받은 latest 이미지: $PULLED_IMAGE_ID / linux/arm64"
+    assert_source_unchanged
+    assert_latest_unchanged
 fi
 # 2026-10-14 hoyeon.han: DB를 열지 않고 Docker 가상환경과 인증·관리 CLI 포함 여부를 검사한다.
 # docker compose --env-file .env -f "$COMPOSE_STAGED" run --rm --no-deps --entrypoint python sollume-auth \
@@ -511,12 +593,17 @@ run_candidate_auth_check() {
     if test -n "$LOCAL_IMAGE_ID"; then
         docker compose --env-file .env -f "$COMPOSE_STAGED" run --pull never "$@"
     else
-        docker compose --env-file .env -f "$COMPOSE_STAGED" run "$@"
+        # docker compose --env-file .env -f "$COMPOSE_STAGED" run "$@"
+        # 2026-11-04 hoyeon.han: 검증 중 latest를 다시 받거나 암묵적으로 빌드하지 않는다.
+        docker compose --env-file .env -f "$COMPOSE_STAGED" run --pull never "$@"
     fi
 }
 run_candidate_auth_check --rm --no-deps --entrypoint python sollume-auth \
     -c 'import sys; assert sys.prefix != sys.base_prefix, "Docker Python 가상환경이 없습니다."; sys.path[:0] = ["/app/Src", "/app/scripts"]; import auth_gateway, security_service, pyotp, cryptography, argon2, qrcode, manage_users, init_users_db' \
     || fail "이미지의 가상환경 또는 인증·관리 CLI 검증에 실패했습니다. 수정된 Dockerfile과 필수 모듈을 포함해 이미지를 다시 빌드·게시하세요."
+# 2026-11-04 hoyeon.han: 실제 인증 검사 전후의 latest와 현재 운영 설정을 고정한다.
+assert_latest_unchanged
+assert_source_unchanged
 
 # BACKUP_DIR="database/backups/before_security_$(date +%Y%m%d_%H%M%S)"
 # 2026-10-19 hoyeon.han: root 소유 backups를 변경하지 않고 준비된 releases 아래에 보관한다.
@@ -544,6 +631,9 @@ docker compose --env-file .env -f "$COMPOSE_STAGED" config --format json > "$COM
 "$OPS_PYTHON" "$PREFLIGHT_HELPER" ready --app-dir "$APP_DIR" \
     --compose-json "$COMPOSE_RENDERED" "${NGINX_CONFIG_ARGS[@]}" --baseline "$PREFLIGHT_RESULT" >/dev/null \
     || fail "배포 준비 중 진입점 정책이 변경되었거나 차단 검사가 실패했습니다. 서비스를 교체하지 않습니다."
+# 2026-11-04 hoyeon.han: 후보 정책은 latest 문자열로 동일하게 유지하고 실제 태그 ID를 별도로 대조한다.
+assert_source_unchanged
+assert_latest_unchanged
 mv "$COMPOSE_STAGED" "$COMPOSE_FILE"
 # docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
 #     || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
@@ -552,7 +642,9 @@ if test -n "$LOCAL_IMAGE_ID"; then
     docker compose --env-file .env -f "$COMPOSE_FILE" up -d --pull never --no-build --wait --wait-timeout 120 \
         || fail "로컬 고정 이미지 서비스 준비 실패. 비공개 복구 안내를 확인하세요."
 else
-    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
+    # docker compose --env-file .env -f "$COMPOSE_FILE" up -d --wait --wait-timeout 120 \
+    # 2026-11-04 hoyeon.han: 받은 latest만 사용하며 교체 중 pull·build를 하지 않는다.
+    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --pull never --no-build --wait --wait-timeout 120 \
         || fail "서비스 준비 실패. 로그와 안전한 롤백 안내를 확인하세요."
 fi
 # sudo systemctl reload nginx || fail "Nginx 적용 실패. 서비스 포트는 루프백 제한 상태입니다."

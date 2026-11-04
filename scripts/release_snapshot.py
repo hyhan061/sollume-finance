@@ -55,7 +55,9 @@ MOUNT_SETS = {
 }
 # 2026-10-19 hoyeon.han: office1 전용 템플릿·고정 ACME 경로만 승인하며 기존 전체 정책을 대체합니다.
 # APPROVED_NGINX_SHA256 = '628df0b4489d9bfccf1aec0e09e394d50d33bcb183f2ce19c3f027fc49be2820'
-APPROVED_NGINX_SHA256 = '291f15ba4a6ad62449911ea7161157f1501e9b757e277d554d442b1a95b56a51'
+# 2026-10-21 hoyeon.han: health를 기존 로그인 검사·Streamlit 전달 경로로 돌린 정책만 승인한다.
+# APPROVED_NGINX_SHA256 = '291f15ba4a6ad62449911ea7161157f1501e9b757e277d554d442b1a95b56a51'
+APPROVED_NGINX_SHA256 = '882188cc54f73c6bf318eb87eaf4b145fc1bf0d88f04fdb2bf628d0a89f184be'
 
 
 class SafetyError(ValueError):

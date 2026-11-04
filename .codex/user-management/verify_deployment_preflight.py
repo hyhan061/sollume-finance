@@ -326,6 +326,17 @@ def main():
             time.sleep(0.5)
         verified = checker.verify(fixture.compose, baseline=ready)
         check('actual_tls_domain_paths_and_readonly_port_inventory_verify', verified['validated'] and not verified['runtime_transition_required'])
+        # 2026-10-21 hoyeon.han: health 404 재발과 미인증 공개를 실제 Nginx 응답으로 함께 차단한다.
+        check('anonymous_streamlit_health_json_requires_authentication',
+              fixture.probe('https://' + DOMAINS[0], '/_stcore/health',
+                            headers={'Accept': 'application/json'})['status'] == 401)
+        health_html = fixture.probe('https://' + DOMAINS[0], '/_stcore/health',
+                                    headers={'Accept': 'text/html'})
+        check('anonymous_streamlit_health_html_redirects_login',
+              # 2026-10-21 hoyeon.han: Nginx 기본 absolute_redirect의 고정 HTTPS 주소도 확인한다.
+              # health_html['status'] == 302 and health_html['location'] == '/auth/login')
+              health_html['status'] == 302 and health_html['location'] in
+              ('/auth/login', 'https://' + DOMAINS[0] + '/auth/login'))
         check('legacy_https_and_http_destinations_checked_without_following_redirects',
               all(any(row['origin'] == scheme + '://' + host and row['status'] == 301 and
                       row['location'] == 'https://' + DOMAINS[0] + row['path'] for row in fixture.probes)

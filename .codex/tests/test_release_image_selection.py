@@ -237,10 +237,16 @@ def test_offline_success_uses_only_fixed_image_and_preserves_common_gates_and_re
     assert all(service['deploy']['resources'] == fixture.config['services'][name]['deploy']['resources'] for name, service in rendered['services'].items())
 
 
-def test_default_mode_keeps_existing_download_pull_and_common_validation(fixture):
+# def test_default_mode_keeps_existing_download_pull_and_common_validation(fixture):
+#     result, observed = fixture.run([])
+#     assert result.returncode == 0
+#     assert any(row[0] == 'curl' and any('raw.githubusercontent.com' in value for value in row) for row in observed)
+#     assert any(row[0] == 'docker' and 'pull' in row for row in observed)
+#     assert not any(row[:3] == ['docker', 'image', 'inspect'] for row in observed)
+#     assert [row[1] for row in observed if row[0] == 'preflight'] == ['ready', 'ready', 'verify']
+# 2026-11-04 hoyeon.han: 기본 배포는 기존 인증 구성이 없으면 다운로드로 대체하지 않는다.
+def test_default_mode_rejects_existing_non_auth_configuration(fixture):
     result, observed = fixture.run([])
-    assert result.returncode == 0
-    assert any(row[0] == 'curl' and any('raw.githubusercontent.com' in value for value in row) for row in observed)
-    assert any(row[0] == 'docker' and 'pull' in row for row in observed)
-    assert not any(row[:3] == ['docker', 'image', 'inspect'] for row in observed)
-    assert [row[1] for row in observed if row[0] == 'preflight'] == ['ready', 'ready', 'verify']
+    assert_no_transition(fixture, result, observed)
+    assert '기존 인증 Compose' in result.stderr
+    assert not any(row[0] in ('preflight', 'backup') for row in observed)

@@ -531,8 +531,11 @@ class Preflight:
                 if action['redirect'] and result.get('location') != 'https://' + OFFICE + path:
                     raise SafetyError('기존 회계 주소의 고정 HTTPS 이동 대상을 확인하지 못했습니다.')
         if phase == 'verify':
+            # 2026-10-21 hoyeon.han: health는 내부 전용 404 대신 다른 Streamlit 요청과 같은 세션 검사를 거쳐야 한다.
+            # for path, status in (('/', 401), ('/media/preflight', 403), (DOWNLOAD, 401),
+            #                      ('/_stcore/stream', 401), ('/auth/check', 404), ('/_stcore/health', 404)):
             for path, status in (('/', 401), ('/media/preflight', 403), (DOWNLOAD, 401),
-                                 ('/_stcore/stream', 401), ('/auth/check', 404), ('/_stcore/health', 404)):
+                                 ('/_stcore/stream', 401), ('/auth/check', 404), ('/_stcore/health', 401)):
                 headers = WEBSOCKET if path.endswith('/stream') else {'Accept': 'application/json'}
                 if self._probe('https://' + OFFICE, path, headers)['status'] != status:
                     raise SafetyError('office1 인증·다운로드·WebSocket 접근 차단을 확인하지 못했습니다.')

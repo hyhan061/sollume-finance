@@ -4,6 +4,8 @@
 .gitattributes
 
 # Python 가상환경
+# 2026-11-04 hoyeon.han: CI 회귀검사용 가상환경을 이미지 빌드 컨텍스트에서 제외한다.
+.venv*/
 bin/
 lib/
 lib64/

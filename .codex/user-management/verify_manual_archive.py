@@ -119,7 +119,10 @@ class SyntheticArchive:
  # 2026-10-20 hoyeon.han: 기존 classic fixture를 유지하며 partial OCI를 명시적으로 선택한다.
  # def __init__(self,parent=None,*,deduplicate=False,empty_customer=False):
  def __init__(self,parent=None,*,deduplicate=False,empty_customer=False,partial_oci=False):
-  self.root=Path(tempfile.mkdtemp(prefix='sollume-manual-mock-',dir=parent or '/private/tmp'))
+  # self.root=Path(tempfile.mkdtemp(prefix='sollume-manual-mock-',dir=parent or '/private/tmp'))
+  # 2026-11-04 hoyeon.han: 명시한 부모 위치는 유지하고 기본값은 운영체제 임시 폴더를 사용한다.
+  # /var와 /private/var 같은 별칭은 복구 도구와 동일한 실제 경로로 정규화한다.
+  self.root=Path(tempfile.mkdtemp(prefix='sollume-manual-mock-',dir=parent)).resolve()
   self.root.chmod(0o700);self.app=self.root/'app';self.app.mkdir(mode=0o700)
   self.backup=self.app/'database/backups/releases/manual-before-auth-fixture'
   self.backup.mkdir(parents=True,mode=0o700)

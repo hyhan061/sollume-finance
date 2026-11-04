@@ -117,7 +117,9 @@ class DockerCliVerifier:
     def __init__(self, image, output):
         self.image, self.output = image, Path(output)
         self.started = datetime.now(timezone.utc).isoformat()
-        self.temp = Path(tempfile.mkdtemp(prefix='sollume-docker-cli-', dir='/private/tmp'))
+        # self.temp = Path(tempfile.mkdtemp(prefix='sollume-docker-cli-', dir='/private/tmp'))
+        # 2026-11-04 hoyeon.han: 격리 검증은 운영체제 기본 임시 폴더의 실제 경로를 사용한다.
+        self.temp = Path(tempfile.mkdtemp(prefix='sollume-docker-cli-')).resolve()
         self.project = 'sollume-cli-qa-' + secrets.token_hex(6)
         self.compose_path = self.temp / 'compose.yml'
         self.env_path = self.temp / 'runtime.env'
@@ -127,7 +129,9 @@ class DockerCliVerifier:
         self.observations = {}
         self.sensitive_values = []
         self.source_hashes = {name: digest_file(ROOT / name) for name in SOURCE_FILES}
-        original = json.loads((ROOT / '.Codex/user-management/data-baseline.json').read_text())
+        # original = json.loads((ROOT / '.Codex/user-management/data-baseline.json').read_text())
+        # 2026-11-04 hoyeon.han: Linux의 대소문자 구분에 맞춰 실제 저장소 경로를 사용한다.
+        original = json.loads((ROOT / '.codex/user-management/data-baseline.json').read_text())
         self.original_hashes = {name: digest_file(ROOT / name) for name in original}
         self.original_baseline = original
         self.cleanup_complete = False
@@ -500,7 +504,9 @@ print(json.dumps({'prefix':sys.prefix,'base_prefix':sys.base_prefix,'executable'
 
 
 def verify(image='sollume-finance-security:venv-test', output=None):
-    output = output or ROOT / '.Codex/user-management/docker-user-cli-results.json'
+    # output = output or ROOT / '.Codex/user-management/docker-user-cli-results.json'
+    # 2026-11-04 hoyeon.han: 기본 결과 경로를 실제 소문자 디렉토리와 일치시킨다.
+    output = output or ROOT / '.codex/user-management/docker-user-cli-results.json'
     verifier = DockerCliVerifier(image, output)
     failure = None
     try:
@@ -523,7 +529,9 @@ def verify(image='sollume-finance-security:venv-test', output=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--image', default='sollume-finance-security:venv-test')
-    parser.add_argument('--output', default=str(ROOT / '.Codex/user-management/docker-user-cli-results.json'))
+    # parser.add_argument('--output', default=str(ROOT / '.Codex/user-management/docker-user-cli-results.json'))
+    # 2026-11-04 hoyeon.han: CLI 기본 출력 경로도 Linux에서 같은 폴더를 가리킨다.
+    parser.add_argument('--output', default=str(ROOT / '.codex/user-management/docker-user-cli-results.json'))
     args = parser.parse_args()
     result = verify(args.image, args.output)
     return 0 if result['passed'] else 1
