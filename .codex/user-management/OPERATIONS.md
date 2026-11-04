@@ -16,12 +16,18 @@ GitHub Actions는 main push와 PR, 버전 태그, 수동 실행에서 회귀·�
 
 `--compose-file`·`--local-image-id`는 검증된 별도 이미지 ID를 선택하는 기존 고정 배포 옵션으로 함께 사용할 수 있다. 10월 20일의 `auth-20261020-37f77d6` 준비 묶음은 당시 운영 반영의 보관 자료다. 그 이미지 ID에는 11월 4일 정산 수정이 없으므로 새 수정 배포에는 새로 검증한 이미지가 필요하다.
 
+<!-- 2026-11-04 hoyeon.han: 최초 통합의 동일성 기록은 후속 helper 수정과 구분한다.
 이번 소스 동기화에서 두 검사 helper는 조회한 운영 파일과 SHA-256이 같다.
+-->
+최초 main 통합 당시 두 검사 helper는 조회한 운영 파일과 SHA-256이 같았다.
 
 | 파일 | 운영 파일과 같은 SHA-256 |
 |---|---|
 | `scripts/deployment_preflight.py` | `c71cccba11774bfe2f053e63478507bc5c41e25de0ab9b5aed9a840021d41971` |
 | `scripts/release_snapshot.py` | `89e3d1bab44de3d250bae0e9e2eb1bd6fc0bfe68a62f17290020fa65ab4f66be` |
+
+<!-- 2026-11-04 hoyeon.han: 기본 CMD 상속에 대한 자동 snapshot 후속 수정. -->
+같은 날 후속 수정에서 자동 snapshot의 `command: null`을 이미지 기본 CMD 상속으로 처리했다. 비교 대상은 현재 컨테이너의 불변 이미지 ID이며 실제 실행 명령 변경은 계속 거절한다. 명시한 빈 명령과 명령 목록도 보존한다. 이 후속 버전의 `scripts/release_snapshot.py` SHA-256은 `3697ed67b0ecedac62c16e6108e10ea0ea5a5fb18f529228fe20d0ea107c5567`이다. 무인자 배포를 재시도하기 전에 서버 helper도 이 버전으로 준비한다. 기존 Compose·인증 키·실행 컨테이너는 이 도구 수정으로 바꾸지 않는다.
 
 Nginx 예시와 승인 정책도 운영 health 수정에 맞췄다. `/_stcore/health`는 미로그인 JSON 요청에 401, HTML 요청에 로그인 이동을 반환하며, 로그인한 요청에는 실제 Streamlit의 응답을 전달한다. 고정 404·가짜 200·미로그인 프록시 정책은 거절한다. 이 동기화 작업은 저장소 소스와 단위 검증을 대상으로 하며 운영 Nginx나 서버 helper를 설치·변경하지 않는다.
 

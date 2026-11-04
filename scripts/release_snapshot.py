@@ -421,6 +421,17 @@ class ReleaseManager:
             if {item['Name'] for item in networks} != network_names or any(item['Driver'] != 'bridge' for item in networks):
                 raise SafetyError('승인된 bridge 네트워크만 복구할 수 있습니다.')
 
+    def _assert_command(self, service, item):
+        """2026-11-04 hoyeon.han: null 명령은 실행 이미지의 기본 CMD와 대조한다."""
+        expected = service.get('command')
+        if expected is None and service.get('entrypoint') is None:
+            # 변경 가능한 latest 태그가 아니라 현재 컨테이너의 불변 이미지 ID를 확인한다.
+            image = json.loads(self.runner.run(['docker', 'image', 'inspect', item['Image']]))[0]
+            expected = image['Config'].get('Cmd')
+        # 명시적인 빈 명령은 기본 CMD를 상속하지 않으며 Docker의 null/[]만 동등하게 본다.
+        if (expected or []) != (item['Config'].get('Cmd') or []):
+            raise SafetyError('실제 서비스 실행 명령이 다릅니다.')
+
     def _assert_runtime(self, config, current):
         """현재 .env로 해석한 설정과 실제 실행 결과를 대조한다."""
         for name, item in current.items():
@@ -428,8 +439,10 @@ class ReleaseManager:
             actual_env = dict(value.split('=', 1) for value in item['Config'].get('Env', []) if '=' in value)
             if any(str(value) != actual_env.get(key) for key, value in service.get('environment', {}).items()):
                 raise SafetyError('실제 서비스 환경 설정이 현재 .env 해석과 다릅니다.')
-            if 'command' in service and service['command'] != item['Config'].get('Cmd'):
-                raise SafetyError('실제 서비스 실행 명령이 다릅니다.')
+            # if 'command' in service and service['command'] != item['Config'].get('Cmd'):
+            #     raise SafetyError('실제 서비스 실행 명령이 다릅니다.')
+            # 2026-11-04 hoyeon.han: 기본 CMD 상속과 실제 명령 변경을 구분한다.
+            self._assert_command(service, item)
             if 'read_only' in service and bool(service['read_only']) != bool(item['HostConfig'].get('ReadonlyRootfs')):
                 raise SafetyError('서비스 루트 파일시스템 보호가 다릅니다.')
             for volume in service.get('volumes', []):
@@ -540,8 +553,11 @@ class ReleaseManager:
             actual_tmpfs = container['HostConfig'].get('Tmpfs') or {}
             if set(actual_tmpfs) != declared_tmpfs:
                 raise SafetyError('실행 중인 tmpfs 경로와 설정이 다릅니다.')
-            if not _recovery and 'command' in service and service['command'] != container['Config'].get('Cmd'):
-                raise SafetyError('실행 명령과 Compose 설정이 다릅니다.')
+            # if not _recovery and 'command' in service and service['command'] != container['Config'].get('Cmd'):
+            #     raise SafetyError('실행 명령과 Compose 설정이 다릅니다.')
+            # 2026-11-04 hoyeon.han: 스냅샷 고정 단계에서도 같은 기본 CMD 규칙을 적용한다.
+            if not _recovery:
+                self._assert_command(service, container)
             image_id = container['Image']
             if not re.fullmatch(r'sha256:[a-f0-9]{64}', image_id):
                 raise SafetyError('실제 실행 이미지 ID가 올바르지 않습니다.')
