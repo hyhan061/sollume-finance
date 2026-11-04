@@ -913,11 +913,17 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         for tab, (name, sub) in zip(sheet_tabs, preview_sheets.items()):
             with tab:
                 is_summary = name in plan["seller_sheets"] or name == ss.SHEET_OVERALL
-                amount_col = "합계" if is_summary else ss.COLUMN_MAP_SALE["amount"]
+                # amount_col = "합계" if is_summary else ss.COLUMN_MAP_SALE["amount"]
+                # 2026-11-04 hoyeon.han: 상세내역은 분리된 배송비·도선료까지 합산한다.
+                amount_cols = ["합계"] if is_summary else [
+                    ss.COLUMN_MAP_SALE[key] for key in ("amount", "delivery", "ferry")
+                ]
                 c1, c2, c3 = st.columns(3)
                 c1.metric("집계 행" if is_summary else "원본 주문 행", f"{len(sub):,}행")
                 c2.metric("수량 합계", f"{int(sub['수량'].sum()):,}")
-                c3.metric("금액 합계", f"{int(sub[amount_col].sum()):,}원")
+                # c3.metric("금액 합계", f"{int(sub[amount_col].sum()):,}원")
+                # 2026-11-04 hoyeon.han: 미리보기 총액을 생성 엑셀의 3열 총합계와 맞춘다.
+                c3.metric("금액 합계", f"{int(sub[amount_cols].sum().sum()):,}원")
                 st.dataframe(sub, use_container_width=True, hide_index=True)
 
 # ===== 10. 생성 및 다운로드 =====
