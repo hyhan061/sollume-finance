@@ -1,5 +1,8 @@
 """이카운트(ECOUNT) 판매현황내역 → 정산서 변환 로직 / 2026-09-01 hoyeon.han
 
+# 2026-11-04 hoyeon.han: 구매현황내역도 지원하며 매입은 상세내역 없이 작성한다.
+# 아래 최초 구현 구조 설명은 판매현황내역 기준으로 보존한다.
+
 # 2026-10-13 hoyeon.han: 출력은 build_ecount_sheet_plan을 통해 기존 발주내역의
 # seller_settlement 집계·상세내역·작성기를 사용한다. 아래 파이프라인 설명은
 # 2026-09-01 최초 구현 기록이며 현재 화면의 출력 연결은 변경되었다.
@@ -49,13 +52,24 @@ import numpy as np
 import pandas as pd
 
 # 기존 정산서 상수 재사용 (seller_settlement.py 와 동일한 flat-import 선례)
-from settlement import TYPE_SALE
+# from settlement import TYPE_SALE
+# 2026-11-04 hoyeon.han: 원본 시트 종류에 따라 매출·매입을 구분한다.
+from settlement import TYPE_PURCHASE, TYPE_SALE
 # 2026-10-13 hoyeon.han: 발주내역 정산서의 집계·상세내역·시트 계획 재사용.
 import seller_settlement as ss
 
 # ===== 상수 =====
 
 SHEET_NAME_DEFAULT = "판매현황내역"
+# 2026-11-04 hoyeon.han: 서버 저장 및 업로드 검증에 사용할 원본 유형 계약.
+SHEET_NAME_PURCHASE = "구매현황내역"
+SHEET_DOC_TYPES = {
+    SHEET_NAME_DEFAULT: TYPE_SALE,
+    SHEET_NAME_PURCHASE: TYPE_PURCHASE,
+}
+REQUIRED_PURCHASE_SOURCE_COLS = [
+    "일자", "거래처명", "품목명", "수량", "특이사항", "공급가액", "부가세",
+]
 # 기존 정산서(.xls)의 A1 제목과 동일하게 고정 → 출력물 제목이 일관된다
 TITLE_DEFAULT = "품목별판매현황"
 
@@ -102,6 +116,8 @@ COL_REMARK = "비고"  # 셀러명
 NBSP = "\xa0"
 
 DATE8_RE = re.compile(r"^\d{8}$")
+# 2026-11-04 hoyeon.han: 이카운트 다운로드 설정에 따른 세 가지 일자 표기 지원.
+SOURCE_DATE_RE = r"(?:\d{8}|\d{4}/\d{2}/\d{2}|\d{4}-\d{2}-\d{2})"
 # A1 조회기간: '2026/08/01  ~ 2026/09/01'
 PERIOD_RE = re.compile(
     r"(\d{4})[./-](\d{1,2})[./-](\d{1,2})\s*~\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})"
@@ -159,7 +175,10 @@ def _to_number(s: pd.Series) -> pd.Series:
 
 
 def _read_raw(
-    file_path_or_buffer: Any, sheet_name: str | None
+    # file_path_or_buffer: Any, sheet_name: str | None
+    # 2026-11-04 hoyeon.han: 유형 지정 호출에서는 다른 원본으로 폴백하지 않는다.
+    file_path_or_buffer: Any, sheet_name: str | None,
+    expected_doc_type: str | None = None,
 ) -> tuple[pd.DataFrame, str, list[str]]:
     """이카운트 .xlsx 를 머리글 없이(header=None) 읽어 원시 행렬을 반환.
 
@@ -189,14 +208,44 @@ def _read_raw(
     if not sheet_names:
         raise ValueError("엑셀 파일에 시트가 없습니다.")
 
-    if sheet_name and sheet_name in sheet_names:
+    # if sheet_name and sheet_name in sheet_names:
+    # 2026-11-04 hoyeon.han: UI에서 매입 선택 후 판매 파일을 올리는 경우를 차단.
+    # 아래 기존 선택 분기는 expected_doc_type 없는 과거 호출의 호환성을 유지한다.
+    if expected_doc_type is not None:
+        if expected_doc_type not in (TYPE_SALE, TYPE_PURCHASE):
+            raise ValueError(f"지원하지 않는 이카운트 정산서 유형입니다: {expected_doc_type}")
+        expected_sheet = (
+            SHEET_NAME_DEFAULT if expected_doc_type == TYPE_SALE else SHEET_NAME_PURCHASE
+        )
+        if sheet_name:
+            if sheet_name not in sheet_names:
+                raise ValueError(f"선택한 시트 '{sheet_name}'을(를) 파일에서 찾을 수 없습니다.")
+            if SHEET_DOC_TYPES.get(sheet_name) != expected_doc_type:
+                raise ValueError(
+                    f"선택한 {expected_doc_type} 정산서와 원본 시트 '{sheet_name}'의 "
+                    f"유형이 다릅니다. 이카운트 '{expected_sheet}' 파일을 업로드하세요."
+                )
+            used = sheet_name
+        elif expected_sheet in sheet_names:
+            used = expected_sheet
+        else:
+            raise ValueError(
+                f"{expected_doc_type} 정산서에 필요한 '{expected_sheet}' 시트가 없습니다. "
+                "판매·구매 파일과 선택한 정산서 유형을 확인하세요."
+            )
+    elif sheet_name and sheet_name in sheet_names:
         used = sheet_name
     elif SHEET_NAME_DEFAULT in sheet_names:
         used = SHEET_NAME_DEFAULT
     else:
         used = sheet_names[0]
 
-    raw = book.parse(used, header=None, dtype=str)
+    # 2026-11-04 hoyeon.han: 구매의 'nan' 등 문자 입력도 원본 그대로 검증한다.
+    # 판매에는 기존 pandas 결측 처리 동작을 유지한다.
+    if SHEET_DOC_TYPES.get(used) == TYPE_PURCHASE:
+        raw = book.parse(used, header=None, dtype=str, keep_default_na=False)
+    else:
+        raw = book.parse(used, header=None, dtype=str)
     return raw, used, sheet_names
 
 
@@ -276,12 +325,162 @@ def parse_ecount_header(a1_text: str) -> tuple[str, date | None, date | None]:
     return company, start, end
 
 
+# 2026-11-04 hoyeon.han: 날짜 구분기호만 제거하고 기존 8자리 날짜 검증을 재사용.
+def _parse_source_dates(values: pd.Series) -> pd.Series:
+    normalized = values.str.replace(r"[/-]", "", regex=True)
+    return pd.to_datetime(normalized, format="%Y%m%d", errors="coerce")
+
+
+# 2026-11-04 hoyeon.han: 구매 금액의 잘못된 입력을 0원으로 숨기지 않는다.
+def _purchase_number(values: pd.Series, column: str) -> pd.Series:
+    cleaned = (
+        values.fillna("").astype(str).str.replace(NBSP, "", regex=False)
+        .str.replace(",", "", regex=False).str.strip()
+    )
+    numbers = pd.to_numeric(cleaned, errors="coerce")
+    invalid = cleaned.ne("") & ~np.isfinite(numbers)
+    if invalid.any():
+        source_rows = ", ".join(str(int(i) + 3) for i in values.index[invalid][:5])
+        raise ValueError(
+            f"구매현황내역 '{column}' 열에 유효하지 않은 숫자가 있습니다. "
+            f"원본 Excel {source_rows}행의 값을 확인하세요."
+        )
+    return numbers.fillna(0.0)
+
+
+# 2026-11-04 hoyeon.han: 구매는 공급가액·부가세를 기준으로 원본 정산금액을 보존.
+def _parse_purchase_body(
+    a1: str,
+    df: pd.DataFrame,
+    used_sheet: str,
+    sheet_names: list[str],
+    unit_price_mode: str,
+) -> dict[str, Any]:
+    missing = [c for c in REQUIRED_PURCHASE_SOURCE_COLS if c not in df.columns]
+    if missing:
+        raise ValueError(
+            "이카운트 구매현황내역 형식이 아닙니다. "
+            f"필수 열이 없습니다: {', '.join(missing)}"
+        )
+    raw_rows = len(df)
+    source_has_order_type = "구분" in df.columns
+    source_has_total = "합계" in df.columns
+    for c in df.columns:
+        # 2026-11-04 hoyeon.han: 공란과 'nan' 같은 실제 문자를 구별해 숫자 오류 확인.
+        df[c] = df[c].fillna("").astype(str).str.replace(NBSP, "", regex=False).str.strip()
+
+    label = df["일자"].str.replace(r"\s+", "", regex=True)
+    foot = df[label == FOOTER_TOTAL_LABEL].head(1)
+    footer_total = footer_qty = None
+    if not foot.empty:
+        footer_qty = float(_purchase_number(foot["수량"], "수량").iloc[0])
+        footer_supply = _purchase_number(foot["공급가액"], "공급가액")
+        footer_vat = _purchase_number(foot["부가세"], "부가세")
+        footer_sum = footer_supply + footer_vat
+        if source_has_total:
+            footer_amount = _purchase_number(foot["합계"], "합계")
+            if footer_amount.ne(footer_sum).any():
+                raise ValueError(
+                    "구매현황내역 총합계의 공급가액+부가세와 합계가 다릅니다. "
+                    "이카운트 원본을 확인하세요."
+                )
+            footer_total = float(footer_amount.iloc[0])
+        else:
+            footer_total = float(footer_sum.iloc[0])
+
+    valid = df["일자"].str.fullmatch(SOURCE_DATE_RE).fillna(False)
+    dropped_rows = int((~valid).sum())
+    df = df[valid].copy()
+    if df.empty:
+        raise ValueError(
+            "유효한 구매 데이터 행이 없습니다. "
+            "일자가 YYYYMMDD, YYYY/MM/DD 또는 YYYY-MM-DD인지 확인하세요."
+        )
+    parsed_date = _parse_source_dates(df["일자"])
+    invalid_date_rows = int(parsed_date.isna().sum())
+    if invalid_date_rows:
+        df = df[parsed_date.notna()].copy()
+        parsed_date = parsed_date[parsed_date.notna()]
+    if df.empty:
+        raise ValueError("유효한 날짜를 가진 구매 데이터 행이 없습니다.")
+    df["작성일자"] = parsed_date.dt.strftime("%Y-%m-%d")
+
+    # 금액 공란은 원본 상태를 별도 집계한다. 수량을 보존하며 사유는 추정하지 않는다.
+    amount_columns = ["공급가액", "부가세"] + (["합계"] if source_has_total else [])
+    blank_amount = df[amount_columns].eq("").all(axis=1)
+    blank_amount_source_rows = [int(i) + 3 for i in df.index[blank_amount]]
+    for c in ["수량", *amount_columns, "단가", "단가(vat포함)", "배송비", "도선료"]:
+        if c in df.columns:
+            df[c] = _purchase_number(df[c], c)
+    calculated_amount = df["공급가액"] + df["부가세"]
+    if source_has_total:
+        mismatch = df["합계"].ne(calculated_amount)
+        if mismatch.any():
+            rows = ", ".join(str(int(i) + 3) for i in df.index[mismatch][:5])
+            raise ValueError(
+                "구매현황내역의 공급가액+부가세와 합계가 다릅니다. "
+                f"원본 Excel {rows}행을 확인하세요."
+            )
+    else:
+        df["합계"] = calculated_amount
+    if "단가" not in df.columns:
+        df["단가"] = 0.0
+    if unit_price_mode == UNIT_RECALC:
+        df["단가"] = (
+            (df["합계"] / df["수량"].replace(0, np.nan)).fillna(0.0).round(0)
+        )
+    df = df.rename(columns=RENAME_MAP)
+    for c in PARSED_COLS:
+        if c not in df.columns:
+            df[c] = 0.0 if c in ("배송비", "도선료") else ""
+    preserved = ["공급가액", "부가세"]
+    if "단가(vat포함)" in df.columns:
+        preserved.append("단가(vat포함)")
+    df = df[PARSED_COLS + preserved].reset_index(drop=True)
+
+    company, start_date, end_date = parse_ecount_header(a1)
+    period_from_data = start_date is None or end_date is None
+    if period_from_data:
+        start_date = date.fromisoformat(str(df["작성일자"].min()))
+        end_date = date.fromisoformat(str(df["작성일자"].max()))
+    return {
+        "title": ss.TITLE_PURCHASE,
+        "period_text": a1.replace(NBSP, " ").strip(),
+        "start_date": start_date,
+        "end_date": end_date,
+        "doc_type": TYPE_PURCHASE,
+        "df": df,
+        "company": company,
+        "sheet_name": used_sheet,
+        "sheet_names": sheet_names,
+        "raw_rows": raw_rows,
+        "dropped_rows": dropped_rows,
+        "invalid_date_rows": invalid_date_rows,
+        "footer_total": footer_total,
+        "footer_qty": footer_qty,
+        "period_from_data": period_from_data,
+        "unit_price_mode": unit_price_mode,
+        "swap_warning": detect_swap_suspicion(df),
+        "blank_amount_rows": int(blank_amount.sum()),
+        "blank_amount_source_rows": blank_amount_source_rows,
+        "source_has_order_type": source_has_order_type,
+        "source_has_total": source_has_total,
+        "amount_source": "합계" if source_has_total else "공급가액+부가세",
+    }
+
+
 def parse_ecount_xlsx(
     file_path_or_buffer: Any,
     sheet_name: str | None = None,
     unit_price_mode: str = UNIT_RAW,
+    # 2026-11-04 hoyeon.han: 기존 호출 순서를 유지하며 원본 유형 일치 검증을 추가.
+    expected_doc_type: str | None = None,
 ) -> dict[str, Any]:
     """이카운트 판매현황내역 .xlsx 파싱.
+
+    2026-11-04 hoyeon.han: 구매현황내역은 전용 파서로 분기한다.
+    expected_doc_type을 지정하면 원본 시트와 선택한 정산서 유형을 검증한다.
+    구매 df에는 검산에 사용한 공급가액·부가세를 추가로 보존한다.
 
     Returns:
         {
@@ -298,8 +497,14 @@ def parse_ecount_xlsx(
           'period_from_data', 'unit_price_mode', 'swap_warning',
         }
     """
-    raw, used_sheet, sheet_names = _read_raw(file_path_or_buffer, sheet_name)
+    # raw, used_sheet, sheet_names = _read_raw(file_path_or_buffer, sheet_name)
+    # 2026-11-04 hoyeon.han: 선택 유형 검증 뒤 구매 전용 파서로 분기한다.
+    raw, used_sheet, sheet_names = _read_raw(
+        file_path_or_buffer, sheet_name, expected_doc_type
+    )
     a1, df = _split_header_and_body(raw)
+    if SHEET_DOC_TYPES.get(used_sheet) == TYPE_PURCHASE:
+        return _parse_purchase_body(a1, df, used_sheet, sheet_names, unit_price_mode)
     raw_rows = len(df)
 
     missing = [c for c in REQUIRED_SOURCE_COLS if c not in df.columns]
@@ -321,18 +526,24 @@ def parse_ecount_xlsx(
 
     # 유효행 필터 — 일자가 YYYYMMDD 8자리인 행만.
     # 월소계('2026/08  계') / 총합계 / 출력일시가 한 번에 걸러진다.
-    valid = df["일자"].str.fullmatch(r"\d{8}").fillna(False)
+    # valid = df["일자"].str.fullmatch(r"\d{8}").fillna(False)
+    # 2026-11-04 hoyeon.han: 판매 원본도 다운로드 날짜 표기 세 가지를 모두 허용.
+    valid = df["일자"].str.fullmatch(SOURCE_DATE_RE).fillna(False)
     dropped_rows = int((~valid).sum())
     df = df[valid].copy()
     if df.empty:
         raise ValueError(
             "유효한 데이터 행이 없습니다. "
-            "일자가 YYYYMMDD 8자리인 행이 하나도 없습니다."
+            # "일자가 YYYYMMDD 8자리인 행이 하나도 없습니다."
+            # 2026-11-04 hoyeon.han: 지원하는 날짜 표기를 안내한다.
+            "일자가 YYYYMMDD, YYYY/MM/DD 또는 YYYY-MM-DD인 행이 하나도 없습니다."
         )
 
     # 날짜 정규화. 20260231 같은 불가능한 날짜만 탈락시키고 카운트로 알린다
     # (1건 때문에 월 전체를 막지 않는다)
-    parsed_date = pd.to_datetime(df["일자"], format="%Y%m%d", errors="coerce")
+    # parsed_date = pd.to_datetime(df["일자"], format="%Y%m%d", errors="coerce")
+    # 2026-11-04 hoyeon.han: 구분기호 정규화 후 기존 날짜 유효성 검증 유지.
+    parsed_date = _parse_source_dates(df["일자"])
     invalid_date_rows = int(parsed_date.isna().sum())
     if invalid_date_rows:
         df = df[parsed_date.notna()].copy()
@@ -473,9 +684,34 @@ def build_ecount_sheet_plan(
     item_mapping: dict[str, str] | None = None,
     detail_mode: str = ss.DETAIL_MODE_SINGLE,
     include_overall: bool = True,
+    # 2026-11-04 hoyeon.han: 매출 기본 동작을 유지하면서 구매 요약을 지원한다.
+    doc_type: str = TYPE_SALE,
 ) -> dict[str, Any]:
     """필터된 이카운트 행을 집계한다. 단가=행 금액/수량(기존 4자리 규칙)."""
+    # 2026-11-04 hoyeon.han: 구매도 기존 정수·비용 중복 검증을 통과시킨 뒤
+    # 매입 컬럼으로 변환한다. 수하인 정보가 없는 매입에는 상세내역을 만들지 않는다.
+    if doc_type not in (TYPE_SALE, TYPE_PURCHASE):
+        raise ValueError(f"지원하지 않는 이카운트 정산서 유형입니다: {doc_type}")
     orders = to_order_settlement_df(df)
+    if doc_type == TYPE_PURCHASE:
+        rename = {
+            ss.COLUMN_MAP_SALE[logical]: ss.COLUMN_MAP_PURCHASE[logical]
+            for logical in ss.DETAIL_LOGICAL_COLS
+            if ss.COLUMN_MAP_SALE[logical] != ss.COLUMN_MAP_PURCHASE[logical]
+        }
+        purchase_orders = orders.rename(columns=rename)
+        purchase_sellers = ss.extract_sellers(
+            purchase_orders, column_map=ss.COLUMN_MAP_PURCHASE
+        )
+        return ss.build_sheet_plan(
+            purchase_orders,
+            purchase_sellers,
+            seller_to_sheet=remark_to_sheet,
+            item_mapping=item_mapping,
+            column_map=ss.COLUMN_MAP_PURCHASE,
+            detail_mode=ss.DETAIL_MODE_NONE,
+            include_overall=include_overall,
+        )
     sellers = ss.extract_sellers(orders)
     # return ss.build_sheet_plan(
     # 2026-11-04 hoyeon.han: 요약 집계는 유지하고 상세 금액 열만 별도 분리한다.

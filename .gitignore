@@ -59,7 +59,10 @@ wheels/
 .tox/
 htmlcov/
 .hypothesis/
-tests/
+# tests/
+# 2026-11-05 hoyeon.han: 원본 자료 제외는 유지하고 구매 정산서 회귀 코드만 추적한다.
+tests/*
+!tests/test_ecount_purchase_settlement.py
 
 # 환경 변수
 .env
