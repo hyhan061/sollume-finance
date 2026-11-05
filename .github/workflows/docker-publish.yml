@@ -54,7 +54,9 @@ jobs:
         run: |
           python -m venv .venv-ci
           .venv-ci/bin/python -m pip install -r requirements.txt pytest
-          .venv-ci/bin/python -m pytest .codex/tests tests/test_ecount_settlement.py -p no:cacheprovider -q
+          # .venv-ci/bin/python -m pytest .codex/tests tests/test_ecount_settlement.py -p no:cacheprovider -q
+          # 2026-11-05 hoyeon.han: 재사용 테스트는 정식 tests 경로에서 실행한다.
+          .venv-ci/bin/python -m pytest tests/security tests/operations tests/test_ecount_settlement.py tests/test_ecount_purchase_settlement.py tests/test_seller_settlement.py tests/test_period_summary.py -p no:cacheprovider -q
           bash -n deploy-oracle.sh rollback-oracle.sh
 
       - name: Set up QEMU (multi-arch emulation)
