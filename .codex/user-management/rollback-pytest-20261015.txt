@@ -1,7 +1,0 @@
-2026-10-15 hoyeon.han
-명령: SOLLUME_ROLLBACK_INTEGRATION=1 .venv311/bin/python -m pytest .codex/tests/test_rollback.py -q
-반환 코드: 0
-pytest 보고 실행시간: 174.85초
-
-.............                                                            [100%]
-13 passed in 174.85s (0:02:54)

@@ -80,3 +80,8 @@ test_*.py
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+
+# 2026-11-05 hoyeon.han: 로컬 Codex 자료와 작업 지침을 이미지 빌드 컨텍스트에서 제외한다.
+.codex/
+.Codex/
+AGENTS.md
