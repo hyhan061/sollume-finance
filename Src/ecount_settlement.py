@@ -622,6 +622,9 @@ def to_order_settlement_df(df: pd.DataFrame) -> pd.DataFrame:
     원본의 별도 품목 행을 유지하고, 비용 컬럼으로 다시 생성하지 않는다.
     원본 비용 컬럼에 금액이 있으면 포함 관계를 추정하지 않고 생성 중단한다.
     원본 DataFrame과 원본 단가는 수정하지 않는다.
+
+    2026-11-04 hoyeon.han: 이 반환값은 요약 집계용이다. 상세내역의 비용 열은
+    build_ecount_sheet_plan에서 별도 사본으로 분리해 요약의 중복 계상을 막는다.
     """
     required = ["작성일자", "회사명", "품목", "구분", "수량", "합계", "비고"]
     missing = [col for col in required if col not in df.columns]
@@ -710,7 +713,9 @@ def build_ecount_sheet_plan(
             include_overall=include_overall,
         )
     sellers = ss.extract_sellers(orders)
-    return ss.build_sheet_plan(
+    # return ss.build_sheet_plan(
+    # 2026-11-04 hoyeon.han: 요약 집계는 유지하고 상세 금액 열만 별도 분리한다.
+    plan = ss.build_sheet_plan(
         orders,
         sellers,
         seller_to_sheet=remark_to_sheet,
@@ -718,6 +723,31 @@ def build_ecount_sheet_plan(
         detail_mode=detail_mode,
         include_overall=include_overall,
     )
+    if detail_mode == ss.DETAIL_MODE_NONE:
+        return plan
+
+    # 2026-11-04 hoyeon.han: 품목명 변경 전 원본 품목으로 분류한다. 수량 0과
+    # 음수 비용도 원본 행에 그대로 두고 상품매출에서 해당 비용 열로만 옮긴다.
+    detail_orders = orders.copy()
+    amount_col = ss.COLUMN_MAP_SALE["amount"]
+    product_col = ss.COLUMN_MAP_SALE["product"]
+    for item, logical in (("배송비", "delivery"), ("도선료", "ferry")):
+        mask = detail_orders[product_col].eq(item)
+        detail_orders.loc[mask, ss.COLUMN_MAP_SALE[logical]] = detail_orders.loc[mask, amount_col]
+        detail_orders.loc[mask, amount_col] = 0
+
+    if plan["detail_df"] is not None:
+        plan["detail_df"] = ss.build_detail_df(detail_orders, sellers, item_mapping)
+    else:
+        # 2026-11-04 hoyeon.han: 시트명 충돌 처리 결과와 셀러별 분리 기준을
+        # 공유 계획에서 그대로 가져온다. 통합 요약 배치와 상세 셀러는 별개다.
+        seller_col = ss.COLUMN_MAP_SALE["seller"]
+        for name, detail in plan["detail_sheets"].items():
+            sheet_sellers = detail[seller_col].unique().tolist()
+            plan["detail_sheets"][name] = ss.build_detail_df(
+                detail_orders, sheet_sellers, item_mapping
+            )
+    return plan
 
 
 def extract_order_types(df: pd.DataFrame) -> list[str]:

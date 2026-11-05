@@ -323,8 +323,14 @@ class Runtime:
         self.record('tls12_or_tls13_in_use', version in ('TLSv1.2', 'TLSv1.3'), tls_version=version)
         for path in ('/media', '/media/fake.xls'):
             self.record('legacy_media_route_denied_' + path.replace('/', '_'), self.request('GET', path).status_code == 403)
-        for path in ('/_auth_check', '/auth/check', '/auth/health', '/_stcore/health'):
+        # 2026-10-21 hoyeon.han: Streamlit 연결 준비 경로는 내부 전용 경로와 구분해 인증 후 전달한다.
+        # for path in ('/_auth_check', '/auth/check', '/auth/health', '/_stcore/health'):
+        for path in ('/_auth_check', '/auth/check', '/auth/health'):
             self.record('internal_endpoint_not_public_' + path.replace('/', '_'), self.request('GET', path).status_code == 404)
+        self.record('anonymous_streamlit_health_json_requires_login',
+                    self.request('GET', '/_stcore/health', headers={'Accept': 'application/json'}).status_code == 401)
+        self.record('anonymous_streamlit_health_html_redirects_login',
+                    self.request('GET', '/_stcore/health', headers={'Accept': 'text/html'}).status_code == 302)
         self.record('spoofed_identity_ip_headers_do_not_bypass_auth',
                     self.request('GET', '/', headers={'X-Auth-User': 'fixture_admin', 'X-Auth-Role': 'admin',
                                                      'X-Real-IP': self.proxy_ip, 'X-Forwarded-For': '127.0.0.1',
@@ -355,6 +361,10 @@ class Runtime:
         self.admin_browser, self.admin_token, admin_secret = self.login('admin')
         self.staff_browser, self.staff_token, staff_secret = self.login('staff')
         self.other_browser, self.other_token, other_secret = self.login('other')
+        # 2026-10-21 hoyeon.han: 인증된 브라우저가 실제 Streamlit health 응답을 받아야 연결할 수 있다.
+        health = self.cookie_request(self.staff_token, '/_stcore/health')
+        self.record('authenticated_streamlit_health_returns_real_backend_ok',
+                    health.status_code == 200 and health.content == b'ok')
         status, _ = self.handshake(self.staff_token)
         self.record('authenticated_websocket_upgrade_101', status == 101)
         self.record('authenticated_cross_origin_websocket_denied',
@@ -409,6 +419,8 @@ print(json.dumps(results))
         self.record('expired_download_denied', self.cookie_request(self.staff_token, '/downloads/' + second_grant).status_code == 403)
         self.service.admin_update_user(self.admin_token, 77, permissions=[])
         self.record('permission_change_revokes_previous_staff_http', self.cookie_request(self.staff_token, '/').status_code == 401)
+        # 2026-10-21 hoyeon.han: 권한 변경으로 회수된 세션은 health 경로도 통과할 수 없다.
+        self.record('permission_change_revokes_previous_staff_health', self.cookie_request(self.staff_token, '/_stcore/health').status_code == 401)
         self.record('permission_change_revokes_previous_staff_download', self.cookie_request(self.staff_token, '/downloads/' + grant).status_code == 401)
         self.record('permission_change_revokes_previous_staff_websocket', self.handshake(self.staff_token)[0] == 401)
         self.record('permission_change_revokes_all_other_staff_sessions', self.cookie_request(second, '/').status_code == 401)

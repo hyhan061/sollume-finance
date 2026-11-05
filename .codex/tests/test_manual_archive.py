@@ -324,8 +324,16 @@ def test_deployment_rechecks_policy_and_runtime_before_reporting_success(tmp_pat
 import json,os,pathlib,shutil,sys
 name=pathlib.Path(sys.argv[0]).name
 with pathlib.Path(os.environ['MANUAL_QA_CALLS']).open('a') as log:log.write(json.dumps([name,*sys.argv[1:]])+'\\n')
-if name=='docker' and 'config' in sys.argv:
- print(pathlib.Path(os.environ['MANUAL_QA_RENDERED']).read_text())
+# if name=='docker' and 'config' in sys.argv:
+#  print(pathlib.Path(os.environ['MANUAL_QA_RENDERED']).read_text())
+# 2026-11-04 hoyeon.han: 현재 Compose 해석·후보 재해석과 받은 latest의 실제 ID를 구분한다.
+if name=='docker':
+ if 'config' in sys.argv:
+  source=pathlib.Path(sys.argv[sys.argv.index('-f')+1]);config=json.loads(source.read_text())
+  print(source.read_text() if 'services' in config else pathlib.Path(os.environ['MANUAL_QA_RENDERED']).read_text())
+ elif sys.argv[1:3]==['image','inspect']:
+  print('sha256:'+'a'*64 if sys.argv[sys.argv.index('--format')+1]=='{{.Id}}' else 'sha256:'+'a'*64+' linux arm64')
+ elif sys.argv[1]=='info':print('linux aarch64')
 elif name=='curl':
  if '--resolve' in sys.argv:
   print('403' if '/media/' in sys.argv[-1] else '401')
@@ -343,7 +351,10 @@ elif name=='curl':
  pull=next(index for index,row in enumerate(observed) if row[0]=='docker' and 'pull' in row)
  assert checks[0][0]<pull<checks[1][0]
  renders=[index for index,row in enumerate(observed) if row[0]=='docker' and 'config' in row]
- assert renders[0]<checks[0][0]<pull<renders[1]<checks[1][0]
+ # assert renders[0]<checks[0][0]<pull<renders[1]<checks[1][0]
+ # 2026-11-04 hoyeon.han: 최초 운영 Compose 해석이 추가되지만 pull 이후 재검사는 필수다.
+ assert renders[0]<checks[0][0]<pull
+ assert any(pull<index<checks[1][0] for index in renders)
  if failure_stage=='second-ready':
   assert result.returncode!=0 and len(checks)==2
   assert not any(row[0]=='docker' and 'up' in row for row in observed)
@@ -352,7 +363,9 @@ elif name=='curl':
   reload=next(index for index,row in enumerate(observed) if row[0]=='sudo' and 'reload' in row)
   assert len(checks)==3 and checks[2][1][1]=='verify' and '--baseline' in checks[2][1]
   assert checks[1][0]<up<reload<checks[2][0]
-  assert len(renders)==3 and reload<renders[2]<checks[2][0]
+  # assert len(renders)==3 and reload<renders[2]<checks[2][0]
+  # 2026-11-04 hoyeon.han: 운영 원본·최초 후보·교체 직전·적용 후 순서로 네 번 해석한다.
+  assert len(renders)==4 and reload<renders[-1]<checks[2][0]
   assert (result.returncode==0)==(failure_stage is None)
  assert ('배포 및 기본 접근 차단 검증 완료' in result.stdout)==(failure_stage is None)
  assert {str(path):helper.sha(path) for path in protected}==before

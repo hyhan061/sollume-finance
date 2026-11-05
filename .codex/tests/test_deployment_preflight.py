@@ -121,7 +121,9 @@ class Fixture:
             return self.overrides[origin, path]
         if any(domain in origin for domain in DOMAINS[1:]):
             return {'status': 301, 'location': 'https://' + DOMAINS[0] + path}
-        status = 403 if path.startswith('/media/') else 404 if path in ('/auth/check', '/_stcore/health') else 401
+        # 2026-10-21 hoyeon.han: health의 미로그인 응답은 401이며 실제 내부 검사 경로만 404다.
+        # status = 403 if path.startswith('/media/') else 404 if path in ('/auth/check', '/_stcore/health') else 401
+        status = 403 if path.startswith('/media/') else 404 if path == '/auth/check' else 401
         return {'status': status, 'location': None}
 
     def checker(self, sites=None):
@@ -197,6 +199,31 @@ def test_legacy_444_cannot_be_proven_by_indistinguishable_connection_failure(fix
 def test_primary_must_remain_exact_approved_authentication_template(fixture):
     fixture.sites[0].write_text(fixture.sites[0].read_text().replace('auth_request /_auth_check;', ''))
     rejected(fixture)
+
+
+# 2026-10-21 hoyeon.han: 연결을 막던 이전 404 정책과 인증을 우회하는 가짜 성공 정책을 모두 거부한다.
+@pytest.mark.parametrize('directive', [
+    'location = /_stcore/health { return 404; }',
+    'location = /_stcore/health { return 200; }',
+    'location = /_stcore/health { proxy_pass http://127.0.0.1:8501; }',
+])
+def test_primary_health_cannot_restore_404_or_bypass_session_check(fixture, directive):
+    content = fixture.sites[0].read_text()
+    previous = '# location = /_stcore/health { return 404; }'
+    assert content.count(previous) == 1
+    fixture.sites[0].write_text(content.replace(previous, directive))
+    rejected(fixture)
+
+
+# 2026-10-21 hoyeon.han: 정적 설정이 맞아도 실제 미로그인 health가 401이 아니면 배포 검증을 거부한다.
+@pytest.mark.parametrize('status', [200, 302, 404, 503])
+def test_verify_rejects_health_without_expected_session_denial(fixture, status):
+    checker = fixture.checker()
+    ready = checker.ready(fixture.compose)
+    fixture.set_runtime(secure=True)
+    fixture.overrides['https://' + DOMAINS[0], '/_stcore/health'] = {'status': status, 'location': None}
+    with pytest.raises(ValueError, match='office1'):
+        checker.verify(fixture.compose, baseline=ready)
 
 
 @pytest.mark.parametrize('action', [

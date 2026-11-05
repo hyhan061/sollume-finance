@@ -182,7 +182,9 @@ class LocalRunner:
 class Fixture:
     def __init__(self, *, legacy=False):
         self.api = module()
-        self.app = Path(tempfile.mkdtemp(prefix='sollume-rollback-qa-', dir='/private/tmp'))
+        # self.app = Path(tempfile.mkdtemp(prefix='sollume-rollback-qa-', dir='/private/tmp'))
+        # 2026-11-04 hoyeon.han: Linux와 macOS의 기본 임시 폴더를 실제 경로로 사용한다.
+        self.app = Path(tempfile.mkdtemp(prefix='sollume-rollback-qa-')).resolve()
         self.project = self.app.name
         self.network = self.project + '-bridge'
         self.nginx_name = self.project + '-nginx'
@@ -195,7 +197,9 @@ class Fixture:
         self.https_port = port()
         # 2026-10-19 hoyeon.han: 업무·비밀 폴더와 분리한 공개 검증 파일만 Nginx에 제공한다.
         self.http_port = port()
-        self.acme_root = Path(tempfile.mkdtemp(prefix='sollume-acme-qa-', dir='/private/tmp'))
+        # self.acme_root = Path(tempfile.mkdtemp(prefix='sollume-acme-qa-', dir='/private/tmp'))
+        # 2026-11-04 hoyeon.han: ACME 시험 폴더도 같은 운영체제 기본 경로에 만든다.
+        self.acme_root = Path(tempfile.mkdtemp(prefix='sollume-acme-qa-')).resolve()
         self.acme_root.chmod(0o755)
         self.acme_path = '/.well-known/acme-challenge/office1-rehearsal.txt'
         self.acme_body = 'office1-acme-rehearsal-' + self.project

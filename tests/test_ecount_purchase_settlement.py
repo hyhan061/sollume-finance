@@ -1,5 +1,6 @@
 # 2026-11-04 hoyeon.han: 구매 정산·유형 보호·최신 원본 저장·화면 통합 회귀 검증.
 # 테스트 원본 제외 규칙(tests/)과 분리해 합성 회귀 검증 코드를 보관한다.
+# 2026-11-05 hoyeon.han: 프로젝트 테스트는 .codex 대신 tests 경로에서 관리한다.
 import hashlib
 import io
 import sys
@@ -11,7 +12,9 @@ from types import SimpleNamespace
 import openpyxl
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+# ROOT = Path(__file__).resolve().parents[2]
+# 2026-11-05 hoyeon.han: tests 바로 아래로 이동한 위치에서 프로젝트 루트를 찾는다.
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "Src"))
 sys.path.insert(0, str(ROOT / "tests"))
 

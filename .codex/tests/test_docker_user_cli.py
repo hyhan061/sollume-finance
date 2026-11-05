@@ -21,8 +21,11 @@ pytestmark = pytest.mark.skipif(os.environ.get('SOLLUME_DOCKER_USER_CLI_INTEGRAT
 
 @pytest.fixture(scope='module')
 def actual_docker_cli():
-    result_file = ROOT / '.Codex/user-management/docker-user-cli-results.json'
-    command = [sys.executable, str(ROOT / '.Codex/user-management/verify_docker_user_cli.py'),
+    # result_file = ROOT / '.Codex/user-management/docker-user-cli-results.json'
+    # command = [sys.executable, str(ROOT / '.Codex/user-management/verify_docker_user_cli.py'),
+    # 2026-11-04 hoyeon.han: Linux에서도 실제 검증 스크립트와 결과 파일 경로를 찾는다.
+    result_file = ROOT / '.codex/user-management/docker-user-cli-results.json'
+    command = [sys.executable, str(ROOT / '.codex/user-management/verify_docker_user_cli.py'),
                '--image', os.environ.get('SOLLUME_DOCKER_USER_CLI_IMAGE', 'sollume-finance-security:venv-test'),
                '--output', str(result_file)]
     executed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=300)
