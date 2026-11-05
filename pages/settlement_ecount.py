@@ -9,6 +9,9 @@
 
 import importlib.util
 import io
+# 2026-11-04 hoyeon.han: 같은 이름·크기의 수정본도 파일 내용으로 구별한다.
+import hashlib
+import logging
 import os
 import sys
 from datetime import datetime
@@ -51,6 +54,8 @@ import ecount_settlement as es  # noqa: E402
 import settlement as st_mod  # noqa: E402
 # 2026-10-13 hoyeon.han: 발주내역 기반 정산서 작성기를 재사용한다.
 import seller_settlement as ss  # noqa: E402
+# 2026-11-04 hoyeon.han: 매출·매입 최신 원본을 독립적으로 영구 저장한다.
+from ecount_file_store import EcountFileStore  # noqa: E402
 
 os.makedirs("processed", exist_ok=True)
 
@@ -60,6 +65,8 @@ os.makedirs("processed", exist_ok=True)
 # sseller_)과 겹치면 화면을 오갈 때 서로의 리셋 함수가 남의 상태를 지운다.
 
 _DEFAULTS: dict[str, Any] = {
+    # 2026-11-04 hoyeon.han: 기존 매출 화면을 기본으로 유지한다.
+    "settle_ecount_doc_type": st_mod.TYPE_SALE,
     "settle_ecount_parsed": None,
     "settle_ecount_uploaded_sig": None,  # (파일명, 크기)
     "settle_ecount_start_date": None,
@@ -175,6 +182,8 @@ def _reset_below_period() -> None:
     # 2026-10-13 hoyeon.han: 주문유형 필터 대신 거래처·셀러 이하를 초기화한다.
     """기간 변경 시 거래처·셀러 선택과 하위 상태 리셋."""
     st.session_state["settle_ecount_vendor"] = _DEFAULTS["settle_ecount_vendor"]
+    # 2026-11-04 hoyeon.han: 원본/기간 변경 후 이전 거래처 위젯 값도 폐기한다.
+    st.session_state.pop("settle_ecount_vendor_select", None)
     _reset_below_vendor()
 
 
@@ -187,22 +196,62 @@ def _reset_below_parse() -> None:
         "settle_ecount_end_date",
     ):
         st.session_state[k] = _DEFAULTS[k]
+    # 2026-11-04 hoyeon.han: 다른 조회기간의 원본을 읽을 때 날짜 위젯을 재생성한다.
+    for wk in ("settle_ecount_start_input", "settle_ecount_end_input"):
+        st.session_state.pop(wk, None)
     _reset_below_period()
 
 
-@st.cache_data(show_spinner="📖 이카운트 판매현황내역을 읽는 중...", max_entries=3)
+# 2026-11-04 hoyeon.han: 파일명·크기만 사용하는 기존 캐시를 보존한다.
+# @st.cache_data(show_spinner="📖 이카운트 판매현황내역을 읽는 중...", max_entries=3)
+# def _parse_ecount_cached(
+#     file_name: str, file_size: int, _file_bytes: bytes
+# ) -> dict[str, Any]:
+#     """업로드 파일 파싱 (캐시).
+#
+#     st.cache_data 는 '_' 로 시작하는 인자를 해시에서 제외한다. 5MB 바이트열을
+#     해시하지 않도록 파일명/크기만 캐시 키로 쓴다. max_entries 로 누적 메모리를 제한.
+#
+#     주의: 반환 dict 는 캐시된 객체 그대로다. parsed["df"] 를 in-place 수정하면
+#     캐시가 오염된다 (하위 filter_by_* 는 모두 .copy() 하므로 현재는 안전).
+#     """
+#     return es.parse_ecount_xlsx(io.BytesIO(_file_bytes))
+#
+#
+# 2026-11-04 hoyeon.han: 파일 내용과 선택 유형을 캐시 키에 포함해 수정본/유형 혼동을 막는다.
+@st.cache_data(show_spinner="📖 이카운트 원본을 읽는 중...", max_entries=4)
 def _parse_ecount_cached(
-    file_name: str, file_size: int, _file_bytes: bytes
+    file_name: str, file_size: int, file_bytes: bytes,
+    doc_type: str = st_mod.TYPE_SALE,
 ) -> dict[str, Any]:
-    """업로드 파일 파싱 (캐시).
+    return es.parse_ecount_xlsx(io.BytesIO(file_bytes), expected_doc_type=doc_type)
 
-    st.cache_data 는 '_' 로 시작하는 인자를 해시에서 제외한다. 5MB 바이트열을
-    해시하지 않도록 파일명/크기만 캐시 키로 쓴다. max_entries 로 누적 메모리를 제한.
 
-    주의: 반환 dict 는 캐시된 객체 그대로다. parsed["df"] 를 in-place 수정하면
-    캐시가 오염된다 (하위 filter_by_* 는 모두 .copy() 하므로 현재는 안전).
-    """
-    return es.parse_ecount_xlsx(io.BytesIO(_file_bytes))
+def _on_doc_type_change() -> None:
+    """매출·매입 변경 시 원본과 모든 하위 위젯을 초기화한다."""
+    _reset_below_parse()
+    st.session_state.pop("settle_ecount_uploader", None)
+    st.session_state.pop("settle_ecount_source_mode", None)
+    st.session_state.pop("settle_ecount_use_saved_next", None)
+
+
+def _on_source_mode_change() -> None:
+    """다른 원본을 선택하기 전 기존 출력부터 폐기한다."""
+    _reset_below_parse()
+    st.session_state.pop("settle_ecount_uploader", None)
+
+
+def _activate_source(record: dict[str, Any], doc_type: str) -> None:
+    """검증한 저장 원본으로 정산 조건을 새로 시작한다."""
+    parsed_source = _parse_ecount_cached(
+        record["original_name"], record["size_bytes"], record["file_bytes"], doc_type
+    )
+    es.to_order_settlement_df(parsed_source["df"])
+    _reset_below_parse()
+    st.session_state.settle_ecount_parsed = parsed_source
+    st.session_state.settle_ecount_uploaded_sig = (doc_type, record["sha256"])
+    st.session_state.settle_ecount_start_date = parsed_source["start_date"]
+    st.session_state.settle_ecount_end_date = parsed_source["end_date"]
 
 
 # 2026-10-13 hoyeon.han: 사용자가 제공한 화면 원본을 cwd와 무관하게 불러온다.
@@ -265,53 +314,167 @@ def _show_download_manual() -> None:
 
 render_page_header(
     "정산서 생성(이카운트)",
-    "이카운트 판매현황내역(.xlsx)을 셀러별 시트로 정리·발행합니다.",
+    # "이카운트 판매현황내역(.xlsx)을 셀러별 시트로 정리·발행합니다.",
+    # 2026-11-04 hoyeon.han: 판매·구매 원본을 한 화면에서 구분한다.
+    "이카운트 판매·구매현황으로 매출·매입 정산서를 생성합니다.",
     icon="🧮",
 )
 
 
-# 2026-10-13 hoyeon.han: 업로드 전 및 셀러 미선택 상태에서도 매뉴얼을 열 수 있다.
-if st.button("📖 다운로드 매뉴얼", key="settle_ecount_manual_open"):
-    _show_download_manual()
-
-
-# ===== 1. 파일 업로드 =====
-
-st.markdown("### 📁 1. 이카운트 판매현황내역 업로드")
-uploaded_file = st.file_uploader(
-    "이카운트에서 내려받은 판매현황내역 파일을 선택하세요 (.xlsx)",
-    type=["xlsx"],
-    key="settle_ecount_uploader",
-    help=(
-        "이카운트 > 판매현황내역 조회 후 엑셀로 내려받은 파일입니다. "
-        "'구분'에는 발주/반품 등 주문유형이, '특이사항'에는 셀러명이 들어 있어야 합니다."
-    ),
-)
-
-if uploaded_file is not None:
-    file_sig = (uploaded_file.name, uploaded_file.size)
-    if st.session_state.settle_ecount_uploaded_sig != file_sig:
-        try:
-            parsed = _parse_ecount_cached(
-                uploaded_file.name, uploaded_file.size, uploaded_file.getvalue()
-            )
-        except ValueError as e:
-            st.error(f"❌ {e}")
-            st.stop()
-        except Exception as e:  # noqa: BLE001 - 총무 직원 대상 안내 후 상세는 expander
-            st.error(f"❌ 파일을 읽지 못했습니다: {e}")
-            with st.expander("🔍 에러 상세 정보"):
-                st.exception(e)
-            st.stop()
-
-        _reset_below_parse()
-        st.session_state.settle_ecount_parsed = parsed
-        st.session_state.settle_ecount_uploaded_sig = file_sig
-        st.session_state.settle_ecount_start_date = parsed["start_date"]
-        st.session_state.settle_ecount_end_date = parsed["end_date"]
+# 2026-11-04 hoyeon.han: 기존 매출 전용 업로드 흐름을 주석으로 보존한다.
+# # 2026-10-13 hoyeon.han: 업로드 전 및 셀러 미선택 상태에서도 매뉴얼을 열 수 있다.
+# if st.button("📖 다운로드 매뉴얼", key="settle_ecount_manual_open"):
+#     _show_download_manual()
+#
+#
+# # ===== 1. 파일 업로드 =====
+#
+# st.markdown("### 📁 1. 이카운트 판매현황내역 업로드")
+# uploaded_file = st.file_uploader(
+#     "이카운트에서 내려받은 판매현황내역 파일을 선택하세요 (.xlsx)",
+#     type=["xlsx"],
+#     key="settle_ecount_uploader",
+#     help=(
+#         "이카운트 > 판매현황내역 조회 후 엑셀로 내려받은 파일입니다. "
+#         "'구분'에는 발주/반품 등 주문유형이, '특이사항'에는 셀러명이 들어 있어야 합니다."
+#     ),
+# )
+#
+# if uploaded_file is not None:
+#     file_sig = (uploaded_file.name, uploaded_file.size)
+#     if st.session_state.settle_ecount_uploaded_sig != file_sig:
+#         try:
+#             parsed = _parse_ecount_cached(
+#                 uploaded_file.name, uploaded_file.size, uploaded_file.getvalue()
+#             )
+#         except ValueError as e:
+#             st.error(f"❌ {e}")
+#             st.stop()
+#         except Exception as e:  # noqa: BLE001 - 총무 직원 대상 안내 후 상세는 expander
+#             st.error(f"❌ 파일을 읽지 못했습니다: {e}")
+#             with st.expander("🔍 에러 상세 정보"):
+#                 st.exception(e)
+#             st.stop()
+#
+#         _reset_below_parse()
+#         st.session_state.settle_ecount_parsed = parsed
+#         st.session_state.settle_ecount_uploaded_sig = file_sig
+#         st.session_state.settle_ecount_start_date = parsed["start_date"]
+#         st.session_state.settle_ecount_end_date = parsed["end_date"]
+#         st.rerun()
+#
+# parsed = st.session_state.settle_ecount_parsed
+#
+#
+# 2026-11-04 hoyeon.han: 매입 다운로드 안내에는 수하인 항목을 요구하지 않는다.
+@st.dialog("이카운트 구매현황내역 다운로드 방법", width="large", on_dismiss="ignore")
+def _show_purchase_download_manual() -> None:
+    st.info("보고서 유형: **정산서** / 다운로드: **검색(F8) 오른쪽 ▼ → Excel(데이터)**")
+    st.markdown(
+        "1. **재고Ⅰ → 구매관리 → 구매 → 구매현황**으로 이동합니다.\n"
+        "2. **현황 / 라인별**을 선택하고 정산 기간·거래처를 지정합니다. "
+        "반품을 포함해 조회하세요.\n"
+        "3. 하단 보고서 유형을 **정산서**로 선택한 뒤 "
+        "**검색(F8) 오른쪽 ▼ → Excel(데이터)**로 내려받습니다.\n"
+        "4. **구매현황내역** 시트가 있는 .xlsx 원본을 **매입**에서 업로드합니다.\n\n"
+        "필수 열: **일자, 거래처명, 품목명, 수량, 공급가액, 부가세, 특이사항**. "
+        "**합계, 구분**도 포함한 현재 양식을 권장합니다. 특이사항은 셀러명입니다.\n\n"
+        "매입 금액은 **합계**를 사용하고, 합계 열이 없으면 **공급가액+부가세**로 계산합니다. "
+        "배송비·도선료 품목 행도 포함하세요. **매입 정산서는 상세내역 시트를 만들지 않습니다.**"
+    )
+    if st.button("닫기", key="settle_ecount_purchase_manual_close"):
         st.rerun()
 
+
+# 2026-11-04 hoyeon.han: 선택 유형을 변경하면 이전 파일/필터/미리보기/다운로드를 폐기한다.
+doc_type = st.radio(
+    "정산서 종류", [st_mod.TYPE_SALE, st_mod.TYPE_PURCHASE], horizontal=True,
+    key="settle_ecount_doc_type", on_change=_on_doc_type_change,
+)
+is_purchase = doc_type == st_mod.TYPE_PURCHASE
+source_label = "구매현황내역" if is_purchase else "판매현황내역"
+column_map = ss.COLUMN_MAP_PURCHASE if is_purchase else ss.COLUMN_MAP_SALE
+
+if st.button("📖 다운로드 매뉴얼", key="settle_ecount_manual_open"):
+    if is_purchase:
+        _show_purchase_download_manual()
+    else:
+        _show_download_manual()
+
+st.markdown(f"### 📁 1. 이카운트 {source_label} 원본")
+st.caption("서버에는 판매용·구매용 최신 파일을 각각 한 개씩 보관합니다. 새 파일은 같은 종류의 저장본을 교체합니다.")
+file_store = EcountFileStore()
+try:
+    stored_record = file_store.load(doc_type)
+except (OSError, ValueError) as e:
+    logging.error("이카운트 저장 원본 조회 실패", exc_info=True)
+    st.warning(f"저장된 원본을 읽지 못했습니다. 새 파일을 업로드하세요. ({e})")
+    stored_record = None
+    _reset_below_parse()
+
+_SOURCE_SAVED = "서버에 저장된 최신 파일"
+_SOURCE_UPLOAD = "새 파일 업로드"
+# 업로드 성공 직후 다음 실행에서만 위젯을 변경하여 Streamlit 위젯 충돌을 피한다.
+if st.session_state.pop("settle_ecount_use_saved_next", False):
+    st.session_state["settle_ecount_source_mode"] = _SOURCE_SAVED
+    st.session_state.pop("settle_ecount_uploader", None)
+source_mode = st.radio(
+    "원본 선택", [_SOURCE_SAVED, _SOURCE_UPLOAD],
+    index=0 if stored_record else 1, horizontal=True,
+    key="settle_ecount_source_mode", on_change=_on_source_mode_change,
+)
+if stored_record:
+    st.info(
+        f"저장된 {doc_type} 원본: **{stored_record['original_name']}** · "
+        f"조회기간 {stored_record.get('period_start', '-')} ~ {stored_record.get('period_end', '-')} · "
+        f"저장일시 {stored_record['uploaded_at']}"
+    )
+
+if source_mode == _SOURCE_SAVED:
+    if stored_record is None:
+        st.info(f"저장된 {doc_type} 원본이 없습니다. '새 파일 업로드'를 선택하세요.")
+    else:
+        source_sig = (doc_type, stored_record["sha256"])
+        if st.session_state.settle_ecount_uploaded_sig != source_sig:
+            try:
+                _activate_source(stored_record, doc_type)
+            except (OSError, ValueError) as e:
+                logging.error("이카운트 저장 원본 검증 실패", exc_info=True)
+                _reset_below_parse()
+                st.error(f"원본 검증에 실패했습니다. 새 파일을 업로드하세요. ({e})")
+                st.stop()
+            st.rerun()
+else:
+    uploaded_file = st.file_uploader(
+        f"{doc_type} 정산용 {source_label} 파일을 선택하세요 (.xlsx)",
+        type=["xlsx"], key="settle_ecount_uploader",
+        help="선택한 정산서 종류와 원본 시트명이 일치해야 저장됩니다. 검증 실패 시 기존 저장본을 유지합니다.",
+    )
+    if uploaded_file is not None:
+        file_bytes = uploaded_file.getvalue()
+        file_sig = (doc_type, hashlib.sha256(file_bytes).hexdigest())
+        if st.session_state.settle_ecount_uploaded_sig != file_sig:
+            # 새 업로드가 실패해도 이전 정산서가 화면에 남지 않도록 먼저 초기화한다.
+            _reset_below_parse()
+            try:
+                record = file_store.save(file_bytes, uploaded_file.name, doc_type)
+                _activate_source(record, doc_type)
+            except ValueError as e:
+                logging.error("이카운트 업로드 검증 실패", exc_info=True)
+                st.error(f"❌ {e} 기존 서버 저장본은 유지됩니다.")
+                st.stop()
+            except Exception as e:  # noqa: BLE001 - 파일 저장 실패도 기존 저장본을 보존한다.
+                logging.error("이카운트 원본 저장 실패", exc_info=True)
+                st.error(f"❌ 파일을 저장하지 못했습니다. 기존 저장본은 유지됩니다. ({e})")
+                st.stop()
+            st.session_state["settle_ecount_use_saved_next"] = True
+            st.rerun()
+
 parsed = st.session_state.settle_ecount_parsed
+# 세션 복원이나 비정상 위젯 상태에서도 선택 유형과 다른 데이터는 처리하지 않는다.
+if parsed is not None and parsed.get("doc_type") != doc_type:
+    _reset_below_parse()
+    parsed = None
 
 
 # ===== 2. 파싱 결과 확인 =====
@@ -336,6 +499,13 @@ if parsed is not None:
     if parsed["invalid_date_rows"]:
         st.warning(
             f"⚠️ 날짜 형식이 올바르지 않은 {parsed['invalid_date_rows']:,}행을 제외했습니다."
+        )
+
+    # 2026-11-04 hoyeon.han: 금액 공란을 무상거래로 단정하지 않고 확인을 안내한다.
+    if parsed.get("blank_amount_rows", 0):
+        st.warning(
+            f"금액이 모두 비어 있는 {parsed['blank_amount_rows']:,}행이 있습니다. "
+            "수량은 포함하고 금액은 0원으로 집계합니다. 원본에서 금액 입력 여부를 확인하세요."
         )
 
     # 검산 — 원본 푸터('총합계')와 대조. 이카운트 양식이 바뀌어 열이 밀리면 즉시 드러난다
@@ -545,7 +715,9 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
     st.markdown("### 🧑‍💼 5. 셀러(특이사항) 선택")
     st.caption(
         "셀러 값은 원본의 특이사항 컬럼입니다. 빈 특이사항은 '일반' 셀러로 묶습니다. "
-        "선택한 셀러의 주문만 집계·상세내역에 포함하며, 주문유형은 모두 포함합니다."
+        # "선택한 셀러의 주문만 집계·상세내역에 포함하며, 주문유형은 모두 포함합니다."
+        # 2026-11-04 hoyeon.han: 매출·매입 공통 안내.
+        "선택한 셀러의 주문만 정산서에 포함하며, 주문유형은 모두 포함합니다."
     )
     df_vendor = st_mod.filter_by_vendor(
         df_period, st.session_state.settle_ecount_vendor
@@ -850,29 +1022,41 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         key="settle_ecount_include_overall_cb",
     )
     st.session_state.settle_ecount_include_overall = include_overall
-    detail_labels = list(_DETAIL_LABELS)
-    previous_label = next(
-        (label for label, mode in _DETAIL_LABELS.items()
-         if mode == st.session_state.settle_ecount_detail_mode),
-        "전체 하나로 생성",
-    )
-    detail_label = st.radio(
-        "상세내역 생성 방식",
-        options=detail_labels,
-        index=detail_labels.index(previous_label),
-        horizontal=True,
-        key="settle_ecount_detail_mode_radio",
-    )
-    detail_mode = _DETAIL_LABELS[detail_label]
-    st.session_state.settle_ecount_detail_mode = detail_mode
-    st.caption(
-        "정산 요약은 일자·품목·단가·반품 여부·셀러별로 수량과 금액을 합산합니다. "
-        "단가는 기존 정산서와 같이 각 원본 행의 합계 ÷ 수량으로 계산합니다. "
-        "상세내역은 합산하지 않은 원본 주문 행입니다."
-    )
+    # 2026-11-04 hoyeon.han: 매입은 셀러 요약/전체만 생성하며 상세 옵션을 제공하지 않는다.
+    if is_purchase:
+        detail_mode = ss.DETAIL_MODE_NONE
+        detail_label = "생성 안 함"
+        st.session_state.settle_ecount_detail_mode = detail_mode
+        st.caption(
+            "매입 정산서는 셀러별 요약과 선택한 전체 시트만 생성합니다. "
+            "단가는 원본의 합계 ÷ 수량으로 계산하며 반품은 음수로 반영합니다."
+        )
+    else:
+        detail_labels = list(_DETAIL_LABELS)
+        previous_label = next(
+            (label for label, mode in _DETAIL_LABELS.items()
+             if mode == st.session_state.settle_ecount_detail_mode),
+            "전체 하나로 생성",
+        )
+        detail_label = st.radio(
+            "상세내역 생성 방식",
+            options=detail_labels,
+            index=detail_labels.index(previous_label),
+            horizontal=True,
+            key="settle_ecount_detail_mode_radio",
+        )
+        detail_mode = _DETAIL_LABELS[detail_label]
+        st.session_state.settle_ecount_detail_mode = detail_mode
+        st.caption(
+            "정산 요약은 일자·품목·단가·반품 여부·셀러별로 수량과 금액을 합산합니다. "
+            "단가는 기존 정산서와 같이 각 원본 행의 합계 ÷ 수량으로 계산합니다. "
+            "상세내역은 합산하지 않은 원본 주문 행입니다."
+        )
 
     # 2026-10-13 hoyeon.han: 매핑/옵션 변경 시 오래된 미리보기·다운로드를 숨긴다.
     plan_signature = (
+        # 2026-11-04 hoyeon.han: 정산서 종류도 출력 조건에 포함한다.
+        doc_type,
         st.session_state.settle_ecount_uploaded_sig,
         st.session_state.settle_ecount_start_date,
         st.session_state.settle_ecount_end_date,
@@ -892,7 +1076,9 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         st.session_state.settle_ecount_plan_signature = plan_signature
 
     # ===== 9. 집계 및 상세내역 미리보기 =====
-    st.markdown("### 👁️ 9. 집계 및 상세내역 미리보기")
+    # st.markdown("### 👁️ 9. 집계 및 상세내역 미리보기")
+    # 2026-11-04 hoyeon.han: 매입에는 상세내역이 없음을 화면 제목에도 반영한다.
+    st.markdown("### 👁️ 9. 집계 미리보기" if is_purchase else "### 👁️ 9. 집계 및 상세내역 미리보기")
     if st.button("🔍 미리보기 생성", key="settle_ecount_preview_btn"):
         try:
             st.session_state.settle_ecount_plan = es.build_ecount_sheet_plan(
@@ -901,6 +1087,8 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
                 item_mapping=st.session_state.settle_ecount_item_mapping,
                 detail_mode=detail_mode,
                 include_overall=include_overall,
+                # 2026-11-04 hoyeon.han: 구매 집계는 매입 컬럼 계약으로 변환한다.
+                doc_type=doc_type,
             )
         except Exception as e:  # noqa: BLE001
             st.error(f"❌ 정산서 미리보기 생성 실패: {e}")
@@ -968,18 +1156,23 @@ if (
                 item_mapping=st.session_state.settle_ecount_item_mapping,
                 detail_mode=detail_mode,
                 include_overall=include_overall,
+                # 2026-11-04 hoyeon.han: 구매 집계는 매입 컬럼 계약으로 변환한다.
+                doc_type=doc_type,
             )
             # 2026-10-14 hoyeon.han: 실제 생성 요청에서만 세션별 출력 폴더를 생성.
             out_path = auth.unique_output_path(out_filename, 'settlement-ecount')
             ss.write_seller_settlement_xlsx(
                 out_path=out_path,
-                title=ss.TITLE_SALE,
+                # title=ss.TITLE_SALE,
+                # 2026-11-04 hoyeon.han: 문서 제목/컬럼 매핑을 선택 유형과 일치시킨다.
+                title=ss.TITLE_PURCHASE if is_purchase else ss.TITLE_SALE,
                 period_line=period_line,
                 plan=plan_final,
                 seller_font_size=float(seller_font_size),
                 total_font_color=total_font_color,
                 total_fill_color=total_fill_color,
-                column_map=ss.COLUMN_MAP_SALE,
+                # column_map=ss.COLUMN_MAP_SALE,
+                column_map=column_map,
             )
             st.session_state.settle_ecount_plan = plan_final
             st.session_state.settle_ecount_output_path = out_path
@@ -993,6 +1186,8 @@ if (
             st.session_state.settle_ecount_history.append({
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "vendor": vendor,
+                # 2026-11-04 hoyeon.han: 세션 이력에서 매출/매입을 구별한다.
+                "정산서 종류": doc_type,
                 # "주문유형": ", ".join(st.session_state.settle_ecount_order_types or []),
                 # 2026-10-13 hoyeon.han: 선택 셀러와 주문유형 전체 포함을 이력에 기록한다.
                 "셀러": ", ".join(st.session_state.settle_ecount_sellers),
