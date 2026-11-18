@@ -162,10 +162,15 @@ def test_order_type_column(ecount_df):
 def test_seller_in_remark(ecount_df):
     """특이사항 → 비고. 셀러명이 들어가 시트 분할 기준이 된다."""
     vc = ecount_df["비고"].value_counts()
-    assert vc["러브지나 5차"] == 1334
-    assert vc["우유커플 16차"] == 479
-    assert vc["에르마린 19차"] == 372
-    assert int((ecount_df["비고"] == "").sum()) == 866
+    # assert vc["러브지나 5차"] == 1334
+    # assert vc["우유커플 16차"] == 479
+    # assert vc["에르마린 19차"] == 372
+    # assert int((ecount_df["비고"] == "").sum()) == 866
+    # 2026-11-18 hoyeon.han: 빈 특이사항 배송비·도선료 31행이 상품 행 셀러로 보충된다.
+    assert vc["러브지나 5차"] == 1338
+    assert vc["우유커플 16차"] == 484
+    assert vc["에르마린 19차"] == 373
+    assert int((ecount_df["비고"] == "").sum()) == 835
 
 
 def test_extract_order_types(ecount_df):
@@ -301,7 +306,9 @@ def test_end_to_end_pipeline(ecount_parsed, ecount_df):
         "황인선",
     ]
     assert len(sheets["전체"]) == 1070
-    assert len(sheets["일반"]) == 27
+    # assert len(sheets["일반"]) == 27
+    # 2026-11-18 hoyeon.han: 셀러가 보충된 비용 23행이 일반에서 각 셀러로 이동한다.
+    assert len(sheets["일반"]) == 4
     # 전체를 뺀 나머지 시트의 행 합이 전체와 같아야 누락이 없다
     assert sum(len(v) for k, v in sheets.items() if k != "전체") == 1070
     assert int(sheets["전체"]["합계"].sum()) == 220_107_000
@@ -709,12 +716,20 @@ def test_detail_fee_classification_preserves_summary_mapping_and_excel(
         assert plan["detail_df"] is None and plan["detail_sheets"] is None
         return
 
+    # expected = pd.DataFrame([
+    #     ["셀러B", "상품B", 2, 20000, 0, 0],
+    #     ["셀러A", "운송비", 0, 0, 3300, 0],
+    #     ["셀러A", "추가운임", 1, 0, 0, 3000],
+    #     ["셀러B", "운송비", -1, 0, -500, 0],
+    #     ["셀러B", "추가운임", 0, 0, 0, -1000],
+    #     ["일반", "배송비", 1, 10000, 0, 0],
+    # ], columns=["특이사항", "제품", "수량", "상품매출", "판매배송비", "도선료"])
+    # 2026-11-18 hoyeon.han: 셀러B 비용은 같은 셀러의 상품B 행에 합쳐진다. 셀러A 비용은
+    # 같은 셀러의 상품 행이 없어(특이사항 불일치) 별도 행으로 남는다.
     expected = pd.DataFrame([
-        ["셀러B", "상품B", 2, 20000, 0, 0],
+        ["셀러B", "상품B", 2, 20000, -500, -1000],
         ["셀러A", "운송비", 0, 0, 3300, 0],
         ["셀러A", "추가운임", 1, 0, 0, 3000],
-        ["셀러B", "운송비", -1, 0, -500, 0],
-        ["셀러B", "추가운임", 0, 0, 0, -1000],
         ["일반", "배송비", 1, 10000, 0, 0],
     ], columns=["특이사항", "제품", "수량", "상품매출", "판매배송비", "도선료"])
     if detail_mode == ss.DETAIL_MODE_SINGLE:
@@ -767,7 +782,10 @@ def test_fee_item_rows_are_included_once_without_extra_cost_lines():
     # assert plan["detail_df"]["상품매출"].sum() == 25000
     # 2026-11-04 hoyeon.han: 비용을 상품매출과 분리하되 전체 금액은 유지한다.
     assert plan["detail_df"][["상품매출", "판매배송비", "도선료"]].sum().tolist() == [20000, 3000, 2000]
-    assert len(plan["detail_df"]) == len(df)
+    # assert len(plan["detail_df"]) == len(df)
+    # 2026-11-18 hoyeon.han: 같은 주문의 배송비·도선료는 상품 행 한 줄로 합쳐진다.
+    assert len(plan["detail_df"]) == 1
+    assert plan["detail_df"][["상품매출", "판매배송비", "도선료"]].iloc[0].tolist() == [20000, 3000, 2000]
 
 
 def test_mixed_blank_sellers_are_kept_in_general_sheet():
@@ -823,7 +841,10 @@ def test_item_mapping_is_identical_in_summary_overall_and_detail(detail_mode):
         assert summary["합계"].sum() == 33000
     detail = (plan["detail_df"] if detail_mode == ss.DETAIL_MODE_SINGLE
               else plan["detail_sheets"]["상세내역_셀러A"])
-    assert detail["제품"].tolist() == ["정리상품", "정리상품", "배송비"]
+    # assert detail["제품"].tolist() == ["정리상품", "정리상품", "배송비"]
+    # 2026-11-18 hoyeon.han: 같은 수하인의 배송비는 첫 상품 행에 합쳐진다.
+    assert detail["제품"].tolist() == ["정리상품", "정리상품"]
+    assert detail["판매배송비"].tolist() == [3000, 0]
     # assert detail["상품매출"].sum() == 33000
     # 2026-11-04 hoyeon.han: 표시명 매핑과 별개로 배송비는 전용 금액 열로 분리한다.
     assert detail[["상품매출", "판매배송비", "도선료"]].sum().tolist() == [30000, 3000, 0]
@@ -1014,15 +1035,20 @@ def test_seller_writer_format_totals_buyer_info_and_decimal_precision(tmp_path):
         assert detail.cell(3, 3).value == "변심반품"
         # assert [detail.cell(row, 11).value for row in range(2, 6)] == [100000, -33333, 3000, 5000]
         # 2026-11-04 hoyeon.han: 배송비 금액은 상품매출에서 빼고 L열에 한 번만 쓴다.
-        assert [detail.cell(row, 11).value for row in range(2, 6)] == [100000, -33333, 0, 5000]
-        for row in range(2, 6):
+        # assert [detail.cell(row, 11).value for row in range(2, 6)] == [100000, -33333, 0, 5000]
+        # 2026-11-18 hoyeon.han: 배송비 행은 같은 수하인·구분의 첫 상품 행 L열로 합쳐진다.
+        assert [detail.cell(row, 11).value for row in range(2, 5)] == [100000, -33333, 5000]
+        # for row in range(2, 6):
+        for row in range(2, 5):
             assert detail.cell(row, 10).data_type == "n"
             assert detail.cell(row, 11).number_format == "#,##0"
             # assert detail.cell(row, 12).value in (None, "")
             # 2026-11-04 hoyeon.han: 배송비 행만 금액을 표시하고 실제 0은 빈칸 유지.
-            assert detail.cell(row, 12).value == (3000 if row == 4 else None)
+            # assert detail.cell(row, 12).value == (3000 if row == 4 else None)
+            assert detail.cell(row, 12).value == (3000 if row == 2 else None)
             assert detail.cell(row, 13).value in (None, "")
-        total_row = 2 + len(df)
+        # total_row = 2 + len(df)
+        total_row = 2 + len(df) - 1
         # assert [detail.cell(total_row, col).value for col in (11, 12, 13)] == [74667, 0, 0]
         # 2026-11-04 hoyeon.han: 세 열로 분리한 합계와 기존 총합계를 각각 확인한다.
         assert [detail.cell(total_row, col).value for col in (11, 12, 13)] == [71667, 3000, 0]
@@ -1052,7 +1078,9 @@ def test_real_sample_uses_seller_pipeline_without_changing_total(ecount_df):
     plan = es.build_ecount_sheet_plan(df)
     assert plan["overall_df"]["합계"].sum() == 220_107_000
     assert sum(sdf["합계"].sum() for sdf in plan["seller_sheets"].values()) == 220_107_000
-    assert len(plan["detail_df"]) == 1070
+    # assert len(plan["detail_df"]) == 1070
+    # 2026-11-18 hoyeon.han: 상품 행에 합쳐진 배송비·도선료 33행은 상세내역에서 빠진다.
+    assert len(plan["detail_df"]) == 1037
     assert list(plan["detail_df"].columns) == _ORDER_SETTLEMENT_COLS
     # assert plan["detail_df"]["상품매출"].sum() == 220_107_000
     # 2026-11-04 hoyeon.han: 실제 샘플의 배송비 103,200원·도선료 24,000원을 분리한다.
@@ -1060,10 +1088,14 @@ def test_real_sample_uses_seller_pipeline_without_changing_total(ecount_df):
         219_979_800, 103_200, 24_000
     ]
     assert "일반" in plan["seller_sheets"]
-    assert int((plan["detail_df"]["특이사항"] == "일반").sum()) == 27
+    # assert int((plan["detail_df"]["특이사항"] == "일반").sum()) == 27
+    # 2026-11-18 hoyeon.han: 셀러 보충·상품 행 병합 후 일반 상세 행은 3행이다.
+    assert int((plan["detail_df"]["특이사항"] == "일반").sum()) == 3
     # assert plan["detail_df"][["판매배송비", "도선료"]].eq(0).all().all()
     # 2026-11-04 hoyeon.han: 상세의 각 행 총액도 원본 순서대로 보존한다.
-    assert plan["detail_df"][["상품매출", "판매배송비", "도선료"]].sum(axis=1).tolist() == df["합계"].tolist()
+    # assert plan["detail_df"][["상품매출", "판매배송비", "도선료"]].sum(axis=1).tolist() == df["합계"].tolist()
+    # 2026-11-18 hoyeon.han: 병합으로 행 수가 줄어도 상세 총액은 원본 합계와 같다.
+    assert plan["detail_df"][["상품매출", "판매배송비", "도선료"]].sum().sum() == df["합계"].sum()
     pd.testing.assert_frame_equal(df, before)
 
 
@@ -1807,3 +1839,198 @@ def test_manual_ui_preserves_period_mapping_preview_output_and_history(
         assert list((Path.cwd() / "processed" / "_session_outputs").rglob("*.xlsx")) == [out_path]
     else:
         assert not list((Path.cwd() / "processed").iterdir())
+
+
+# ===== 2026-11-18 hoyeon.han: 배송비·도선료를 같은 주문 상품 행에 합치는 상세내역 =====
+
+ECOUNT_XLSX_202611 = _TESTS_DIR / "이카운트_판매현황내역_20261117.xlsx"
+
+
+def _detail_amounts(detail):
+    return detail[["제품", "수량", "상품매출", "판매배송비", "도선료"]].values.tolist()
+
+
+def test_requested_return_layout_merges_fee_rows_into_order_row():
+    """현업 요청 화면: 반품 상품 1줄 옆에 판매배송비·도선료가 표시된다."""
+    df = _make_ecount_df(
+        {"구분": "변심반품", "품목": "사파이어 쿨링 팬시", "수량": -1, "합계": -190000},
+        {"구분": "변심반품", "품목": "배송비", "합계": 6600, "연락처1": ""},
+        {"구분": "변심반품", "품목": "도선료", "합계": 3000, "연락처1": ""},
+    )
+    plan = es.build_ecount_sheet_plan(df)
+    assert _detail_amounts(plan["detail_df"]) == [
+        ["사파이어 쿨링 팬시", -1, -190000, 6600, 3000]
+    ]
+    assert plan["detail_df"].iloc[0]["연락처1"] == "000-0000-0000"
+    # 요약은 기존처럼 배송비·도선료 품목 행을 유지한다.
+    summary = plan["seller_sheets"]["셀러A"].set_index("품목")["합계"]
+    assert summary.to_dict() == {"사파이어 쿨링 팬시": -190000, "배송비": 6600, "도선료": 3000}
+
+
+def test_fee_row_with_address_in_phone_cell_links_by_address():
+    """연락처 칸에 주소가 입력된 비용 행도 주소가 같으면 연결된다."""
+    addr = "테스트시 테스트구 검증로 0"
+    df = _make_ecount_df({}, {"품목": "도선료", "합계": 3000, "연락처1": addr})
+    links = es.match_fee_rows(df)
+    assert links.loc[1, es.FEE_LINK_COL] == 0
+    assert links.loc[1, es.FEE_REASON_COL] == ""
+    assert _detail_amounts(es.build_ecount_sheet_plan(df)["detail_df"]) == [
+        ["상품A", 1, 10000, 0, 3000]
+    ]
+
+
+def test_homonyms_are_split_by_address_or_phone():
+    """같은 날 같은 업체·셀러의 동명이인은 주소, 주소가 없으면 연락처로 구분한다."""
+    df = _make_ecount_df(
+        {"수하인주소": "주소1", "연락처1": "010-0000-0001"},
+        {"수하인주소": "주소2", "연락처1": "010-0000-0002", "합계": 20000},
+        {"품목": "배송비", "합계": 3300, "수하인주소": "주소 2", "연락처1": ""},
+        {"품목": "도선료", "합계": 3000, "수하인주소": "", "연락처1": "01000000001"},
+    )
+    links = es.match_fee_rows(df)
+    assert links[es.FEE_LINK_COL].tolist() == [1, 0]
+    assert _detail_amounts(es.build_ecount_sheet_plan(df)["detail_df"]) == [
+        ["상품A", 1, 10000, 0, 3000],
+        ["상품A", 1, 20000, 3300, 0],
+    ]
+
+
+def test_unresolvable_homonyms_stay_as_separate_fee_row():
+    """주소·연락처가 없어 누구 비용인지 모르면 합치지 않고 별도 행으로 둔다."""
+    df = _make_ecount_df(
+        {"수하인주소": "주소1", "연락처1": "010-0000-0001"},
+        {"수하인주소": "주소2", "연락처1": "010-0000-0002"},
+        {"품목": "배송비", "합계": 3300, "수하인주소": "", "연락처1": ""},
+    )
+    unmatched = es.unmatched_fee_rows(df)
+    assert unmatched[es.FEE_REASON_COL].tolist() == [es.FEE_REASON_AMBIGUOUS]
+    detail = es.build_ecount_sheet_plan(df)["detail_df"]
+    assert _detail_amounts(detail) == [
+        ["상품A", 1, 10000, 0, 0],
+        ["상품A", 1, 10000, 0, 0],
+        ["배송비", 1, 0, 3300, 0],
+    ]
+
+
+@pytest.mark.parametrize("fee_row, reason", [
+    ({"수하인명": ""}, es.FEE_REASON_NO_CONSIGNEE),
+    ({"작성일자": "2026-10-02"}, es.FEE_REASON_NO_ORDER),
+    ({"회사명": "다른업체"}, es.FEE_REASON_NO_ORDER),
+    ({"비고": "셀러B"}, es.FEE_REASON_SELLER),
+    ({"수하인주소": "다른 주소"}, es.FEE_REASON_ADDRESS),
+    ({"수하인주소": "", "연락처1": "010-9999-9999"}, es.FEE_REASON_PHONE),
+])
+def test_unlinkable_fee_rows_keep_amount_in_separate_row(fee_row, reason):
+    """연결 불가 사유별로 비용 행은 금액 누락 없이 별도 행으로 남는다."""
+    df = _make_ecount_df({}, {"품목": "배송비", "합계": 3000, **fee_row})
+    unmatched = es.unmatched_fee_rows(df)
+    assert unmatched[es.FEE_REASON_COL].tolist() == [reason]
+    plan = es.build_ecount_sheet_plan(df)
+    details = [plan["detail_df"]]
+    assert sum(len(d) for d in details) == 2
+    total = sum(d[["상품매출", "판매배송비", "도선료"]].sum().sum() for d in details)
+    assert total == 13000
+
+
+def test_same_person_fee_prefers_same_order_type_then_first_row():
+    """같은 사람의 여러 행이면 구분이 같은 행, 그중 원본 첫 행에 합친다."""
+    df = _make_ecount_df(
+        {"품목": "상품A"},
+        {"품목": "상품B", "구분": "변심반품", "수량": -1, "합계": -10000},
+        {"품목": "상품C", "구분": "변심반품", "수량": -1, "합계": -5000},
+        {"품목": "배송비", "구분": "변심반품", "합계": 6600},
+        {"품목": "도선료", "합계": 3000},
+    )
+    assert es.match_fee_rows(df)[es.FEE_LINK_COL].tolist() == [1, 0]
+    assert _detail_amounts(es.build_ecount_sheet_plan(df)["detail_df"]) == [
+        ["상품A", 1, 10000, 0, 3000],
+        ["상품B", -1, -10000, 6600, 0],
+        ["상품C", -1, -5000, 0, 0],
+    ]
+
+
+def test_fill_fee_row_sellers_only_fills_blank_linked_rows():
+    """빈 특이사항 비용 행만 상품 행 셀러로 채우고 원본 df 는 바꾸지 않는다."""
+    df = _make_ecount_df(
+        {},
+        {"품목": "배송비", "비고": "", "합계": 3000},
+        {"품목": "도선료", "비고": "", "합계": 3000, "수하인명": "없는수하인"},
+    )
+    before = df.copy(deep=True)
+    filled, count = es.fill_fee_row_sellers(df)
+    assert count == 1
+    assert filled["비고"].tolist() == ["셀러A", "셀러A", ""]
+    pd.testing.assert_frame_equal(df, before)
+
+
+def test_parser_fills_blank_fee_seller_so_seller_filter_keeps_fee(tmp_path):
+    """셀러만 골라도 빈 특이사항 배송비가 '일반'으로 빠지지 않는다."""
+    header = _HEADER + ["수하인명", "연락처1", "수하인주소"]
+    path = _write_xlsx(tmp_path / "fill.xlsx", [
+        [_A1], header,
+        ["20260803", "업체", "상품A", "변심반품", -1, 190000, -190000, "셀러A",
+         "수하인", "010-0000-0000", "주소"],
+        ["20260803", "업체", "배송비", "변심반품", 1, 6600, 6600, "",
+         "수하인", "", "주소"],
+        ["20260803", "업체", "도선료", "", 1, 3000, 3000, "",
+         "수하인", "", "주소"],
+    ])
+    parsed = es.parse_ecount_xlsx(path)
+    assert (parsed["fee_rows"], parsed["fee_rows_linked"], parsed["fee_seller_filled"]) == (2, 2, 2)
+    df = parsed["df"]
+    assert df["비고"].tolist() == ["셀러A"] * 3
+    plan = es.build_ecount_sheet_plan(df[df["비고"].eq("셀러A")])
+    assert list(plan["seller_sheets"]) == ["셀러A"]
+    assert plan["seller_sheets"]["셀러A"]["합계"].sum() == -180400
+    assert _detail_amounts(plan["detail_df"]) == [["상품A", -1, -190000, 6600, 3000]]
+
+
+@pytest.mark.parametrize("detail_mode", [ss.DETAIL_MODE_SINGLE, ss.DETAIL_MODE_PER_SELLER])
+def test_fee_merge_keeps_detail_totals_equal_to_summary(detail_mode):
+    """병합 전후 상세 총액과 요약 총액이 같다(셀러별 상세 포함)."""
+    df = _make_ecount_df(
+        {}, {"품목": "배송비", "합계": 3000},
+        {"비고": "셀러B", "수하인명": "수하인B", "합계": 20000},
+        {"비고": "셀러B", "수하인명": "수하인B", "품목": "도선료", "합계": 3000},
+        {"비고": "셀러B", "수하인명": "수하인C", "품목": "도선료", "합계": 3000},
+    )
+    plan = es.build_ecount_sheet_plan(df, detail_mode=detail_mode)
+    details = ([plan["detail_df"]] if detail_mode == ss.DETAIL_MODE_SINGLE
+               else list(plan["detail_sheets"].values()))
+    detail_total = sum(d[["상품매출", "판매배송비", "도선료"]].sum().sum() for d in details)
+    assert detail_total == plan["overall_df"]["합계"].sum() == df["합계"].sum() == 39000
+    assert sum(len(d) for d in details) == 3  # 병합 2건, 수하인C 도선료는 별도 행
+
+
+@pytest.mark.parametrize("path, fee_rows, linked, filled, unmatched", [
+    (ECOUNT_XLSX, 130, 129, 31, 1),
+    (ECOUNT_XLSX_202611, 205, 205, 5, 0),
+])
+def test_real_samples_fee_link_counts(path, fee_rows, linked, filled, unmatched):
+    """실제 샘플(개인정보, 저장소 미포함)이 있을 때만 연결 건수와 총액을 확인한다."""
+    if not path.is_file():
+        pytest.skip(f"테스트 원본 파일이 없습니다: {path}")
+    parsed = es.parse_ecount_xlsx(str(path))
+    df = parsed["df"]
+    assert (parsed["fee_rows"], parsed["fee_rows_linked"], parsed["fee_seller_filled"]) == (
+        fee_rows, linked, filled
+    )
+    assert len(es.unmatched_fee_rows(df)) == unmatched
+    assert es.verify_totals(df, parsed["footer_total"], parsed["footer_qty"])["matches"]
+    plan = es.build_ecount_sheet_plan(df)
+    detail = plan["detail_df"]
+    assert len(detail) == len(df) - (fee_rows - unmatched)
+    assert detail[["상품매출", "판매배송비", "도선료"]].sum().sum() == df["합계"].sum()
+
+
+def test_ui_preview_reports_merged_and_unmatched_fee_rows(ecount_seller_ui_app):
+    """미리보기에 비용 행 병합 건수와 합치지 못한 행(사유 포함)을 안내한다."""
+    at = ecount_seller_ui_app
+    at.multiselect(key="settle_ecount_seller_multiselect").set_value(["셀러B"]).run()
+    _preview_ecount_seller_ui(at)
+    captions = [c.value for c in at.caption]
+    assert any("배송비·도선료 1행 중 0행은" in c and "1행은 별도 행" in c for c in captions)
+    labels = [e.label for e in at.expander]
+    assert any("상품 행에 합치지 못한 배송비·도선료 (1행)" in label for label in labels)
+    table = next(df.value for df in at.dataframe if es.FEE_REASON_COL in df.value.columns)
+    assert table[es.FEE_REASON_COL].tolist() == [es.FEE_REASON_SELLER]

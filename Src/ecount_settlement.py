@@ -149,6 +149,21 @@ SWAP_MIN_ROWS = 20
 UNIT_RAW = "raw"
 UNIT_RECALC = "recalc"
 
+# 2026-11-18 hoyeon.han: 배송비·도선료 품목 행을 같은 주문의 상품 행에 연결하는 규칙.
+# 이카운트 비용 행은 특이사항·연락처가 비어 있는 경우가 많아 전 열 일치로는 연결할 수
+# 없다. 일자·업체·수하인명으로 후보를 찾고 주소(없으면 전화번호)로 동명이인을 가른다.
+FEE_ITEMS = ("배송비", "도선료")
+FEE_ITEM_LOGICAL = {"배송비": "delivery", "도선료": "ferry"}
+PHONE_RE = re.compile(r"^0\d{8,11}$")  # 숫자만 남긴 전화번호 형식
+FEE_LINK_COL = "연결행"
+FEE_REASON_COL = "사유"
+FEE_REASON_NO_CONSIGNEE = "수하인명 없음"
+FEE_REASON_NO_ORDER = "같은 일자·업체·수하인명의 상품 행 없음"
+FEE_REASON_SELLER = "특이사항 불일치"
+FEE_REASON_ADDRESS = "수하인주소 불일치"
+FEE_REASON_PHONE = "연락처 불일치"
+FEE_REASON_AMBIGUOUS = "동명이인 구분 불가"
+
 
 # ===== 내부 헬퍼 =====
 
@@ -585,6 +600,11 @@ def parse_ecount_xlsx(
             df[c] = 0.0 if c in ("배송비", "도선료") else ""
     df = df[PARSED_COLS].reset_index(drop=True)
 
+    # 2026-11-18 hoyeon.han: 특이사항이 빈 배송비·도선료 행은 같은 주문 상품 행의
+    # 셀러를 따른다. 셀러 선택·시트 배치 전에 채워야 비용이 '일반'으로 빠지지 않는다.
+    fee_links = match_fee_rows(df)
+    df, fee_seller_filled = fill_fee_row_sellers(df, fee_links)
+
     # 조회기간 — A1 인식 실패 시 데이터 일자 범위로 폴백
     company, start_date, end_date = parse_ecount_header(a1)
     period_from_data = False
@@ -611,6 +631,10 @@ def parse_ecount_xlsx(
         "period_from_data": period_from_data,
         "unit_price_mode": unit_price_mode,
         "swap_warning": detect_swap_suspicion(df),
+        # 2026-11-18 hoyeon.han: 비용 행 연결·셀러 보충 결과(화면 안내용)
+        "fee_rows": int(len(fee_links)),
+        "fee_rows_linked": int(fee_links[FEE_REASON_COL].eq("").sum()) if len(fee_links) else 0,
+        "fee_seller_filled": fee_seller_filled,
     }
 
 
@@ -677,6 +701,136 @@ def to_order_settlement_df(df: pd.DataFrame) -> pd.DataFrame:
     return out[[ss.COLUMN_MAP_SALE[k] for k in ss.DETAIL_LOGICAL_COLS]].reset_index(drop=True)
 
 
+# 2026-11-18 hoyeon.han: 비용 행 → 상품 행 연결. 상세내역 병합과 셀러 보충에 공통 사용.
+def _text_column(df: pd.DataFrame, col: str) -> pd.Series:
+    """선택 열을 정리된 문자열로. 열이 없으면 빈 문자열."""
+    if col not in df.columns:
+        return pd.Series("", index=df.index, dtype=object)
+    return _clean_series(df[col])
+
+
+def match_fee_rows(df: pd.DataFrame, strict_seller: bool = False) -> pd.DataFrame:
+    """배송비·도선료 품목 행마다 같은 주문의 상품 행을 찾는다.
+
+    규칙(순서대로 적용):
+      1. 수하인명이 없으면 연결하지 않는다.
+      2. 같은 작성일자 + 회사명 + 수하인명의 상품 행이 후보다.
+      3. 비용 행에 특이사항이 있으면 같은 특이사항의 상품 행만 남긴다.
+         strict_seller=True 이면 비용 행 특이사항이 비어 있어도 같아야 한다
+         (빈 값과 '일반'은 같은 셀러로 본다 — 상세 병합 시 시트가 어긋나지 않게).
+      4. 비용 행에 주소가 있으면 주소(공백 무시)로, 없으면 전화번호 형식인
+         연락처1(숫자만)로 좁힌다. 연락처 칸에 주소가 잘못 입력된 행도 주소로 연결된다.
+      5. 남은 후보가 서로 다른 사람(주소, 주소가 없으면 연락처가 다름)이면
+         연결하지 않는다. 같은 사람의 상품이 여러 행이면 구분이 같은 행을 우선하고,
+         그중 원본 순서상 첫 행에 연결한다.
+
+    Returns:
+        index = 비용 행 index, columns = [연결행(상품 행 index 또는 None), 사유('' = 연결)]
+    """
+    items = _text_column(df, "품목")
+    is_fee = items.isin(FEE_ITEMS)
+    result = pd.DataFrame(
+        {FEE_LINK_COL: pd.Series(dtype=object), FEE_REASON_COL: pd.Series(dtype=object)}
+    )
+    if not is_fee.any():
+        return result
+
+    dates = pd.to_datetime(_text_column(df, "작성일자"), errors="coerce").dt.normalize()
+    vendors = _text_column(df, "회사명")
+    names = _text_column(df, "수하인명")
+    sellers = _text_column(df, "비고").replace("", ss.SHEET_GENERAL)
+    seller_given = _text_column(df, "비고").ne("")
+    addrs = _text_column(df, "수하인주소").str.replace(r"\s+", "", regex=True)
+    phones = _text_column(df, "연락처1").str.replace(r"\D", "", regex=True)
+    order_types = _text_column(df, COL_ORDER_TYPE)
+
+    product_rows: dict[tuple, list] = {}
+    for idx in df.index[~is_fee]:
+        if pd.isna(dates[idx]):
+            continue
+        product_rows.setdefault((dates[idx], vendors[idx], names[idx]), []).append(idx)
+
+    links: dict[Any, Any] = {}
+    reasons: dict[Any, str] = {}
+    for idx in df.index[is_fee]:
+        link, reason = None, ""
+        if names[idx] == "":
+            reason = FEE_REASON_NO_CONSIGNEE
+        else:
+            cands = product_rows.get((dates[idx], vendors[idx], names[idx]), [])
+            if not cands:
+                reason = FEE_REASON_NO_ORDER
+            if not reason and (strict_seller or seller_given[idx]):
+                cands = [c for c in cands if sellers[c] == sellers[idx]]
+                if not cands:
+                    reason = FEE_REASON_SELLER
+            if not reason and addrs[idx]:
+                cands = [c for c in cands if addrs[c] == addrs[idx]]
+                if not cands:
+                    reason = FEE_REASON_ADDRESS
+            elif not reason and PHONE_RE.match(phones[idx]):
+                cands = [c for c in cands if phones[c] == phones[idx]]
+                if not cands:
+                    reason = FEE_REASON_PHONE
+            if not reason:
+                persons = {addrs[c] for c in cands if addrs[c]}
+                if not persons:
+                    persons = {phones[c] for c in cands}
+                if len(persons) > 1:
+                    reason = FEE_REASON_AMBIGUOUS
+                else:
+                    # 같은 사람의 여러 행 중 구분(발주/반품)이 같은 행을 우선한다
+                    # (같은 날 발주와 반품이 함께 있으면 반품배송비는 반품 행으로).
+                    same_type = [c for c in cands if order_types[c] == order_types[idx]]
+                    link = (same_type or cands)[0]
+        links[idx] = link
+        reasons[idx] = reason
+    result = pd.DataFrame({FEE_LINK_COL: pd.Series(links, dtype=object),
+                           FEE_REASON_COL: pd.Series(reasons, dtype=object)})
+    return result
+
+
+def fill_fee_row_sellers(
+    df: pd.DataFrame, links: pd.DataFrame | None = None
+) -> tuple[pd.DataFrame, int]:
+    """연결된 비용 행의 빈 특이사항(비고)을 상품 행의 셀러로 채운다.
+
+    셀러를 고른 정산서에서 '일반'으로 분류된 배송비·도선료가 빠지지 않게 한다.
+    비어 있는 특이사항만 채우며 금액·다른 열·원본 df 는 수정하지 않는다.
+
+    Returns:
+        (채운 사본 df, 채운 행 수)
+    """
+    if links is None:
+        links = match_fee_rows(df)
+    out = df.copy()
+    if COL_REMARK not in out.columns or links.empty:
+        return out, 0
+    remarks = _text_column(out, COL_REMARK)
+    filled = 0
+    for fee_idx, product_idx in links[FEE_LINK_COL].items():
+        if product_idx is None or pd.isna(product_idx):
+            continue
+        if remarks[fee_idx] == "" and remarks[product_idx] != "":
+            out.at[fee_idx, COL_REMARK] = remarks[product_idx]
+            filled += 1
+    return out, filled
+
+
+def unmatched_fee_rows(df: pd.DataFrame, strict_seller: bool = True) -> pd.DataFrame:
+    """상세내역에서 상품 행에 합치지 못하는 비용 행과 사유(화면 안내용).
+
+    원본 index 를 유지한다. 화면은 거래처 전체로 사유를 판정한 뒤 선택 셀러 행만 고른다.
+    """
+    links = match_fee_rows(df, strict_seller=strict_seller)
+    miss = links[links[FEE_REASON_COL].ne("")]
+    cols = [c for c in ("작성일자", "회사명", "구분", "수하인명", "품목", "합계", "비고")
+            if c in df.columns]
+    out = df.loc[miss.index, cols].copy()
+    out[FEE_REASON_COL] = miss[FEE_REASON_COL]
+    return out
+
+
 # 2026-10-13 hoyeon.han: 요약·상세·전체 시트를 기존 발주내역과 같은 계획으로 작성.
 def build_ecount_sheet_plan(
     df: pd.DataFrame,
@@ -731,10 +885,27 @@ def build_ecount_sheet_plan(
     detail_orders = orders.copy()
     amount_col = ss.COLUMN_MAP_SALE["amount"]
     product_col = ss.COLUMN_MAP_SALE["product"]
-    for item, logical in (("배송비", "delivery"), ("도선료", "ferry")):
-        mask = detail_orders[product_col].eq(item)
-        detail_orders.loc[mask, ss.COLUMN_MAP_SALE[logical]] = detail_orders.loc[mask, amount_col]
-        detail_orders.loc[mask, amount_col] = 0
+    # for item, logical in (("배송비", "delivery"), ("도선료", "ferry")):
+    #     mask = detail_orders[product_col].eq(item)
+    #     detail_orders.loc[mask, ss.COLUMN_MAP_SALE[logical]] = detail_orders.loc[mask, amount_col]
+    #     detail_orders.loc[mask, amount_col] = 0
+    # 2026-11-18 hoyeon.han: 같은 주문의 상품 행을 찾은 비용 행은 그 상품 행의
+    # 판매배송비·도선료 열로 합치고 비용 행은 상세내역에서 뺀다(현업 요청 양식).
+    # 특이사항이 정확히 같을 때만 합쳐 요약 시트와 상세 시트의 셀러가 어긋나지 않는다.
+    # 연결하지 못한 비용 행은 기존처럼 별도 행으로 두고 금액만 비용 열로 옮긴다.
+    links = match_fee_rows(df.reset_index(drop=True), strict_seller=True)
+    merged_fee_rows = []
+    for fee_pos, row in links.iterrows():
+        item = detail_orders.at[fee_pos, product_col]
+        fee_col = ss.COLUMN_MAP_SALE[FEE_ITEM_LOGICAL[item]]
+        product_pos = row[FEE_LINK_COL]
+        if product_pos is None or pd.isna(product_pos):
+            detail_orders.at[fee_pos, fee_col] = detail_orders.at[fee_pos, amount_col]
+            detail_orders.at[fee_pos, amount_col] = 0
+        else:
+            detail_orders.at[product_pos, fee_col] += detail_orders.at[fee_pos, amount_col]
+            merged_fee_rows.append(fee_pos)
+    detail_orders = detail_orders.drop(index=merged_fee_rows)
 
     if plan["detail_df"] is not None:
         plan["detail_df"] = ss.build_detail_df(detail_orders, sellers, item_mapping)

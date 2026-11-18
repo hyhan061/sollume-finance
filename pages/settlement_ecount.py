@@ -508,6 +508,14 @@ if parsed is not None:
             "수량은 포함하고 금액은 0원으로 집계합니다. 원본에서 금액 입력 여부를 확인하세요."
         )
 
+    # 2026-11-18 hoyeon.han: 배송비·도선료 행의 주문 연결·셀러 보충 결과 안내.
+    if parsed.get("fee_seller_filled", 0):
+        st.info(
+            f"ℹ️ 특이사항이 비어 있던 배송비·도선료 {parsed['fee_seller_filled']:,}행은 "
+            "같은 주문(일자·거래처·수하인) 상품 행의 셀러로 채웠습니다. "
+            "셀러를 골라 정산서를 만들어도 해당 비용이 빠지지 않습니다."
+        )
+
     # 검산 — 원본 푸터('총합계')와 대조. 이카운트 양식이 바뀌어 열이 밀리면 즉시 드러난다
     v = es.verify_totals(df_all, parsed["footer_total"], parsed["footer_qty"])
     if not v["checked"]:
@@ -1050,7 +1058,10 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         st.caption(
             "정산 요약은 일자·품목·단가·반품 여부·셀러별로 수량과 금액을 합산합니다. "
             "단가는 기존 정산서와 같이 각 원본 행의 합계 ÷ 수량으로 계산합니다. "
-            "상세내역은 합산하지 않은 원본 주문 행입니다."
+            # "상세내역은 합산하지 않은 원본 주문 행입니다."
+            # 2026-11-18 hoyeon.han: 배송비·도선료는 같은 주문 상품 행 옆 열에 표시한다.
+            "상세내역은 합산하지 않은 원본 주문 행이며, 배송비·도선료는 같은 주문 "
+            "상품 행의 판매배송비·도선료 열에 함께 표시합니다."
         )
 
     # 2026-10-13 hoyeon.han: 매핑/옵션 변경 시 오래된 미리보기·다운로드를 숨긴다.
@@ -1095,6 +1106,26 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
             st.session_state.settle_ecount_plan = None
 
     plan = st.session_state.settle_ecount_plan
+    # 2026-11-18 hoyeon.han: 상세내역에서 상품 행에 합친/못 합친 배송비·도선료 안내.
+    if plan is not None and not is_purchase and detail_mode != ss.DETAIL_MODE_NONE:
+        _fee_links = es.match_fee_rows(df_final.reset_index(drop=True), strict_seller=True)
+        if len(_fee_links):
+            # 사유는 거래처 전체 행으로 판정해야 다른 셀러 상품 행과의 불일치가 드러난다.
+            _unmatched = es.unmatched_fee_rows(df_vendor)
+            _unmatched = _unmatched[_unmatched.index.isin(df_final.index)]
+            _merged = len(_fee_links) - len(_unmatched)
+            st.caption(
+                f"상세내역 배송비·도선료 {len(_fee_links):,}행 중 {_merged:,}행은 같은 주문의 "
+                f"상품 행에 합쳤고, {len(_unmatched):,}행은 별도 행으로 표시합니다."
+            )
+            if len(_unmatched):
+                with st.expander(f"⚠️ 상품 행에 합치지 못한 배송비·도선료 ({len(_unmatched):,}행)"):
+                    st.caption(
+                        "같은 일자·거래처·수하인명·특이사항의 상품 행을 찾지 못했거나 "
+                        "동명이인을 구분할 수 없는 행입니다. 금액은 별도 행으로 정산서에 포함됩니다. "
+                        "원본에서 상품 행과 같은 일자·수하인명·주소로 입력되었는지 확인하세요."
+                    )
+                    st.dataframe(_unmatched, use_container_width=True, hide_index=True)
     if plan is not None:
         preview_sheets = {}
         if plan.get("overall_df") is not None:
