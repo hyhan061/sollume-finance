@@ -52,3 +52,25 @@ def test_latest_is_only_published_from_main_and_main_push_triggers_build():
     assert "flavor: latest=false" in active
     assert "type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}" in active
     assert "enable=${{ startsWith(github.ref, 'refs/tags/v') }}" not in active
+
+
+# 2026-11-18 hoyeon.han: 버전 태그는 재빌드 없이 main에서 검증·게시된 이미지에 태그만 붙인다.
+def test_release_tag_retags_verified_main_image_without_rebuild_or_latest():
+    text = (ROOT / ".github/workflows/docker-publish.yml").read_text()
+    active = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    build_job, retag_job = active.split("\n  release-retag:\n", 1)
+    assert "      - \"v*\"\n" in active
+    assert "    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}\n" in build_job
+    assert "    if: ${{ startsWith(github.ref, 'refs/tags/v') }}\n" in retag_job
+    # 재태깅 job은 빌드·latest 게시를 하지 않고, main에 있는 커밋의 sha 이미지만 원본으로 쓴다.
+    assert "build-push-action" not in retag_job
+    assert "flavor: latest=false" in retag_job
+    assert "type=raw" not in retag_job and "value=latest" not in retag_job
+    assert '*:latest) echo "::error::' in retag_job
+    assert "git merge-base --is-ancestor \"$GITHUB_SHA\" FETCH_HEAD" in retag_job
+    assert 'SOURCE="${IMAGE_NAME}:sha-${GITHUB_SHA::7}"' in retag_job
+    assert "docker buildx imagetools inspect \"$SOURCE\"" in retag_job
+    assert "docker buildx imagetools create \"${args[@]}\" \"$SOURCE\"" in retag_job
+    assert "type=sha,prefix=sha-,format=short" in build_job
+    for pattern in ("{{version}}", "{{major}}.{{minor}}", "{{major}}"):
+        assert f"type=semver,pattern={pattern}\n" in retag_job
