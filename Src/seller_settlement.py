@@ -86,6 +86,11 @@ TITLE_SALE = "품목별판매현황"  # 셀러 시트 제목 (참고 정산서 r
 # 2026-07-23 hoyeon.han: 매입 셀러 시트 제목 (경리나라 '품목별 구매 현황' 표기)
 TITLE_PURCHASE = "품목별구매현황"
 DETAIL_SHEET_NAME = "상세내역"  # 예약 시트명
+# 2026-11-20 hoyeon.han: 비용조정(1회성 업로드) 지원.
+# 조정유형은 내부 열 이름이며, 정산서에는 비고(상세내역은 마지막) 옆 칸에 값만 쓰고
+# 열 헤더는 비운다. 입력에 이 열이 없으면 모든 함수가 기존과 동일하게 동작한다.
+ADJ_TYPE_COL = "조정유형"
+ADJ_SHEET_NAME = "비용조정내역"  # 예약 시트명 (비용조정 반영 시에만 생성)
 
 # 2026-07-24 hoyeon.han: 상세내역 생성 모드 3택 (발주내역 기반 정산서생성에서 사용).
 # 기본값은 SINGLE(현재 동작 = 전체 하나로) 이라 기존 셀러 화면과 하위호환.
@@ -318,6 +323,9 @@ def aggregate_item_sheet(
 
     c = column_map
     mapped = apply_mapping(rows, c["product"], item_mapping or {})
+    # 2026-11-20 hoyeon.han: 비용조정 행이 섞여 있으면(조정유형 열 존재) 조정 줄을
+    # 이카운트 줄과 합치지 않고 별도 줄로 집계한다. 열이 없으면 기존과 동일.
+    has_adj = ADJ_TYPE_COL in mapped.columns
 
     work = pd.DataFrame(
         {
@@ -330,6 +338,8 @@ def aggregate_item_sheet(
             "_셀러": mapped[c["seller"]].fillna("").astype(str).str.strip(),
         }
     )
+    if has_adj:
+        work["_조정"] = mapped[ADJ_TYPE_COL].fillna("").astype(str).str.strip()
 
     qty = work["_수량"].to_numpy(dtype=float)
     amt = work["_금액"].to_numpy(dtype=float)
@@ -340,6 +350,8 @@ def aggregate_item_sheet(
     work["_반품"] = qty < 0
 
     group_cols = ["_날짜", "_품목", "_단가", "_반품", "_셀러"]
+    if has_adj:  # 2026-11-20 hoyeon.han: 조정유형이 다르면 다른 줄
+        group_cols.append("_조정")
     prod = (
         work.groupby(group_cols, sort=False, dropna=False)
         .agg(_수량합=("_수량", "sum"), _합계=("_금액", "sum"))
@@ -351,8 +363,12 @@ def aggregate_item_sheet(
         fee_rows = work[work[fee_col] > 0]
         if fee_rows.empty:
             return pd.DataFrame(columns=prod.columns)
+        # g = (
+        #     fee_rows.groupby(["_날짜", fee_col, "_셀러"], sort=False)
+        # 2026-11-20 hoyeon.han: 조정유형 열이 있으면 비용 라인도 조정유형별로 분리.
+        fee_keys = ["_날짜", fee_col, "_셀러"] + (["_조정"] if has_adj else [])
         g = (
-            fee_rows.groupby(["_날짜", fee_col, "_셀러"], sort=False)
+            fee_rows.groupby(fee_keys, sort=False)
             .size()
             .reset_index(name="_수량합")
             .rename(columns={fee_col: "_단가"})
@@ -377,9 +393,17 @@ def aggregate_item_sheet(
         [p for p in _parts if not p.empty], ignore_index=True
     )
 
-    merged = merged.sort_values(
-        ["_날짜", "_품목", "_반품", "_단가"], kind="stable"
-    ).reset_index(drop=True)
+    # merged = merged.sort_values(
+    #     ["_날짜", "_품목", "_반품", "_단가"], kind="stable"
+    # ).reset_index(drop=True)
+    # 2026-11-20 hoyeon.han: 조정 줄은 같은 일자 안에서 이카운트 줄 뒤에 둔다.
+    # 조정유형 열이 없으면 정렬 키는 기존과 동일하다.
+    if has_adj:
+        merged["_조정여부"] = merged["_조정"].ne("")
+        sort_cols = ["_날짜", "_조정여부", "_품목", "_반품", "_단가", "_조정"]
+    else:
+        sort_cols = ["_날짜", "_품목", "_반품", "_단가"]
+    merged = merged.sort_values(sort_cols, kind="stable").reset_index(drop=True)
 
     out = pd.DataFrame(
         {
@@ -391,6 +415,11 @@ def aggregate_item_sheet(
             "비고": merged["_셀러"],
         }
     )
+    # return out[list(OUTPUT_COLS)]
+    # 2026-11-20 hoyeon.han: 조정 줄이 있을 때만 비고 옆에 조정유형 열을 둔다.
+    if has_adj and merged["_조정"].ne("").any():
+        out[ADJ_TYPE_COL] = merged["_조정"]
+        return out[list(OUTPUT_COLS) + [ADJ_TYPE_COL]]
     return out[list(OUTPUT_COLS)]
 
 
@@ -415,7 +444,12 @@ def build_detail_df(
     if item_mapping:
         rows = apply_mapping(rows, column_map["product"], item_mapping)
     cols = [column_map[k] for k in DETAIL_LOGICAL_COLS]
+    # 2026-11-20 hoyeon.han: 비용조정 행이 섞여 있으면 조정유형을 마지막 열로 둔다.
+    if ADJ_TYPE_COL in rows.columns:
+        cols.append(ADJ_TYPE_COL)
     detail = rows[cols].copy()
+    if ADJ_TYPE_COL in detail.columns:
+        detail[ADJ_TYPE_COL] = detail[ADJ_TYPE_COL].fillna("").astype(str)
     detail[column_map["date"]] = detail[column_map["date"]].dt.strftime("%Y-%m-%d")
     return detail.reset_index(drop=True)
 
@@ -692,15 +726,29 @@ def _write_seller_sheet(
         cell.fill = _HEADER_FILL
         cell.alignment = center
 
+    # 2026-11-20 hoyeon.han: 비용조정 반영 시 비고 옆(G열)에 조정유형 값만 쓴다.
+    # 헤더(3행)·병합(A~F)은 그대로 두고, 열이 없으면 기존과 동일하다.
+    data_cols = list(OUTPUT_COLS) + (
+        [ADJ_TYPE_COL] if ADJ_TYPE_COL in seller_df.columns else []
+    )
+
     # 컬럼 너비 (13pt 기준으로 settlement._apply_column_widths 대비 확대)
-    seller_widths = {"작성일자": 14, "품목": 44, "수량": 12, "단가": 14, "합계": 17, "비고": 28}
-    for c, name in enumerate(OUTPUT_COLS, start=1):
+    # seller_widths = {"작성일자": 14, "품목": 44, "수량": 12, "단가": 14, "합계": 17, "비고": 28}
+    seller_widths = {"작성일자": 14, "품목": 44, "수량": 12, "단가": 14, "합계": 17, "비고": 28,
+                     ADJ_TYPE_COL: 16}
+    # for c, name in enumerate(OUTPUT_COLS, start=1):
+    for c, name in enumerate(data_cols, start=1):
         ws.column_dimensions[get_column_letter(c)].width = seller_widths.get(name, 16)
 
     # 데이터 행 (row 4+)
     for i, row in enumerate(seller_df.itertuples(index=False), start=4):
-        for c, col_name in enumerate(OUTPUT_COLS, start=1):
+        # for c, col_name in enumerate(OUTPUT_COLS, start=1):
+        for c, col_name in enumerate(data_cols, start=1):
             value = getattr(row, col_name, "")
+            if col_name == ADJ_TYPE_COL:  # 2026-11-20 hoyeon.han: 값만 (빈 값은 빈칸)
+                cell = ws.cell(row=i, column=c, value=_blank_if_na(value))
+                cell.font = base_font
+                continue
             if col_name in ("수량", "합계"):
                 _write_int_cell(ws, i, c, value, base_font)
             elif col_name == "단가":
@@ -747,18 +795,35 @@ def _write_seller_sheet(
     )
 
 
+def _blank_if_na(value: Any) -> Any:
+    """2026-11-20 hoyeon.han: NaN/None 은 빈칸으로 (조정유형·비용조정 빈 값 표시용)."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and pd.isna(value):
+        return ""
+    return str(value)
+
+
 def _write_detail_sheet(
     ws,
     detail_df: pd.DataFrame,
     column_map: dict[str, str],
+    hide_adj_header: bool = True,  # 2026-11-20 hoyeon.han: 조정유형 열 헤더 비움
 ) -> None:
-    """상세내역 시트를 작성한다 (원본 컬럼 + 열별 합계행 + 빈 2행 + 총합계행)."""
+    """상세내역 시트를 작성한다 (원본 컬럼 + 열별 합계행 + 빈 2행 + 총합계행).
+
+    2026-11-20 hoyeon.han: 조정유형 열이 있으면 헤더 칸은 비우고 값만 쓴다
+    (hide_adj_header=False 는 '비용조정내역' 시트처럼 헤더를 보여 줄 때).
+    수량·금액이 빈 값(NaN)이면 빈칸으로 쓴다(배송비만 있는 비용조정 행).
+    """
     bold = Font(bold=True)
     center = Alignment(horizontal="center", vertical="center")
     detail_cols = detail_df.columns.tolist()
 
     # 헤더 (row 1)
     for c, col_name in enumerate(detail_cols, start=1):
+        if hide_adj_header and col_name == ADJ_TYPE_COL:
+            continue  # 2026-11-20 hoyeon.han: 헤더 없이 값만 표시
         cell = ws.cell(row=1, column=c, value=col_name)
         cell.font = bold
         cell.fill = _HEADER_FILL
@@ -786,7 +851,14 @@ def _write_detail_sheet(
         for c, col_name in enumerate(detail_cols, start=1):
             value = row[c - 1]
             if col_name in (qty_col, amount_col):
-                _write_int_cell(ws, i, c, value)
+                # _write_int_cell(ws, i, c, value)
+                # 2026-11-20 hoyeon.han: 빈 값(NaN)은 빈칸 (기존 데이터는 항상 숫자)
+                if _blank_if_na(value) == "":
+                    ws.cell(row=i, column=c, value="")
+                else:
+                    _write_int_cell(ws, i, c, value)
+            elif col_name == ADJ_TYPE_COL:  # 2026-11-20 hoyeon.han
+                ws.cell(row=i, column=c, value=_blank_if_na(value))
             elif col_name in (delivery_col, ferry_col):
                 # 0은 빈칸 처리 (참고 정산서 상세내역과 동일)
                 v = float(value) if value not in ("", None) else 0.0
@@ -848,11 +920,18 @@ def write_seller_settlement_xlsx(
     overall_df = plan.get("overall_df")  # 2026-07-31 hoyeon.han: '전체' 시트(옵션)
     if not seller_sheets:
         raise ValueError("생성할 셀러 시트가 없습니다.")
+    # 2026-11-20 hoyeon.han: 비용조정내역(옵션) — 반영한 조정 행 그대로
+    adjustments_df = plan.get("adjustments_df")
     for name in seller_sheets:
         if name == DETAIL_SHEET_NAME:  # build_sheet_plan에서 검증되지만 방어
             raise ValueError(f"시트명 '{DETAIL_SHEET_NAME}'은(는) 예약된 이름입니다.")
         if overall_df is not None and name == SHEET_OVERALL:  # 2026-07-31 hoyeon.han
             raise ValueError(f"시트명 '{SHEET_OVERALL}'은(는) '전체' 시트와 충돌합니다.")
+        if adjustments_df is not None and name == ADJ_SHEET_NAME:  # 2026-11-20 hoyeon.han
+            raise ValueError(
+                f"시트명 '{ADJ_SHEET_NAME}'은(는) 비용조정 반영 시 예약된 이름입니다. "
+                "시트 배치에서 다른 이름을 입력해주세요."
+            )
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
@@ -897,6 +976,14 @@ def write_seller_settlement_xlsx(
     else:  # SINGLE (또는 키 없는 수동 plan) → 현재 동작
         _write_detail_sheet(
             wb.create_sheet(title=DETAIL_SHEET_NAME), plan["detail_df"], column_map
+        )
+
+    # ---------- 비용조정내역 시트 (2026-11-20 hoyeon.han: 비용조정 반영 시 맨 뒤) ----------
+    # 업로드 목록을 그대로 보여 주는 근거 시트이므로 조정유형 헤더를 표시한다.
+    if adjustments_df is not None and not adjustments_df.empty:
+        _write_detail_sheet(
+            wb.create_sheet(title=ADJ_SHEET_NAME), adjustments_df, column_map,
+            hide_adj_header=False,
         )
 
     wb.save(out_path)

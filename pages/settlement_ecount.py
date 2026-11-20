@@ -15,6 +15,8 @@ import logging
 import os
 import sys
 from datetime import datetime
+# 2026-11-20 hoyeon.han: 비용조정 일자 빈칸 → 오늘 날짜
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +58,8 @@ import settlement as st_mod  # noqa: E402
 import seller_settlement as ss  # noqa: E402
 # 2026-11-04 hoyeon.han: 매출·매입 최신 원본을 독립적으로 영구 저장한다.
 from ecount_file_store import EcountFileStore  # noqa: E402
+# 2026-11-20 hoyeon.han: 비용조정 엑셀(1회성, 올린 그대로 반영)
+import cost_adjustment as ca  # noqa: E402
 
 os.makedirs("processed", exist_ok=True)
 
@@ -96,6 +100,8 @@ for _k, _v in _DEFAULTS.items():
 # _TYPE_WIDGET_KEYS = ("settle_ecount_types_multiselect",)
 # 2026-10-13 hoyeon.han: 상위 조건이 바뀌면 셀러 위젯도 초기화한다.
 _SELLER_WIDGET_KEYS = ("settle_ecount_seller_multiselect",)
+# 2026-11-20 hoyeon.han: 원본·기간·거래처가 바뀌면 비용조정 파일도 다시 올리게 한다.
+_ADJ_WIDGET_KEYS = ("settle_ecount_adj_uploader", "settle_ecount_adj_sheet")
 _EDITOR_WIDGET_KEYS = ("settle_ecount_item_editor", "settle_ecount_sheet_editor")
 _OPTION_WIDGET_KEYS = (
     # "settle_ecount_exclude_general",
@@ -168,6 +174,9 @@ def _reset_below_vendor() -> None:
     st.session_state["settle_ecount_sellers"] = []
     for wk in _SELLER_WIDGET_KEYS:
         st.session_state.pop(wk, None)
+    # 2026-11-20 hoyeon.han: 다른 거래처·원본에 이전 비용조정이 섞이지 않게 한다.
+    for wk in _ADJ_WIDGET_KEYS:
+        st.session_state.pop(wk, None)
     _reset_below_sellers()
 
 
@@ -225,6 +234,18 @@ def _parse_ecount_cached(
     doc_type: str = st_mod.TYPE_SALE,
 ) -> dict[str, Any]:
     return es.parse_ecount_xlsx(io.BytesIO(file_bytes), expected_doc_type=doc_type)
+
+
+# 2026-11-20 hoyeon.han: 양식 바이트를 고정해 다운로드 버튼이 매 rerun 새 파일을 만들지 않게 한다.
+@st.cache_data(show_spinner=False)
+def _adjustment_template_bytes() -> bytes:
+    return ca.build_template_xlsx()
+
+
+# 2026-11-20 hoyeon.han: 비용조정 파일의 시트 목록·기본 시트 (파일 내용 기준 캐시).
+@st.cache_data(show_spinner=False, max_entries=4)
+def _adjustment_sheets(file_bytes: bytes) -> tuple[list[str], str | None]:
+    return ca.list_sheet_names(file_bytes), ca.find_default_sheet(file_bytes)
 
 
 def _on_doc_type_change() -> None:
@@ -771,6 +792,158 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
     )
 
 
+# ===== 5-1. 비용조정 엑셀 반영 (선택) =====
+# 2026-11-20 hoyeon.han: 이카운트에 없는 비용(반품·반품배송비·수수료 등)을 이번 정산서에만
+# 1회 그대로 반영한다. 자동 연결·매칭·중복 판정·이력 저장은 하지 않는다.
+adj_applied: pd.DataFrame | None = None  # build_ecount_sheet_plan(adjustments=...) 입력
+adj_signature: tuple | None = None  # plan_signature 용 (파일·시트·반영 건수)
+if parsed is not None and st.session_state.settle_ecount_vendor is not None:
+    st.markdown("### 🧾 5-1. 비용조정 엑셀 반영 (선택)")
+    st.caption(
+        "이카운트에 없는 비용(반품, 반품배송비, 수수료 등)을 이번 정산서에만 1회 그대로 "
+        "반영합니다. 올리지 않으면 이카운트 데이터 그대로 생성됩니다."
+    )
+    # 보호 다운로드는 링크를 만들 때 서버 파일을 쓰므로, 요청했을 때만 만든다
+    # (정산서 생성 전에는 다운로드 파일을 만들지 않는 기존 원칙 유지).
+    tpl_col, _ = st.columns([1, 2])
+    with tpl_col:
+        if st.button("📄 비용조정 양식 받기", key="settle_ecount_adj_template_req",
+                     use_container_width=True):
+            st.session_state["settle_ecount_adj_template_ready"] = True
+        if st.session_state.get("settle_ecount_adj_template_ready"):
+            protected_download(
+                label="⬇️ 비용조정_업로드양식.xlsx 다운로드",
+                data=_adjustment_template_bytes(),
+                file_name="비용조정_업로드양식.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="settle_ecount_adj_template_btn",
+                use_container_width=True,
+            )
+    with st.expander("ℹ️ 비용조정 양식 작성 규칙"):
+        st.markdown(
+            "- 1행은 헤더, 한 행이 조정 1건입니다. 열 순서는 자유이며 양식에 없는 열은 무시합니다.\n"
+            "- **필수 열**: 조정유형, 특이사항(셀러명 — 이 화면의 셀러명과 같아야 반영)\n"
+            "- **일자**: 비우면 오늘 날짜로 반영합니다.\n"
+            "- **품목·수량·상품금액**은 셋 다 입력하거나 셋 다 비웁니다"
+            "(셋 다 비우면 배송비·도선료만 있는 행).\n"
+            "- 수량·금액은 **정산서에 보이는 부호 그대로** 정수로 입력합니다 "
+            "(예: 반품 수량 -1, 상품금액 -282,000 / 반품배송비 6,600 / 수수료 차감 -50,000).\n"
+            "- 조정유형은 정산서 비고 옆 칸에 그대로 표시되고, 이카운트 줄과 합치지 않고 별도 줄로 나옵니다.\n"
+            f"- 결과 파일 맨 뒤에 '{ss.ADJ_SHEET_NAME}' 시트가 추가됩니다."
+        )
+    adj_file = st.file_uploader(
+        "비용조정 엑셀 파일 (.xlsx, 선택)",
+        type=["xlsx"], key="settle_ecount_adj_uploader",
+        help="올린 내용은 기록되지 않으며 이번 정산서에만 반영됩니다.",
+    )
+    if adj_file is not None:
+        adj_bytes = adj_file.getvalue()
+        adj_sha = hashlib.sha256(adj_bytes).hexdigest()
+        try:
+            adj_sheet_names, adj_default_sheet = _adjustment_sheets(adj_bytes)
+        except Exception as e:  # noqa: BLE001
+            logging.error("비용조정 엑셀 열기 실패", exc_info=True)
+            st.error(f"❌ 비용조정 엑셀을 열 수 없습니다. .xlsx 파일인지 확인하세요. ({e})")
+            st.stop()
+        if st.session_state.get("settle_ecount_adj_sheet") not in adj_sheet_names:
+            st.session_state.pop("settle_ecount_adj_sheet", None)
+        adj_sheet = st.selectbox(
+            "반영할 시트",
+            adj_sheet_names,
+            index=(adj_sheet_names.index(adj_default_sheet)
+                   if adj_default_sheet in adj_sheet_names else 0),
+            key="settle_ecount_adj_sheet",
+        )
+        today = date.today()
+        try:
+            adj_result = ca.parse_adjustments(
+                ca.read_adjustment_sheet(adj_bytes, adj_sheet), today=today
+            )
+        except ValueError as e:
+            st.error(f"❌ {e}")
+            st.info("비용조정 없이 생성하려면 업로드한 파일을 삭제(X)하세요.")
+            st.stop()
+        except Exception as e:  # noqa: BLE001
+            logging.error("비용조정 엑셀 읽기 실패", exc_info=True)
+            st.error(f"❌ 비용조정 시트를 읽지 못했습니다. ({e})")
+            st.stop()
+
+        adj_errors = adj_result["errors"]
+        if not adj_errors.empty:
+            # 일부만 반영되는 일이 없도록 오류가 1건이라도 있으면 다음 단계로 진행하지 않는다.
+            st.error(
+                f"❌ 입력 오류 {len(adj_errors):,}건이 있어 비용조정을 반영할 수 없습니다. "
+                "엑셀을 고쳐 다시 올리거나, 비용조정 없이 생성하려면 파일을 삭제(X)하세요."
+            )
+            st.dataframe(adj_errors, use_container_width=True, hide_index=True)
+            st.stop()
+
+        adj_rows, adj_excluded = ca.split_by_sellers(
+            adj_result["rows"], st.session_state.settle_ecount_sellers
+        )
+        if adj_result["blank_date_count"]:
+            st.info(
+                f"ℹ️ 일자 빈칸 {adj_result['blank_date_count']:,}건은 "
+                f"오늘({today.isoformat()})로 반영합니다."
+            )
+        if adj_rows.empty:
+            st.warning(
+                "⚠️ 선택한 셀러의 비용조정 행이 없습니다. 특이사항(셀러명)이 이 화면의 "
+                "셀러명과 같은지 확인하세요. 비용조정 없이 생성합니다."
+            )
+        else:
+            adj_applied = adj_rows
+            adj_signature = (adj_sha, adj_sheet, len(adj_rows), today.isoformat())
+            outside = ca.out_of_period_rows(
+                adj_rows,
+                st.session_state.settle_ecount_start_date,
+                st.session_state.settle_ecount_end_date,
+            )
+            if len(outside):
+                st.warning(
+                    f"⚠️ 정산 기간({st.session_state.settle_ecount_start_date} ~ "
+                    f"{st.session_state.settle_ecount_end_date}) 밖 일자 {len(outside):,}건이 "
+                    "있습니다. 그대로 반영하니 일자를 확인하세요. (엑셀 행: "
+                    + ", ".join(str(r) for r in outside[ca.ROW_COL].tolist()) + ")"
+                )
+            adj_total = ca.summarize(adj_rows)
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("반영 건수", f"{adj_total['건수']:,}건")
+            m2.metric("상품금액", f"{adj_total['상품금액']:,}원")
+            m3.metric("배송비", f"{adj_total['배송비']:,}원")
+            m4.metric("도선료", f"{adj_total['도선료']:,}원")
+            m5.metric("순 조정액", f"{adj_total['순조정액']:,}원")
+            st.caption("조정유형별 소계")
+            st.dataframe(ca.summarize_by_type(adj_rows), use_container_width=True, hide_index=True)
+            with st.expander(f"반영할 비용조정 내용 ({len(adj_rows):,}건)", expanded=True):
+                st.dataframe(
+                    ca.build_adjustment_sheet_df(adj_rows, doc_type),
+                    use_container_width=True, hide_index=True,
+                )
+        if not adj_excluded.empty:
+            with st.expander(
+                f"이번 정산서 셀러가 아닌 행 ({len(adj_excluded):,}건, 반영 안 함)"
+            ):
+                st.dataframe(
+                    ca.build_adjustment_sheet_df(adj_excluded, doc_type),
+                    use_container_width=True, hide_index=True,
+                )
+        if adj_applied is not None:
+            st.warning(
+                "⚠️ 비용조정은 이번 정산서에만 1회 반영되며 기록되지 않습니다. 여기서 반영한 "
+                "반품 등이 나중에 이카운트에 입력되면 다음 회차 정산에 다시 포함되니, "
+                "다음 회차를 생성할 때 이카운트 반품 내역을 확인하세요."
+            )
+            with st.expander("예시: 다음 회차 이중 차감"):
+                st.markdown(
+                    "1. 11/17 정산(기간 11/01~11/16): 이카운트에 없는 반품을 비용조정으로 "
+                    "−282,000원 반영\n"
+                    "2. 11/20 반품 완료 → 이카운트에 '변심반품 −282,000원(11/20)' 입력\n"
+                    "3. 12/01 정산(기간 11/17~11/30): 이카운트 원본에 11/20 반품 행이 들어와 "
+                    "다시 차감됨 → 정산서 생성 전에 확인 필요"
+                )
+
+
 # ===== 6. 품목명 정리 =====
 
 if parsed is not None and st.session_state.settle_ecount_vendor is not None:
@@ -1079,6 +1252,8 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
         tuple(sorted((st.session_state.settle_ecount_remark_sheet_map or {}).items())),
         include_overall,
         detail_mode,
+        # 2026-11-20 hoyeon.han: 비용조정 파일·시트·반영 건수가 바뀌면 이전 결과 폐기.
+        adj_signature,
     )
     if plan_signature != st.session_state.settle_ecount_plan_signature:
         st.session_state.settle_ecount_plan = None
@@ -1100,6 +1275,7 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
                 include_overall=include_overall,
                 # 2026-11-04 hoyeon.han: 구매 집계는 매입 컬럼 계약으로 변환한다.
                 doc_type=doc_type,
+                adjustments=adj_applied,  # 2026-11-20 hoyeon.han: 비용조정(없으면 None)
             )
         except Exception as e:  # noqa: BLE001
             st.error(f"❌ 정산서 미리보기 생성 실패: {e}")
@@ -1135,17 +1311,30 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
             preview_sheets[ss.DETAIL_SHEET_NAME] = plan["detail_df"]
         elif detail_mode == ss.DETAIL_MODE_PER_SELLER:
             preview_sheets.update(plan["detail_sheets"] or {})
+        # 2026-11-20 hoyeon.han: 비용조정 반영 시 '비용조정내역' 탭 (매출·매입)
+        if plan.get("adjustments_df") is not None:
+            preview_sheets[ss.ADJ_SHEET_NAME] = plan["adjustments_df"]
         sheet_tabs = st.tabs(list(preview_sheets))
         for tab, (name, sub) in zip(sheet_tabs, preview_sheets.items()):
             with tab:
                 is_summary = name in plan["seller_sheets"] or name == ss.SHEET_OVERALL
                 # amount_col = "합계" if is_summary else ss.COLUMN_MAP_SALE["amount"]
                 # 2026-11-04 hoyeon.han: 상세내역은 분리된 배송비·도선료까지 합산한다.
+                # amount_cols = ["합계"] if is_summary else [
+                #     ss.COLUMN_MAP_SALE[key] for key in ("amount", "delivery", "ferry")
+                # ]
+                # 2026-11-20 hoyeon.han: 매입 비용조정내역은 매입 열 이름을 쓴다.
                 amount_cols = ["합계"] if is_summary else [
-                    ss.COLUMN_MAP_SALE[key] for key in ("amount", "delivery", "ferry")
+                    column_map[key] for key in ("amount", "delivery", "ferry")
                 ]
                 c1, c2, c3 = st.columns(3)
-                c1.metric("집계 행" if is_summary else "원본 주문 행", f"{len(sub):,}행")
+                # c1.metric("집계 행" if is_summary else "원본 주문 행", f"{len(sub):,}행")
+                # 2026-11-20 hoyeon.han: 비용조정내역 탭은 '조정 행'으로 표시
+                c1.metric(
+                    "집계 행" if is_summary else
+                    ("조정 행" if name == ss.ADJ_SHEET_NAME else "원본 주문 행"),
+                    f"{len(sub):,}행",
+                )
                 c2.metric("수량 합계", f"{int(sub['수량'].sum()):,}")
                 # c3.metric("금액 합계", f"{int(sub[amount_col].sum()):,}원")
                 # 2026-11-04 hoyeon.han: 미리보기 총액을 생성 엑셀의 3열 총합계와 맞춘다.
@@ -1195,6 +1384,7 @@ if (
                 include_overall=include_overall,
                 # 2026-11-04 hoyeon.han: 구매 집계는 매입 컬럼 계약으로 변환한다.
                 doc_type=doc_type,
+                adjustments=adj_applied,  # 2026-11-20 hoyeon.han: 비용조정(없으면 None)
             )
             # 2026-10-14 hoyeon.han: 실제 생성 요청에서만 세션별 출력 폴더를 생성.
             out_path = auth.unique_output_path(out_filename, 'settlement-ecount')
@@ -1219,6 +1409,8 @@ if (
                 + int(plan_final["overall_df"] is not None)
                 + (1 if detail_mode == ss.DETAIL_MODE_SINGLE else
                    len(plan_final["detail_sheets"] or {}))
+                # 2026-11-20 hoyeon.han: 비용조정내역 시트
+                + int(plan_final.get("adjustments_df") is not None)
             )
             st.session_state.settle_ecount_history.append({
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1231,6 +1423,8 @@ if (
                 "주문유형": "전체 포함",
                 "전체시트": "포함" if include_overall else "제외",
                 "상세내역": detail_label,
+                # 2026-11-20 hoyeon.han: 비용조정 반영 건수
+                "비용조정": f"{len(adj_applied):,}건" if adj_applied is not None else "없음",
                 "시트수": sheet_count,
                 "start_date": str(start_date),
                 "end_date": str(end_date),
