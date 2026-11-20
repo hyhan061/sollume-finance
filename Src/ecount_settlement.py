@@ -57,6 +57,8 @@ import pandas as pd
 from settlement import TYPE_PURCHASE, TYPE_SALE
 # 2026-10-13 hoyeon.han: 발주내역 정산서의 집계·상세내역·시트 계획 재사용.
 import seller_settlement as ss
+# 2026-11-20 hoyeon.han: 비용조정 엑셀(1회성) 행 변환
+import cost_adjustment as ca
 
 # ===== 상수 =====
 
@@ -840,24 +842,48 @@ def build_ecount_sheet_plan(
     include_overall: bool = True,
     # 2026-11-04 hoyeon.han: 매출 기본 동작을 유지하면서 구매 요약을 지원한다.
     doc_type: str = TYPE_SALE,
+    # 2026-11-20 hoyeon.han: 비용조정 엑셀(1회성) — cost_adjustment.parse_adjustments
+    # 결과 중 이번 정산서 셀러 행. None/빈 값이면 기존과 동일하게 동작한다.
+    adjustments: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
-    """필터된 이카운트 행을 집계한다. 단가=행 금액/수량(기존 4자리 규칙)."""
+    """필터된 이카운트 행을 집계한다. 단가=행 금액/수량(기존 4자리 규칙).
+
+    2026-11-20 hoyeon.han: adjustments 가 있으면 조정 행을 올린 그대로 더한다.
+    - 셀러·전체 시트: 상품·배송비·도선료를 별도 줄로, 이카운트 줄과 합치지 않음
+    - 상세내역(매출): 이카운트 행 뒤에 조정 1건당 1행 (비용 자동 연결 없음)
+    - plan['adjustments_df']: '비용조정내역' 시트 (매출·매입 모두)
+    """
     # 2026-11-04 hoyeon.han: 구매도 기존 정수·비용 중복 검증을 통과시킨 뒤
     # 매입 컬럼으로 변환한다. 수하인 정보가 없는 매입에는 상세내역을 만들지 않는다.
     if doc_type not in (TYPE_SALE, TYPE_PURCHASE):
         raise ValueError(f"지원하지 않는 이카운트 정산서 유형입니다: {doc_type}")
     orders = to_order_settlement_df(df)
+    # 2026-11-20 hoyeon.han: 집계용은 이카운트 행 + 조정 집계행. 상세내역의 비용 병합은
+    # 이카운트 행(orders) 위치 기준이므로 orders 자체는 바꾸지 않는다.
+    has_adj = adjustments is not None and not adjustments.empty
+    agg_orders = orders
+    adjustments_df = None
+    if has_adj:
+        vendor_col = ss.COLUMN_MAP_SALE["vendor"]
+        vendors = [v for v in orders[vendor_col].astype(str).tolist() if v.strip()]
+        adj_vendor = vendors[0] if vendors else ""
+        agg_orders = pd.concat(
+            [orders, ca.to_aggregate_rows(adjustments, adj_vendor)], ignore_index=True
+        )
+        adjustments_df = ca.build_adjustment_sheet_df(adjustments, doc_type)
     if doc_type == TYPE_PURCHASE:
         rename = {
             ss.COLUMN_MAP_SALE[logical]: ss.COLUMN_MAP_PURCHASE[logical]
             for logical in ss.DETAIL_LOGICAL_COLS
             if ss.COLUMN_MAP_SALE[logical] != ss.COLUMN_MAP_PURCHASE[logical]
         }
-        purchase_orders = orders.rename(columns=rename)
+        # purchase_orders = orders.rename(columns=rename)
+        purchase_orders = agg_orders.rename(columns=rename)  # 2026-11-20 hoyeon.han
         purchase_sellers = ss.extract_sellers(
             purchase_orders, column_map=ss.COLUMN_MAP_PURCHASE
         )
-        return ss.build_sheet_plan(
+        # return ss.build_sheet_plan(
+        purchase_plan = ss.build_sheet_plan(  # 2026-11-20 hoyeon.han: 비용조정내역 추가
             purchase_orders,
             purchase_sellers,
             seller_to_sheet=remark_to_sheet,
@@ -866,17 +892,23 @@ def build_ecount_sheet_plan(
             detail_mode=ss.DETAIL_MODE_NONE,
             include_overall=include_overall,
         )
+        if has_adj:  # 조정이 없으면 기존 plan 계약(키 목록) 그대로
+            purchase_plan["adjustments_df"] = adjustments_df
+        return purchase_plan
     sellers = ss.extract_sellers(orders)
     # return ss.build_sheet_plan(
     # 2026-11-04 hoyeon.han: 요약 집계는 유지하고 상세 금액 열만 별도 분리한다.
     plan = ss.build_sheet_plan(
-        orders,
+        # orders,
+        agg_orders,  # 2026-11-20 hoyeon.han: 조정 집계행 포함
         sellers,
         seller_to_sheet=remark_to_sheet,
         item_mapping=item_mapping,
         detail_mode=detail_mode,
         include_overall=include_overall,
     )
+    if has_adj:  # 2026-11-20 hoyeon.han: 조정이 없으면 기존 plan 계약(키 목록) 그대로
+        plan["adjustments_df"] = adjustments_df
     if detail_mode == ss.DETAIL_MODE_NONE:
         return plan
 
@@ -906,6 +938,11 @@ def build_ecount_sheet_plan(
             detail_orders.at[product_pos, fee_col] += detail_orders.at[fee_pos, amount_col]
             merged_fee_rows.append(fee_pos)
     detail_orders = detail_orders.drop(index=merged_fee_rows)
+    # 2026-11-20 hoyeon.han: 비용조정 행은 자동 연결 없이 이카운트 행 뒤에 그대로 붙인다.
+    if has_adj:
+        detail_orders = pd.concat(
+            [detail_orders, ca.to_detail_rows(adjustments, adj_vendor)], ignore_index=True
+        )
 
     if plan["detail_df"] is not None:
         plan["detail_df"] = ss.build_detail_df(detail_orders, sellers, item_mapping)
