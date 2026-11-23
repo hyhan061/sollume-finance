@@ -60,6 +60,8 @@ import seller_settlement as ss  # noqa: E402
 from ecount_file_store import EcountFileStore  # noqa: E402
 # 2026-11-20 hoyeon.han: 비용조정 엑셀(1회성, 올린 그대로 반영)
 import cost_adjustment as ca  # noqa: E402
+# 2026-11-20 hoyeon.han: 표의 빈 수량·금액을 'None' 대신 빈칸으로 표시(화면 전용)
+from ui_components import blank_na_display  # noqa: E402
 
 os.makedirs("processed", exist_ok=True)
 
@@ -916,16 +918,26 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
             st.caption("조정유형별 소계")
             st.dataframe(ca.summarize_by_type(adj_rows), use_container_width=True, hide_index=True)
             with st.expander(f"반영할 비용조정 내용 ({len(adj_rows):,}건)", expanded=True):
+                # st.dataframe(
+                #     ca.build_adjustment_sheet_df(adj_rows, doc_type),
+                #     use_container_width=True, hide_index=True,
+                # )
+                # 2026-11-20 hoyeon.han: 배송비만 있는 행의 빈 수량·상품금액을 빈칸으로 표시
                 st.dataframe(
-                    ca.build_adjustment_sheet_df(adj_rows, doc_type),
+                    blank_na_display(ca.build_adjustment_sheet_df(adj_rows, doc_type)),
                     use_container_width=True, hide_index=True,
                 )
         if not adj_excluded.empty:
             with st.expander(
                 f"이번 정산서 셀러가 아닌 행 ({len(adj_excluded):,}건, 반영 안 함)"
             ):
+                # st.dataframe(
+                #     ca.build_adjustment_sheet_df(adj_excluded, doc_type),
+                #     use_container_width=True, hide_index=True,
+                # )
+                # 2026-11-20 hoyeon.han: 빈 수량·상품금액을 빈칸으로 표시
                 st.dataframe(
-                    ca.build_adjustment_sheet_df(adj_excluded, doc_type),
+                    blank_na_display(ca.build_adjustment_sheet_df(adj_excluded, doc_type)),
                     use_container_width=True, hide_index=True,
                 )
         if adj_applied is not None:
@@ -1339,7 +1351,9 @@ if parsed is not None and st.session_state.settle_ecount_vendor is not None:
                 # c3.metric("금액 합계", f"{int(sub[amount_col].sum()):,}원")
                 # 2026-11-04 hoyeon.han: 미리보기 총액을 생성 엑셀의 3열 총합계와 맞춘다.
                 c3.metric("금액 합계", f"{int(sub[amount_cols].sum().sum()):,}원")
-                st.dataframe(sub, use_container_width=True, hide_index=True)
+                # st.dataframe(sub, use_container_width=True, hide_index=True)
+                # 2026-11-20 hoyeon.han: 비용조정내역·상세내역의 빈 수량·금액을 빈칸으로 표시
+                st.dataframe(blank_na_display(sub), use_container_width=True, hide_index=True)
 
 # ===== 10. 생성 및 다운로드 =====
 # 2026-10-13 hoyeon.han: 기존 정산서 작성기로 요약과 상세내역을 같은 파일에 작성.

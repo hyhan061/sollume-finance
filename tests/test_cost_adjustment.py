@@ -595,3 +595,27 @@ def test_ui_template_link_only_after_request(ecount_seller_ui_app):
     at.button(key="settle_ecount_adj_template_req").click().run()
     _assert_ecount_seller_ui_clean(at)
     assert len(at.get("link_button")) == 1
+
+
+# 2026-11-20 hoyeon.han: 화면 표에서 빈 수량·금액이 'None'으로 보이지 않게 한다.
+def test_blank_na_display_shows_blank_cells_without_changing_data():
+    """배송비만 있는 조정 행의 수량·상품매출은 화면에서 빈칸, 데이터는 그대로."""
+    import ui_components
+
+    df = pd.DataFrame({
+        "제품": ["배송비", None],
+        "수량": [float("nan"), -1.0],
+        "상품매출": [float("nan"), -89000.0],
+        "판매배송비": [6600, 0],
+    })
+    original = df.copy()
+    shown = ui_components.blank_na_display(df)
+    pd.testing.assert_frame_equal(df, original)  # 합계 계산·엑셀 작성에 쓰는 원본은 그대로
+    assert not shown.isna().to_numpy().any()  # st.dataframe 은 빈 값을 'None'으로 그린다
+    assert shown["수량"].tolist() == ["", "-1"]
+    assert shown["상품매출"].tolist() == ["", "-89000"]
+    assert shown["제품"].tolist() == ["배송비", ""]
+    assert shown["판매배송비"].tolist() == [6600, 0]  # 빈 값 없는 열은 숫자 그대로
+    # 빈 값이 없으면 기존처럼 원본 그대로 표시
+    plain = pd.DataFrame({"수량": [1], "상품매출": [1000]})
+    assert ui_components.blank_na_display(plain) is plain

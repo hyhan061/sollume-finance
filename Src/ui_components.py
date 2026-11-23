@@ -27,6 +27,33 @@ def render_static_asset_image(image_path, caption=None, width=None):
         st.caption(caption)
 
 
+def _format_float_cell(value):
+    """2026-11-20 hoyeon.han: 정수 값인 실수는 소수점 없이(-1.0 → -1) 표시."""
+    return f"{value:.0f}" if float(value).is_integer() else str(value)
+
+
+def blank_na_display(df):
+    """2026-11-20 hoyeon.han: st.dataframe 이 빈 값(NaN/None)을 'None'으로 보여 주는 문제 대응.
+
+    비용조정의 배송비·도선료만 있는 행은 수량·상품금액이 비어 있다.
+    st.dataframe 은 빈 값을 서식(Styler na_rep)과 상관없이 항상 'None'으로 그리므로,
+    빈 값이 있는 열만 화면용 사본에서 글자로 바꿔 빈칸으로 보이게 한다(그 열은 왼쪽 정렬).
+    원본 df 는 바꾸지 않고, 빈 값이 없으면 df 를 그대로 돌려줘 기존 표시와 같다.
+    """
+    import pandas as pd
+
+    na_cols = [col for col in df.columns if df[col].isna().any()]
+    if not na_cols:
+        return df
+    shown = df.copy()
+    for col in na_cols:
+        shown[col] = [
+            "" if pd.isna(v) else (_format_float_cell(v) if isinstance(v, float) else str(v))
+            for v in df[col]
+        ]
+    return shown
+
+
 def _logo_data_uri():
     """현재 테마에 맞는 로고 PNG를 data URI로 반환 (라이트=검정 logo_dark / 다크=흰색 logo_white).
     2026-07-13 hoyeon.han: 신규 - 커스텀 <a> 사이드바 로고와 홈 중앙 로고에서 공용.
